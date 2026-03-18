@@ -1,4 +1,5 @@
-import { trackOrder, type TrackId } from "@/features/song/song-document";
+import { AudioTransport } from "@/features/audio/audio-transport";
+import { trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
 
 export type AudioEngineState = AudioContextState | "closed";
 
@@ -15,19 +16,27 @@ export class AudioEngine {
   readonly context: AudioContext;
   readonly masterGain: GainNode;
   readonly voices: Record<TrackId, VoiceBus>;
+  readonly transport: AudioTransport;
 
-  private constructor(context: AudioContext, masterGain: GainNode, voices: Record<TrackId, VoiceBus>) {
+  private constructor(
+    context: AudioContext,
+    masterGain: GainNode,
+    voices: Record<TrackId, VoiceBus>,
+    transport: AudioTransport,
+  ) {
     this.context = context;
     this.masterGain = masterGain;
     this.voices = voices;
+    this.transport = transport;
   }
 
-  static create() {
+  static async create() {
     if (typeof AudioContext === "undefined") {
       throw new Error("Web Audio is not available in this browser.");
     }
 
     const context = new AudioContext({ latencyHint: "interactive" });
+    const transport = await AudioTransport.create(context);
     const masterGain = context.createGain();
     masterGain.gain.value = 0.88;
     masterGain.connect(context.destination);
@@ -58,7 +67,7 @@ export class AudioEngine {
       }),
     ) as Record<TrackId, VoiceBus>;
 
-    return new AudioEngine(context, masterGain, voices);
+    return new AudioEngine(context, masterGain, voices, transport);
   }
 
   get state(): AudioEngineState {
@@ -85,6 +94,18 @@ export class AudioEngine {
     this.voices[trackId].gain.gain.value = volume;
   }
 
+  configureTransport(transport: SongDocument["transport"]) {
+    this.transport.configure(transport);
+  }
+
+  startTransport(startTime?: number, step?: number) {
+    this.transport.start(startTime, step);
+  }
+
+  stopTransport() {
+    this.transport.stop();
+  }
+
   getWaveform(trackId: TrackId, sampleSize = 256) {
     const waveform = new Uint8Array(sampleSize);
     this.voices[trackId].analyser.getByteTimeDomainData(waveform);
@@ -96,6 +117,7 @@ export class AudioEngine {
       return;
     }
 
+    this.transport.disconnect();
     this.masterGain.disconnect();
     trackOrder.forEach((trackId) => {
       const voice = this.voices[trackId];

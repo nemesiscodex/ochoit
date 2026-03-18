@@ -1,6 +1,8 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 
+import { type AudioTransportEvent, type AudioTransportSnapshot } from "@/features/audio/audio-transport";
 import { AudioEngine } from "@/features/audio/audio-engine";
+import { createDefaultSongDocument } from "@/features/song/song-document";
 
 export type AudioBootstrapState =
   | "idle"
@@ -29,12 +31,29 @@ function toBootstrapState(engine: AudioEngine | null): AudioBootstrapState {
 
 export function useAudioEngine() {
   const engineRef = useRef<AudioEngine | null>(null);
+  const unsubscribeTransportRef = useRef<(() => void) | null>(null);
   const [engineState, setEngineState] = useState<AudioBootstrapState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [transportState, setTransportState] = useState<AudioTransportSnapshot>({
+    playbackState: "stopped",
+    nextStep: 0,
+    nextStepTime: null,
+    loopCount: 0,
+  });
 
   const syncState = (engine: AudioEngine | null) => {
     startTransition(() => {
       setEngineState(toBootstrapState(engine));
+    });
+  };
+
+  const syncTransportState = (event: AudioTransportEvent) => {
+    if (event.type !== "playback-state") {
+      return;
+    }
+
+    startTransition(() => {
+      setTransportState(event.snapshot);
     });
   };
 
@@ -51,8 +70,11 @@ export function useAudioEngine() {
     });
 
     try {
-      const engine = AudioEngine.create();
+      const engine = await AudioEngine.create();
       engineRef.current = engine;
+      unsubscribeTransportRef.current?.();
+      unsubscribeTransportRef.current = engine.transport.subscribe(syncTransportState);
+      engine.configureTransport(createDefaultSongDocument().transport);
       await engine.resume();
       syncState(engine);
       return engine;
@@ -75,9 +97,32 @@ export function useAudioEngine() {
     syncState(engineRef.current);
   };
 
+  const startTransport = async () => {
+    const engine = await initializeAudio();
+
+    if (engine === null) {
+      return;
+    }
+
+    engine.startTransport();
+  };
+
+  const stopTransport = () => {
+    const engine = engineRef.current;
+
+    if (engine === null) {
+      return;
+    }
+
+    engine.stopTransport();
+  };
+
   useEffect(() => {
     return () => {
       const engine = engineRef.current;
+
+      unsubscribeTransportRef.current?.();
+      unsubscribeTransportRef.current = null;
 
       if (engine === null) {
         return;
@@ -95,7 +140,10 @@ export function useAudioEngine() {
     engine: engineRef.current,
     engineState,
     errorMessage,
+    transportState,
     initializeAudio,
     suspendAudio,
+    startTransport,
+    stopTransport,
   };
 }

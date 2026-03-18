@@ -7,7 +7,7 @@
 - [x] Define the app information architecture and main screen layout
 - [x] Create the audio engine foundation in `apps/web`
 - [x] Initialize `AudioContext` from a user gesture
-- [ ] Add AudioWorklet-based transport and scheduling
+- [x] Add AudioWorklet-based transport and scheduling
 - [ ] Implement pulse voice 1
 - [ ] Implement pulse voice 2
 - [ ] Implement triangle voice
