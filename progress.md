@@ -9,14 +9,14 @@
 - [x] Initialize `AudioContext` from a user gesture
 - [x] Add AudioWorklet-based transport and scheduling
 - [ ] Implement pulse voice 1
+- [ ] Build the transport bar with play, stop, BPM, and loop length
+- [ ] Add per-voice analysers for waveform capture
+- [ ] Build a reusable waveform canvas component
+- [ ] Build five sequencer rows with one row per voice
 - [ ] Implement pulse voice 2
 - [ ] Implement triangle voice
 - [ ] Implement noise voice
 - [ ] Implement PCM sample voice
-- [ ] Add per-voice analysers for waveform capture
-- [ ] Build a reusable waveform canvas component
-- [ ] Build the transport bar with play, stop, BPM, and loop length
-- [ ] Build five sequencer rows with one row per voice
 - [ ] Add note entry UI for pulse and triangle voices
 - [ ] Add trigger UI for noise and PCM voices
 - [ ] Add per-voice mute and volume controls
