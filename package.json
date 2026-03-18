@@ -1,0 +1,29 @@
+{
+  "name": "ochoit",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "deploy": "turbo -F @ochoit/infra deploy",
+    "destroy": "turbo -F @ochoit/infra destroy"
+  },
+  "dependencies": {
+    "@ochoit/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251213.0",
+    "@ochoit/config": "workspace:*",
+    "turbo": "^2.8.12",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.15.0"
+}

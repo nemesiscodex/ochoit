@@ -1,0 +1,3 @@
+{
+  "extends": "@ochoit/config/tsconfig.base.json"
+}
