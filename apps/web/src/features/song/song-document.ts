@@ -191,6 +191,7 @@ export type SongDocument = z.infer<typeof songDocumentSchema>;
 export type TrackId = (typeof trackOrder)[number];
 export type Track = SongDocument["tracks"][TrackId];
 export type Step = Track["steps"][number];
+export type PulseTrack = Extract<Track, { kind: "pulse" }>;
 export type SerializedSampleAsset = z.infer<typeof serializedSampleAssetSchema>;
 
 const baseTimestamp = "2026-03-18T00:00:00.000Z";

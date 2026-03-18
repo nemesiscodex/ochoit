@@ -1,5 +1,6 @@
 import { AudioTransport } from "@/features/audio/audio-transport";
-import { trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
+import { PulseVoice } from "@/features/audio/pulse-voice";
+import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
 
 export type AudioEngineState = AudioContextState | "closed";
 
@@ -17,17 +18,23 @@ export class AudioEngine {
   readonly masterGain: GainNode;
   readonly voices: Record<TrackId, VoiceBus>;
   readonly transport: AudioTransport;
+  private readonly pulseVoice1: PulseVoice;
+  private readonly unsubscribeTransport: () => void;
 
   private constructor(
     context: AudioContext,
     masterGain: GainNode,
     voices: Record<TrackId, VoiceBus>,
     transport: AudioTransport,
+    pulseVoice1: PulseVoice,
+    unsubscribeTransport: () => void,
   ) {
     this.context = context;
     this.masterGain = masterGain;
     this.voices = voices;
     this.transport = transport;
+    this.pulseVoice1 = pulseVoice1;
+    this.unsubscribeTransport = unsubscribeTransport;
   }
 
   static async create() {
@@ -67,7 +74,18 @@ export class AudioEngine {
       }),
     ) as Record<TrackId, VoiceBus>;
 
-    return new AudioEngine(context, masterGain, voices, transport);
+    const pulseVoice1 = new PulseVoice(context, voices.pulse1.input);
+    const unsubscribeTransport = transport.subscribe((event) => {
+      if (event.type !== "scheduled-steps") {
+        return;
+      }
+
+      event.steps.forEach(({ step, time }) => {
+        pulseVoice1.scheduleStep(step, time);
+      });
+    });
+
+    return new AudioEngine(context, masterGain, voices, transport, pulseVoice1, unsubscribeTransport);
   }
 
   get state(): AudioEngineState {
@@ -94,6 +112,15 @@ export class AudioEngine {
     this.voices[trackId].gain.gain.value = volume;
   }
 
+  configureSong(song: SongDocument) {
+    this.setMasterVolume(song.mixer.masterVolume);
+    getOrderedTracks(song).forEach((track) => {
+      this.setVoiceVolume(track.id, track.muted ? 0 : track.volume);
+    });
+    this.pulseVoice1.configure(song.tracks.pulse1, song.transport);
+    this.transport.configure(song.transport);
+  }
+
   configureTransport(transport: SongDocument["transport"]) {
     this.transport.configure(transport);
   }
@@ -117,6 +144,7 @@ export class AudioEngine {
       return;
     }
 
+    this.unsubscribeTransport();
     this.transport.disconnect();
     this.masterGain.disconnect();
     trackOrder.forEach((trackId) => {

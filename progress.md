@@ -1,3 +1,6 @@
+For context, check the files `project.md` and `mvp.md`
+
+
 # Progress
 
 - [x] Capture the project vision and high-level architecture in `project.md`
@@ -8,7 +11,7 @@
 - [x] Create the audio engine foundation in `apps/web`
 - [x] Initialize `AudioContext` from a user gesture
 - [x] Add AudioWorklet-based transport and scheduling
-- [ ] Implement pulse voice 1
+- [x] Implement pulse voice 1
 - [ ] Build the transport bar with play, stop, BPM, and loop length
 - [ ] Add per-voice analysers for waveform capture
 - [ ] Build a reusable waveform canvas component

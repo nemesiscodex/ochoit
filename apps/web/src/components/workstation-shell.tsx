@@ -48,7 +48,8 @@ const labelByTrackId: Record<TrackId, string> = {
 
 export function WorkstationShell() {
   const tracks = getOrderedTracks(starterSong);
-  const { engineState, errorMessage, initializeAudio, suspendAudio } = useAudioEngine();
+  const { engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
+    useAudioEngine(starterSong);
   const audioReady = engineState === "running" || engineState === "suspended";
 
   return (
@@ -91,8 +92,9 @@ export function WorkstationShell() {
                   <TransportStrip
                     song={starterSong}
                     engineState={engineState}
-                    initializeAudio={initializeAudio}
-                    suspendAudio={suspendAudio}
+                    startTransport={startTransport}
+                    stopTransport={stopTransport}
+                    playbackState={transportState.playbackState}
                   />
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
@@ -233,13 +235,15 @@ export function WorkstationShell() {
 function TransportStrip({
   song,
   engineState,
-  initializeAudio,
-  suspendAudio,
+  startTransport,
+  stopTransport,
+  playbackState,
 }: {
   song: SongDocument;
   engineState: AudioBootstrapState;
-  initializeAudio: () => Promise<unknown>;
-  suspendAudio: () => Promise<void>;
+  startTransport: () => Promise<void>;
+  stopTransport: () => void;
+  playbackState: "stopped" | "playing";
 }) {
   return (
     <div className="grid gap-3 rounded-none border border-white/10 bg-black/20 p-3 lg:grid-cols-[auto_auto_minmax(0,1fr)] lg:items-center">
@@ -247,22 +251,22 @@ function TransportStrip({
         <Button
           className="bg-[#7ae582] text-[#091022] hover:bg-[#a7f0af]"
           onClick={() => {
-            void initializeAudio();
+            void startTransport();
           }}
         >
           <Play className="size-4" />
-          {engineState === "running" ? "Audio Running" : "Prime Audio"}
+          {playbackState === "playing" ? "Playing" : "Play Pattern"}
         </Button>
         <Button
           variant="outline"
           className="border-white/15 bg-white/5 text-white hover:bg-white/10"
-          disabled={engineState !== "running"}
+          disabled={playbackState !== "playing"}
           onClick={() => {
-            void suspendAudio();
+            stopTransport();
           }}
         >
           <Square className="size-4" />
-          Suspend
+          Stop
         </Button>
       </div>
 
@@ -271,6 +275,7 @@ function TransportStrip({
         <TransportChip label="Steps / Beat" value={`${song.transport.stepsPerBeat}`} />
         <TransportChip label="Loop" value={`${song.transport.loopLength}`} />
         <TransportChip label="Audio" value={engineState} />
+        <TransportChip label="Playback" value={playbackState} />
       </div>
 
       <div className="h-px bg-[linear-gradient(90deg,rgba(255,209,102,0.4),rgba(139,211,255,0.1),transparent)] lg:h-10 lg:w-full" />

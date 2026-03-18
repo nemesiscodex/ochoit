@@ -2,7 +2,7 @@ import { startTransition, useEffect, useRef, useState } from "react";
 
 import { type AudioTransportEvent, type AudioTransportSnapshot } from "@/features/audio/audio-transport";
 import { AudioEngine } from "@/features/audio/audio-engine";
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import type { SongDocument } from "@/features/song/song-document";
 
 export type AudioBootstrapState =
   | "idle"
@@ -29,7 +29,7 @@ function toBootstrapState(engine: AudioEngine | null): AudioBootstrapState {
   }
 }
 
-export function useAudioEngine() {
+export function useAudioEngine(song: SongDocument) {
   const engineRef = useRef<AudioEngine | null>(null);
   const unsubscribeTransportRef = useRef<(() => void) | null>(null);
   const [engineState, setEngineState] = useState<AudioBootstrapState>("idle");
@@ -59,6 +59,7 @@ export function useAudioEngine() {
 
   const initializeAudio = async () => {
     if (engineRef.current !== null) {
+      engineRef.current.configureSong(song);
       await engineRef.current.resume();
       syncState(engineRef.current);
       return engineRef.current;
@@ -74,7 +75,7 @@ export function useAudioEngine() {
       engineRef.current = engine;
       unsubscribeTransportRef.current?.();
       unsubscribeTransportRef.current = engine.transport.subscribe(syncTransportState);
-      engine.configureTransport(createDefaultSongDocument().transport);
+      engine.configureSong(song);
       await engine.resume();
       syncState(engine);
       return engine;
@@ -116,6 +117,16 @@ export function useAudioEngine() {
 
     engine.stopTransport();
   };
+
+  useEffect(() => {
+    const engine = engineRef.current;
+
+    if (engine === null) {
+      return;
+    }
+
+    engine.configureSong(song);
+  }, [song]);
 
   useEffect(() => {
     return () => {
