@@ -3,10 +3,10 @@
 - [x] Capture the project vision and high-level architecture in `project.md`
 - [x] Define the first playable product scope in `mvp.md`
 - [x] Create a progress tracker for the work ahead
-- [ ] Decide the initial song data model and file/version format
-- [ ] Define the app information architecture and main screen layout
-- [ ] Create the audio engine foundation in `apps/web`
-- [ ] Initialize `AudioContext` from a user gesture
+- [x] Decide the initial song data model and file/version format
+- [x] Define the app information architecture and main screen layout
+- [x] Create the audio engine foundation in `apps/web`
+- [x] Initialize `AudioContext` from a user gesture
 - [ ] Add AudioWorklet-based transport and scheduling
 - [ ] Implement pulse voice 1
 - [ ] Implement pulse voice 2

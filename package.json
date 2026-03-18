@@ -7,12 +7,14 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "check-types": "turbo check-types",
-    "dev:web": "turbo -F web dev",
-    "deploy": "turbo -F @ochoit/infra deploy",
-    "destroy": "turbo -F @ochoit/infra destroy"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "test": "turbo run test",
+    "verify": "turbo run verify",
+    "dev:web": "turbo run dev --filter=web",
+    "deploy": "turbo run deploy --filter=@ochoit/infra",
+    "destroy": "turbo run destroy --filter=@ochoit/infra"
   },
   "dependencies": {
     "@ochoit/env": "workspace:*",
