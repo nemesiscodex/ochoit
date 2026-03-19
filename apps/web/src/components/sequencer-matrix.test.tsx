@@ -11,8 +11,11 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -31,8 +34,11 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="playing"
         nextStep={4}
@@ -51,8 +57,11 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={onToggleTrackMute}
         onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -71,8 +80,11 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={onUpdateMelodicStep}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -101,8 +113,11 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={engine}
         onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -122,8 +137,11 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
+        onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -133,5 +151,40 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
     expect(onOpenMelodicTrackEditor).toHaveBeenCalledWith("pulse1");
+  });
+
+  it("passes hovered noise and PCM trigger options to the audio preview", () => {
+    const previewNoiseTrigger = vi.fn();
+    const previewSampleTrigger = vi.fn();
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      previewNote: vi.fn(),
+      previewNoiseTrigger,
+      previewSampleTrigger,
+    } as unknown as AudioEngine;
+
+    render(
+      <SequencerMatrix
+        engine={engine}
+        onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
+        onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Noise step 1 trigger"));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Select noise trigger Crash" }));
+
+    fireEvent.click(screen.getByLabelText("PCM step 8 trigger"));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Assign vox-hit at 1.5x" }));
+
+    expect(previewNoiseTrigger).toHaveBeenCalledWith("crash");
+    expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001", 1.5);
   });
 });

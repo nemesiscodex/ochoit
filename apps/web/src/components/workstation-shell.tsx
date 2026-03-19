@@ -13,8 +13,21 @@ import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type Tr
 import {
   type MelodicStepUpdates,
   type MelodicTrackId,
+  type NoiseStepUpdates,
+  type SampleStepUpdates,
+  type TriggerTrackId,
+  isMelodicTrackId,
+  noiseTriggerPresets,
+  parseNoiseTrackArrangement,
+  parseSampleTrackArrangement,
   parseMelodicTrackArrangement,
+  replaceNoiseTrackArrangement,
+  replaceSampleTrackArrangement,
   replaceMelodicTrackArrangement,
+  serializeNoiseTrackArrangement,
+  serializeSampleTrackArrangement,
+  updateNoiseTrackStep,
+  updateSampleTrackStep,
   serializeMelodicTrackArrangement,
   updateMelodicTrackStep,
 } from "@/features/song/song-pattern";
@@ -26,13 +39,15 @@ import {
   updateSongTransport,
 } from "@/features/song/song-transport";
 
+type ArrangementEditorState = {
+  trackId: MelodicTrackId | TriggerTrackId;
+  draft: string;
+  error: string | null;
+};
+
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
-  const [arrangementEditor, setArrangementEditor] = useState<{
-    trackId: MelodicTrackId;
-    draft: string;
-    error: string | null;
-  } | null>(null);
+  const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
   const tracks = getOrderedTracks(song);
   const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
@@ -56,10 +71,29 @@ export function WorkstationShell() {
     setSong((currentSong) => updateMelodicTrackStep(currentSong, trackId, stepIndex, updates));
   };
 
+  const updateNoiseStep = (stepIndex: number, updates: NoiseStepUpdates) => {
+    setSong((currentSong) => updateNoiseTrackStep(currentSong, stepIndex, updates));
+  };
+
+  const updateSampleStep = (stepIndex: number, updates: SampleStepUpdates) => {
+    setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
+  };
+
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
     setArrangementEditor({
       trackId,
       draft: serializeMelodicTrackArrangement(song.tracks[trackId]),
+      error: null,
+    });
+  };
+
+  const openTriggerTrackEditor = (trackId: TriggerTrackId) => {
+    setArrangementEditor({
+      trackId,
+      draft:
+        trackId === "noise"
+          ? serializeNoiseTrackArrangement(song.tracks.noise)
+          : serializeSampleTrackArrangement(song.tracks.sample),
       error: null,
     });
   };
@@ -82,11 +116,64 @@ export function WorkstationShell() {
     });
   };
 
-  const applyMelodicTrackArrangement = () => {
+  const applyArrangement = () => {
     if (arrangementEditor === null) {
       return;
     }
 
+    if (arrangementEditor.trackId === "noise") {
+      const parsedArrangement = parseNoiseTrackArrangement(arrangementEditor.draft, song.transport.loopLength);
+
+      if (!parsedArrangement.ok) {
+        setArrangementEditor((currentEditor) => {
+          if (currentEditor === null) {
+            return null;
+          }
+
+          return {
+            ...currentEditor,
+            error: parsedArrangement.error,
+          };
+        });
+        return;
+      }
+
+      setSong((currentSong) => replaceNoiseTrackArrangement(currentSong, parsedArrangement.entries));
+      setArrangementEditor(null);
+      return;
+    }
+
+    if (arrangementEditor.trackId === "sample") {
+      const parsedArrangement = parseSampleTrackArrangement(
+        arrangementEditor.draft,
+        song.transport.loopLength,
+        song.samples,
+      );
+
+      if (!parsedArrangement.ok) {
+        setArrangementEditor((currentEditor) => {
+          if (currentEditor === null) {
+            return null;
+          }
+
+          return {
+            ...currentEditor,
+            error: parsedArrangement.error,
+          };
+        });
+        return;
+      }
+
+      setSong((currentSong) => replaceSampleTrackArrangement(currentSong, parsedArrangement.entries));
+      setArrangementEditor(null);
+      return;
+    }
+
+    if (!isMelodicTrackId(arrangementEditor.trackId)) {
+      return;
+    }
+
+    const melodicTrackId = arrangementEditor.trackId;
     const parsedArrangement = parseMelodicTrackArrangement(arrangementEditor.draft, song.transport.loopLength);
 
     if (!parsedArrangement.ok) {
@@ -104,7 +191,7 @@ export function WorkstationShell() {
     }
 
     setSong((currentSong) =>
-      replaceMelodicTrackArrangement(currentSong, arrangementEditor.trackId, parsedArrangement.entries),
+      replaceMelodicTrackArrangement(currentSong, melodicTrackId, parsedArrangement.entries),
     );
     setArrangementEditor(null);
   };
@@ -192,8 +279,11 @@ export function WorkstationShell() {
             <SequencerMatrix
               engine={engine}
               onOpenMelodicTrackEditor={openMelodicTrackEditor}
+              onOpenTriggerTrackEditor={openTriggerTrackEditor}
               onToggleTrackMute={toggleTrackMute}
               onUpdateMelodicStep={updateMelodicStep}
+              onUpdateNoiseStep={updateNoiseStep}
+              onUpdateSampleStep={updateSampleStep}
               song={song}
               playbackState={transportState.playbackState}
               nextStep={transportState.nextStep}
@@ -209,14 +299,15 @@ export function WorkstationShell() {
       </div>
 
       {arrangementEditor !== null ? (
-        <MelodicArrangementEditor
+        <TrackArrangementEditor
           trackId={arrangementEditor.trackId}
           loopLength={song.transport.loopLength}
           draft={arrangementEditor.draft}
           error={arrangementEditor.error}
+          samples={song.samples}
           onChangeDraft={updateArrangementDraft}
           onClose={closeMelodicTrackEditor}
-          onApply={applyMelodicTrackArrangement}
+          onApply={applyArrangement}
         />
       ) : null}
     </main>
@@ -493,25 +584,37 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MelodicArrangementEditor({
+function TrackArrangementEditor({
   trackId,
   loopLength,
   draft,
   error,
+  samples,
   onChangeDraft,
   onClose,
   onApply,
 }: {
-  trackId: MelodicTrackId;
+  trackId: MelodicTrackId | TriggerTrackId;
   loopLength: number;
   draft: string;
   error: string | null;
+  samples: SongDocument["samples"];
   onChangeDraft: (draft: string) => void;
   onClose: () => void;
   onApply: () => void;
 }) {
   const trackLabel = labelByTrackId[trackId];
   const accentColor = waveformLineColorByTrackId[trackId];
+  const helperCopy =
+    trackId === "noise"
+      ? `One trigger per line in the format 1: snare. Available presets: ${noiseTriggerPresets.map((preset) => preset.id).join(", ")}. Steps above ${loopLength} are ignored when you apply.`
+      : trackId === "sample"
+        ? `One trigger per line in the format 8: ${samples[0]?.id ?? "mic-001"}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x. Steps above ${loopLength} are ignored when you apply.`
+        : `One step per line in the format 1: E4. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`;
+  const editorTitle =
+    trackId === "noise" ? "Noise Trigger Map" : trackId === "sample" ? "PCM Trigger Map" : "Voice Arrangement";
+  const labelSuffix =
+    trackId === "noise" ? "trigger text" : trackId === "sample" ? "trigger text" : "arrangement text";
 
   return (
     <div className="fixed inset-0 z-[260] flex items-center justify-center p-4">
@@ -525,7 +628,7 @@ function MelodicArrangementEditor({
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/35">
-              Voice Arrangement
+              {editorTitle}
             </p>
             <h2
               className="mt-1 font-[var(--oc-mono)] text-lg font-bold uppercase tracking-[0.1em]"
@@ -534,8 +637,7 @@ function MelodicArrangementEditor({
               {trackLabel}
             </h2>
             <p className="mt-2 max-w-xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/50">
-              One step per line in the format <span className="text-white/80">1: E4</span>. Notes are
-              case-insensitive. Steps above {loopLength} are ignored when you apply.
+              {helperCopy}
             </p>
           </div>
           <Button
@@ -553,11 +655,11 @@ function MelodicArrangementEditor({
           htmlFor={`arrangement-${trackId}`}
           className="mb-2 block font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.2em] text-white/40"
         >
-          {trackLabel} Arrangement Text
+          {trackLabel} {trackId === "noise" || trackId === "sample" ? "Trigger Text" : "Arrangement Text"}
         </label>
         <textarea
           id={`arrangement-${trackId}`}
-          aria-label={`${trackLabel} arrangement text`}
+          aria-label={`${trackLabel} ${labelSuffix}`}
           value={draft}
           autoFocus
           spellCheck={false}

@@ -6,7 +6,9 @@ import type { AudioEngine } from "@/features/audio/audio-engine";
 import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
 import { useTrackWaveform } from "@/features/audio/use-track-waveform";
 import {
+  type NoiseTrack,
   type PulseTrack,
+  type SampleTrack,
   type SongDocument,
   type Track,
   type TrackId,
@@ -14,13 +16,17 @@ import {
   getOrderedTracks,
 } from "@/features/song/song-document";
 import {
+  getDefaultSampleTrigger,
+  getNoiseTriggerPresetForStep,
   type MelodicStepUpdates,
   type MelodicTrackId,
+  type TriggerTrackId,
+  type NoiseStepUpdates,
+  type SampleStepUpdates,
 } from "@/features/song/song-pattern";
 
 import {
   accentByTrackId,
-  getStepLabel,
   labelByTrackId,
   shortLabelByTrackId,
   voiceColorByTrackId,
@@ -28,6 +34,7 @@ import {
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
+import { NoiseTriggerPicker, SampleTriggerPicker } from "@/components/trigger-picker";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
@@ -37,7 +44,10 @@ export function SequencerMatrix({
   nextStep,
   onToggleTrackMute,
   onOpenMelodicTrackEditor,
+  onOpenTriggerTrackEditor,
   onUpdateMelodicStep,
+  onUpdateNoiseStep,
+  onUpdateSampleStep,
 }: {
   engine: AudioEngine | null;
   song: SongDocument;
@@ -45,7 +55,10 @@ export function SequencerMatrix({
   nextStep: number;
   onToggleTrackMute: (trackId: TrackId) => void;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
+  onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
+  onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
+  onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
 }) {
   const tracks = getOrderedTracks(song);
 
@@ -58,9 +71,13 @@ export function SequencerMatrix({
           engine={engine}
           nextStep={nextStep}
           onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
+          onOpenTriggerTrackEditor={onOpenTriggerTrackEditor}
           onToggleTrackMute={onToggleTrackMute}
           onUpdateMelodicStep={onUpdateMelodicStep}
+          onUpdateNoiseStep={onUpdateNoiseStep}
+          onUpdateSampleStep={onUpdateSampleStep}
           playbackState={playbackState}
+          samples={song.samples}
           track={track}
         />
       ))}
@@ -118,17 +135,25 @@ function SequencerRow({
   engine,
   nextStep,
   onOpenMelodicTrackEditor,
+  onOpenTriggerTrackEditor,
   onToggleTrackMute,
   onUpdateMelodicStep,
+  onUpdateNoiseStep,
+  onUpdateSampleStep,
   playbackState,
+  samples,
   track,
 }: {
   engine: AudioEngine | null;
   nextStep: number;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
+  onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
   onToggleTrackMute: (trackId: TrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
+  onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
+  onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
   playbackState: "stopped" | "playing";
+  samples: SongDocument["samples"];
   track: Track;
 }) {
   return (
@@ -199,6 +224,19 @@ function SequencerRow({
           >
             Text Edit
           </Button>
+        ) : track.kind === "noise" || track.kind === "sample" ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={`Edit ${labelByTrackId[track.id]} arrangement as text`}
+            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            onClick={() => {
+              onOpenTriggerTrackEditor(track.id);
+            }}
+          >
+            Text Edit
+          </Button>
         ) : null}
       </div>
 
@@ -214,13 +252,29 @@ function SequencerRow({
             playbackState={playbackState}
             track={track}
           />
-        ) : (
-          <StaticStepGrid
+        ) : track.kind === "noise" ? (
+          <NoiseStepGrid
             accentClassName={accentByTrackId[track.id]}
+            accentColor={waveformLineColorByTrackId[track.id]}
+            engine={engine}
             nextStep={nextStep}
+            onUpdateNoiseStep={onUpdateNoiseStep}
             playbackState={playbackState}
             track={track}
           />
+        ) : track.kind === "sample" ? (
+          <SampleStepGrid
+            accentClassName={accentByTrackId[track.id]}
+            accentColor={waveformLineColorByTrackId[track.id]}
+            engine={engine}
+            nextStep={nextStep}
+            onUpdateSampleStep={onUpdateSampleStep}
+            playbackState={playbackState}
+            samples={samples}
+            track={track}
+          />
+        ) : (
+          <div />
         )}
       </div>
     </div>
@@ -335,18 +389,24 @@ function MelodicStepGrid({
   );
 }
 
-/* ─────────── Static Step Grid (Noise / Sample) ─────────── */
+/* ─────────── Noise Step Grid ─────────── */
 
-function StaticStepGrid({
+function NoiseStepGrid({
   accentClassName,
+  accentColor,
+  engine,
   nextStep,
+  onUpdateNoiseStep,
   playbackState,
   track,
 }: {
   accentClassName: string;
+  accentColor: string;
+  engine: AudioEngine | null;
   nextStep: number;
+  onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
   playbackState: "stopped" | "playing";
-  track: Track;
+  track: NoiseTrack;
 }) {
   return (
     <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
@@ -360,7 +420,7 @@ function StaticStepGrid({
             aria-current={isActive ? "step" : undefined}
             aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
             className={cn(
-              "oc-step-cell rounded-sm border px-1 py-2.5 text-center font-[var(--oc-mono)] text-[10px] font-medium transition-all",
+              "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
               step.enabled
                 ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
                 : isQuarterBoundary
@@ -369,8 +429,139 @@ function StaticStepGrid({
               isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
             )}
           >
-            <div className="mb-1 text-[8px] text-white/25">{index + 1}</div>
-            <div className="text-white/80">{getStepLabel(track, index)}</div>
+            <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
+              <span>{index + 1}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
+                aria-pressed={step.enabled}
+                className={cn(
+                  "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
+                  step.enabled && "text-white/60",
+                )}
+                onClick={() => {
+                  onUpdateNoiseStep(index, { enabled: !step.enabled });
+                }}
+              >
+                {step.enabled ? "On" : "Off"}
+              </Button>
+            </div>
+
+            <NoiseTriggerPicker
+              selectedPresetId={getNoiseTriggerPresetForStep(step)?.id ?? null}
+              disabled={!step.enabled}
+              accentColor={accentColor}
+              ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} trigger`}
+              onHoverPreset={(presetId) => {
+                engine?.previewNoiseTrigger(presetId);
+              }}
+              onSelectPreset={(presetId) => {
+                onUpdateNoiseStep(index, {
+                  enabled: true,
+                  presetId,
+                });
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─────────── Sample Step Grid ─────────── */
+
+function SampleStepGrid({
+  accentClassName,
+  accentColor,
+  engine,
+  nextStep,
+  onUpdateSampleStep,
+  playbackState,
+  samples,
+  track,
+}: {
+  accentClassName: string;
+  accentColor: string;
+  engine: AudioEngine | null;
+  nextStep: number;
+  onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
+  playbackState: "stopped" | "playing";
+  samples: SongDocument["samples"];
+  track: SampleTrack;
+}) {
+  const defaultSampleTrigger = getDefaultSampleTrigger(samples);
+
+  return (
+    <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
+      {track.steps.map((step, index) => {
+        const isQuarterBoundary = index % 4 === 0;
+        const isActive = playbackState === "playing" && nextStep === index;
+
+        return (
+          <div
+            key={`${track.id}-step-${index}`}
+            aria-current={isActive ? "step" : undefined}
+            aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
+            className={cn(
+              "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
+              step.enabled
+                ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
+                : isQuarterBoundary
+                  ? "border-white/[0.08] bg-white/[0.04] text-white/30"
+                  : "border-white/[0.05] bg-white/[0.02] text-white/20",
+              isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
+            )}
+          >
+            <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
+              <span>{index + 1}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
+                aria-pressed={step.enabled}
+                className={cn(
+                  "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
+                  step.enabled && "text-white/60",
+                )}
+                onClick={() => {
+                  if (step.enabled) {
+                    onUpdateSampleStep(index, { enabled: false });
+                    return;
+                  }
+
+                  onUpdateSampleStep(index, {
+                    enabled: true,
+                    sampleId: step.sampleId ?? defaultSampleTrigger.sampleId,
+                    playbackRate: step.playbackRate ?? defaultSampleTrigger.playbackRate,
+                  });
+                }}
+              >
+                {step.enabled ? "On" : "Off"}
+              </Button>
+            </div>
+
+            <SampleTriggerPicker
+              selectedSampleId={step.sampleId}
+              playbackRate={step.playbackRate}
+              samples={samples}
+              disabled={!step.enabled}
+              accentColor={accentColor}
+              ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} trigger`}
+              onHoverTrigger={(trigger) => {
+                engine?.previewSampleTrigger(trigger.sampleId, trigger.playbackRate);
+              }}
+              onSelectTrigger={(trigger) => {
+                onUpdateSampleStep(index, {
+                  enabled: true,
+                  sampleId: trigger.sampleId,
+                  playbackRate: trigger.playbackRate,
+                });
+              }}
+            />
           </div>
         );
       })}

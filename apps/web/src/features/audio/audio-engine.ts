@@ -5,7 +5,7 @@ import { PulseVoice } from "@/features/audio/pulse-voice";
 import { SampleVoice } from "@/features/audio/sample-voice";
 import { TriangleVoice } from "@/features/audio/triangle-voice";
 import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
-import type { MelodicTrackId, NoteValue } from "@/features/song/song-pattern";
+import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue } from "@/features/song/song-pattern";
 
 export type AudioEngineState = AudioContextState | "closed";
 
@@ -219,6 +219,35 @@ export class AudioEngine {
 
     oscillator.start(now);
     oscillator.stop(now + durationSec + 0.01);
+  }
+
+  previewNoiseTrigger(presetId: NoiseTriggerPresetId, durationMs = 120) {
+    if (this.context.state !== "running") {
+      return;
+    }
+
+    const preset = getNoiseTriggerPresetById(presetId);
+
+    if (preset === null) {
+      return;
+    }
+
+    this.noiseVoice.previewStep(
+      {
+        volume: 0.78,
+        mode: preset.mode,
+        periodIndex: preset.periodIndex,
+      },
+      durationMs,
+    );
+  }
+
+  previewSampleTrigger(sampleId: string, playbackRate = 1, durationMs = 250) {
+    if (this.context.state !== "running") {
+      return;
+    }
+
+    this.sampleVoice.previewSample(sampleId, playbackRate, durationMs, 0.82);
   }
 
   async close() {

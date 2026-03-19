@@ -124,6 +124,65 @@ describe("workstation-shell", () => {
     expect(pulseStepThreeNote.textContent).toBe("G4");
   });
 
+  it("opens the noise trigger text editor with the current arrangement", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Noise trigger text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Noise trigger text to be a textarea.");
+    }
+
+    expect(textarea.value).toBe("1: snare\n3: hiss\n5: snare\n7: hiss\n9: snare\n11: hiss\n13: snare\n15: hiss");
+  });
+
+  it("applies pasted noise and PCM trigger text arrangements", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
+
+    const noiseTextarea = screen.getByLabelText("Noise trigger text");
+
+    if (!(noiseTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Noise trigger text to be a textarea.");
+    }
+
+    fireEvent.change(noiseTextarea, {
+      target: {
+        value: "2: hat\n4: crash\n18: snare",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+
+    expect(screen.queryByLabelText("Noise trigger text")).toBeNull();
+    expect(screen.getByRole("button", { name: "Enable Noise step 1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Disable Noise step 2" })).toBeTruthy();
+    expect(screen.getByLabelText("Noise step 2 trigger").textContent).toBe("hat");
+    expect(screen.getByLabelText("Noise step 4 trigger").textContent).toBe("crsh");
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
+
+    const pcmTextarea = screen.getByLabelText("PCM trigger text");
+
+    if (!(pcmTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected PCM trigger text to be a textarea.");
+    }
+
+    fireEvent.change(pcmTextarea, {
+      target: {
+        value: "2: vox-hit@0.75x\n6: mic-001@1.5\n20: vox-hit",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+
+    expect(screen.queryByLabelText("PCM trigger text")).toBeNull();
+    expect(screen.getByRole("button", { name: "Disable PCM step 2" })).toBeTruthy();
+    expect(screen.getByLabelText("PCM step 2 trigger").textContent).toBe("vox-hit 0.75x");
+    expect(screen.getByLabelText("PCM step 6 trigger").textContent).toBe("vox-hit 1.5x");
+  });
+
   it("renders the sample deck sidebar", () => {
     render(React.createElement(WorkstationShell));
 
@@ -173,5 +232,43 @@ describe("workstation-shell", () => {
     }
 
     expect(pulseStepOneNote.disabled).toBe(true);
+  });
+
+  it("updates the noise trigger controls from the picker", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable Noise step 2" }));
+
+    const triggerButton = screen.getByLabelText("Noise step 2 trigger");
+
+    if (!(triggerButton instanceof HTMLButtonElement)) {
+      throw new Error("Expected Noise step 2 trigger to be a button.");
+    }
+
+    expect(triggerButton.disabled).toBe(false);
+
+    fireEvent.click(triggerButton);
+    fireEvent.click(screen.getByRole("button", { name: "Select noise trigger Crash" }));
+
+    expect(triggerButton.textContent).toBe("crsh");
+  });
+
+  it("updates the PCM trigger controls from the picker", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable PCM step 2" }));
+
+    const triggerButton = screen.getByLabelText("PCM step 2 trigger");
+
+    if (!(triggerButton instanceof HTMLButtonElement)) {
+      throw new Error("Expected PCM step 2 trigger to be a button.");
+    }
+
+    expect(triggerButton.disabled).toBe(false);
+
+    fireEvent.click(triggerButton);
+    fireEvent.click(screen.getByRole("button", { name: "Assign vox-hit at 1.5x" }));
+
+    expect(triggerButton.textContent).toBe("vox-hit 1.5x");
   });
 });

@@ -61,10 +61,36 @@ export class NoiseVoice {
       return;
     }
 
+    this.playStep(step, time, this.stepDuration);
+  }
+
+  previewStep(step: Pick<NoiseTrack["steps"][number], "volume" | "mode" | "periodIndex">, durationMs = 120) {
+    this.playStep(step, this.context.currentTime, durationMs / 1000);
+  }
+
+  private getWaveBuffer(mode: NoiseTrack["steps"][number]["mode"]) {
+    const cachedBuffer = this.waveBufferByMode.get(mode);
+
+    if (cachedBuffer !== undefined) {
+      return cachedBuffer;
+    }
+
+    const buffer = this.context.createBuffer(1, noiseCycleFrameCount, this.context.sampleRate);
+    const channel = buffer.getChannelData(0);
+    channel.set(createNoiseCycle(mode, noiseCycleFrameCount));
+    this.waveBufferByMode.set(mode, buffer);
+    return buffer;
+  }
+
+  private playStep(
+    step: Pick<NoiseTrack["steps"][number], "volume" | "mode" | "periodIndex">,
+    time: number,
+    durationSeconds: number,
+  ) {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     const buffer = this.getWaveBuffer(step.mode);
-    const noteDuration = Math.max(this.stepDuration - noteAttackSeconds, noteAttackSeconds);
+    const noteDuration = Math.max(durationSeconds - noteAttackSeconds, noteAttackSeconds);
     const noteEndTime = time + noteDuration;
     const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
 
@@ -88,19 +114,5 @@ export class NoiseVoice {
 
     source.start(time);
     source.stop(noteEndTime + sourceStopPaddingSeconds);
-  }
-
-  private getWaveBuffer(mode: NoiseTrack["steps"][number]["mode"]) {
-    const cachedBuffer = this.waveBufferByMode.get(mode);
-
-    if (cachedBuffer !== undefined) {
-      return cachedBuffer;
-    }
-
-    const buffer = this.context.createBuffer(1, noiseCycleFrameCount, this.context.sampleRate);
-    const channel = buffer.getChannelData(0);
-    channel.set(createNoiseCycle(mode, noiseCycleFrameCount));
-    this.waveBufferByMode.set(mode, buffer);
-    return buffer;
   }
 }

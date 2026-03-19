@@ -53,31 +53,26 @@ export class SampleVoice {
       return;
     }
 
-    const source = this.context.createBufferSource();
-    const gain = this.context.createGain();
-    const buffer = this.getSampleBuffer(sample);
-    const sampleEndTime = time + buffer.duration / step.playbackRate;
-    const releaseStartTime = Math.max(time + noteAttackSeconds, sampleEndTime - noteReleaseSeconds);
+    this.playSample(sample, {
+      playbackRate: step.playbackRate,
+      time,
+      volume: step.volume,
+    });
+  }
 
-    source.buffer = buffer;
-    source.playbackRate.setValueAtTime(step.playbackRate, time);
+  previewSample(sampleId: string, playbackRate = 1, durationMs = 250, volume = 0.8) {
+    const sample = this.sampleById.get(sampleId);
 
-    gain.gain.cancelScheduledValues(time);
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(step.volume, time + noteAttackSeconds);
-    gain.gain.setValueAtTime(step.volume, releaseStartTime);
-    gain.gain.linearRampToValueAtTime(silentGainFloor, sampleEndTime);
+    if (sample === undefined) {
+      return;
+    }
 
-    source.connect(gain);
-    gain.connect(this.output);
-
-    source.onended = () => {
-      source.disconnect();
-      gain.disconnect();
-    };
-
-    source.start(time);
-    source.stop(sampleEndTime + sourceStopPaddingSeconds);
+    this.playSample(sample, {
+      playbackRate,
+      maxDurationSeconds: durationMs / 1000,
+      time: this.context.currentTime,
+      volume,
+    });
   }
 
   private getSampleBuffer(sample: SerializedSampleAsset) {
@@ -101,5 +96,46 @@ export class SampleVoice {
 
     this.bufferByCacheKey.set(cacheKey, buffer);
     return buffer;
+  }
+
+  private playSample(
+    sample: SerializedSampleAsset,
+    options: {
+      playbackRate: number;
+      time: number;
+      volume: number;
+      maxDurationSeconds?: number;
+    },
+  ) {
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    const buffer = this.getSampleBuffer(sample);
+    const naturalDuration = buffer.duration / options.playbackRate;
+    const sampleDuration =
+      options.maxDurationSeconds === undefined
+        ? naturalDuration
+        : Math.min(naturalDuration, Math.max(options.maxDurationSeconds, noteAttackSeconds));
+    const sampleEndTime = options.time + sampleDuration;
+    const releaseStartTime = Math.max(options.time + noteAttackSeconds, sampleEndTime - noteReleaseSeconds);
+
+    source.buffer = buffer;
+    source.playbackRate.setValueAtTime(options.playbackRate, options.time);
+
+    gain.gain.cancelScheduledValues(options.time);
+    gain.gain.setValueAtTime(0, options.time);
+    gain.gain.linearRampToValueAtTime(options.volume, options.time + noteAttackSeconds);
+    gain.gain.setValueAtTime(options.volume, releaseStartTime);
+    gain.gain.linearRampToValueAtTime(silentGainFloor, sampleEndTime);
+
+    source.connect(gain);
+    gain.connect(this.output);
+
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+
+    source.start(options.time);
+    source.stop(sampleEndTime + sourceStopPaddingSeconds);
   }
 }
