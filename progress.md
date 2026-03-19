@@ -12,7 +12,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Initialize `AudioContext` from a user gesture
 - [x] Add AudioWorklet-based transport and scheduling
 - [x] Implement pulse voice 1
-- [ ] Build the transport bar with play, stop, BPM, and loop length
+- [x] Build the transport bar with play, stop, BPM, and loop length
 - [ ] Add per-voice analysers for waveform capture
 - [ ] Build a reusable waveform canvas component
 - [ ] Build five sequencer rows with one row per voice

@@ -1,3 +1,4 @@
+import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@ochoit/ui/components/card";
 import { cn } from "@ochoit/ui/lib/utils";
@@ -5,11 +6,14 @@ import {
   Activity,
   AudioWaveform,
   Gauge,
+  Minus,
   Mic,
   Play,
+  Plus,
   Save,
   Square,
 } from "lucide-react";
+import { useState } from "react";
 
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import {
@@ -19,8 +23,13 @@ import {
   type Track,
   type TrackId,
 } from "@/features/song/song-document";
-
-const starterSong = createDefaultSongDocument();
+import {
+  resolveSongBpmInput,
+  resolveSongLoopLengthInput,
+  SONG_BPM_RANGE,
+  SONG_LOOP_LENGTH_RANGE,
+  updateSongTransport,
+} from "@/features/song/song-transport";
 
 const waveformPreviewByTrackId: Record<TrackId, number[]> = {
   pulse1: [18, 18, 18, 7, 7, 18, 18, 18, 7, 7, 18, 18],
@@ -47,9 +56,10 @@ const labelByTrackId: Record<TrackId, string> = {
 };
 
 export function WorkstationShell() {
-  const tracks = getOrderedTracks(starterSong);
+  const [song, setSong] = useState(() => createDefaultSongDocument());
+  const tracks = getOrderedTracks(song);
   const { engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
-    useAudioEngine(starterSong);
+    useAudioEngine(song);
   const audioReady = engineState === "running" || engineState === "suspended";
 
   return (
@@ -73,16 +83,16 @@ export function WorkstationShell() {
                       </h1>
                       <p className="max-w-3xl text-sm text-slate-300">
                         A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        This shell locks the first information architecture before the audio engine is
-                        wired in.
+                        Pulse voice 1 and the transport are live, while the editor rows are still being
+                        connected to real sequencing data.
                       </p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-300 sm:grid-cols-4">
-                    <Metric label="Mode" value={starterSong.meta.engineMode} />
-                    <Metric label="Tempo" value={`${starterSong.transport.bpm} bpm`} />
-                    <Metric label="Loop" value={`${starterSong.transport.loopLength} steps`} />
+                    <Metric label="Mode" value={song.meta.engineMode} />
+                    <Metric label="Tempo" value={`${song.transport.bpm} bpm`} />
+                    <Metric label="Loop" value={`${song.transport.loopLength} steps`} />
                     <Metric label="Voices" value={`${tracks.length}`} />
                     <Metric label="Audio" value={engineState} />
                   </div>
@@ -90,11 +100,17 @@ export function WorkstationShell() {
 
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                   <TransportStrip
-                    song={starterSong}
+                    song={song}
                     engineState={engineState}
                     startTransport={startTransport}
                     stopTransport={stopTransport}
                     playbackState={transportState.playbackState}
+                    onBpmChange={(nextBpm) => {
+                      setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
+                    }}
+                    onLoopLengthChange={(nextLoopLength) => {
+                      setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
+                    }}
                   />
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
@@ -108,9 +124,9 @@ export function WorkstationShell() {
                       Export
                     </Button>
                     <Button
-                      className="bg-[#ffd166] text-[#091022] hover:bg-[#ffe09b]"
-                      onClick={() => {
-                        void initializeAudio();
+                        className="bg-[#ffd166] text-[#091022] hover:bg-[#ffe09b]"
+                        onClick={() => {
+                          void initializeAudio();
                       }}
                     >
                       {engineState === "initializing" ? "Booting..." : audioReady ? "Resume Audio" : "Start Audio"}
@@ -156,7 +172,7 @@ export function WorkstationShell() {
                     <div className="mt-4 rounded-none border border-white/10 bg-black/20 p-3">
                       <div className="mb-2 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.22em] text-white/65">
                         <span>Trim Window</span>
-                        <span>{starterSong.samples[0]?.name ?? "No Sample"}</span>
+                        <span>{song.samples[0]?.name ?? "No Sample"}</span>
                       </div>
                       <div className="flex h-14 items-end gap-1">
                         {waveformPreviewByTrackId.sample.map((height, index) => (
@@ -179,7 +195,7 @@ export function WorkstationShell() {
                     <SidebarPanel
                       icon={Gauge}
                       title="Next Engine Step"
-                      body="Create the AudioContext and AudioWorklet transport, then swap this static shell for live playback state."
+                      body="Route analyser taps per voice so each row can replace the placeholder waveform with live capture."
                     />
                   </div>
                 </CardContent>
@@ -220,7 +236,7 @@ export function WorkstationShell() {
                 <VoiceRow
                   key={track.id}
                   barNumber={index + 1}
-                  song={starterSong}
+                  song={song}
                   track={track}
                 />
               ))}
@@ -238,16 +254,20 @@ function TransportStrip({
   startTransport,
   stopTransport,
   playbackState,
+  onBpmChange,
+  onLoopLengthChange,
 }: {
   song: SongDocument;
   engineState: AudioBootstrapState;
   startTransport: () => Promise<void>;
   stopTransport: () => void;
   playbackState: "stopped" | "playing";
+  onBpmChange: (value: number) => void;
+  onLoopLengthChange: (value: number) => void;
 }) {
   return (
-    <div className="grid gap-3 rounded-none border border-white/10 bg-black/20 p-3 lg:grid-cols-[auto_auto_minmax(0,1fr)] lg:items-center">
-      <div className="flex items-center gap-2">
+    <div className="grid gap-3 rounded-none border border-white/10 bg-black/20 p-3 lg:grid-cols-[auto_minmax(0,220px)_minmax(0,220px)_minmax(0,1fr)] lg:items-center">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           className="bg-[#7ae582] text-[#091022] hover:bg-[#a7f0af]"
           onClick={() => {
@@ -270,15 +290,118 @@ function TransportStrip({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <TransportChip label="BPM" value={`${song.transport.bpm}`} />
+      <TransportField
+        label="BPM"
+        value={song.transport.bpm}
+        min={SONG_BPM_RANGE.min}
+        max={SONG_BPM_RANGE.max}
+        step={1}
+        accentClassName="border-[#ffd166]/40 bg-[#ffd166]/8 text-[#ffd166]"
+        valueSuffix="beats/min"
+        onChange={onBpmChange}
+        parseValue={(rawValue) => resolveSongBpmInput(rawValue, song.transport.bpm)}
+      />
+
+      <TransportField
+        label="Loop Length"
+        value={song.transport.loopLength}
+        min={SONG_LOOP_LENGTH_RANGE.min}
+        max={SONG_LOOP_LENGTH_RANGE.max}
+        step={SONG_LOOP_LENGTH_RANGE.step}
+        accentClassName="border-[#8bd3ff]/40 bg-[#8bd3ff]/8 text-[#8bd3ff]"
+        valueSuffix="steps"
+        onChange={onLoopLengthChange}
+        parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, song.transport.loopLength)}
+      />
+
+      <div className="grid gap-2 sm:grid-cols-3">
         <TransportChip label="Steps / Beat" value={`${song.transport.stepsPerBeat}`} />
-        <TransportChip label="Loop" value={`${song.transport.loopLength}`} />
         <TransportChip label="Audio" value={engineState} />
         <TransportChip label="Playback" value={playbackState} />
       </div>
+    </div>
+  );
+}
 
-      <div className="h-px bg-[linear-gradient(90deg,rgba(255,209,102,0.4),rgba(139,211,255,0.1),transparent)] lg:h-10 lg:w-full" />
+function TransportField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  valueSuffix,
+  accentClassName,
+  onChange,
+  parseValue,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  valueSuffix: string;
+  accentClassName: string;
+  onChange: (value: number) => void;
+  parseValue: (rawValue: string) => number;
+}) {
+  const inputId = `transport-${label.toLowerCase().replace(/\s+/g, "-")}`;
+
+  return (
+    <div className={cn("rounded-none border p-2", accentClassName)}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <label htmlFor={inputId} className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/80">
+          {label}
+        </label>
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
+          {min}-{max}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 rounded-none border-white/10 bg-black/25 px-0 text-white hover:bg-white/10"
+          aria-label={`Decrease ${label}`}
+          onClick={() => {
+            onChange(value - step);
+          }}
+        >
+          <Minus className="size-4" />
+        </Button>
+
+        <div className="rounded-none border border-white/10 bg-[#050816]/85 px-2 py-2">
+          <Input
+            id={inputId}
+            type="number"
+            inputMode="numeric"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            aria-label={label}
+            className="h-7 border-0 bg-transparent px-0 text-center font-mono text-base uppercase tracking-[0.18em] text-white focus-visible:ring-0"
+            onChange={(event) => {
+              onChange(parseValue(event.currentTarget.value));
+            }}
+          />
+          <div className="mt-1 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
+            {valueSuffix}
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 rounded-none border-white/10 bg-black/25 px-0 text-white hover:bg-white/10"
+          aria-label={`Increase ${label}`}
+          onClick={() => {
+            onChange(value + step);
+          }}
+        >
+          <Plus className="size-4" />
+        </Button>
+      </div>
     </div>
   );
 }
