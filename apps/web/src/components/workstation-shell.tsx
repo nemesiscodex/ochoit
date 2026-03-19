@@ -2,10 +2,10 @@ import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Mic, Pause, Play, Save, Square, Upload, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
-import { waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
+import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 import { sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
@@ -13,6 +13,9 @@ import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type Tr
 import {
   type MelodicStepUpdates,
   type MelodicTrackId,
+  parseMelodicTrackArrangement,
+  replaceMelodicTrackArrangement,
+  serializeMelodicTrackArrangement,
   updateMelodicTrackStep,
 } from "@/features/song/song-pattern";
 import {
@@ -25,6 +28,11 @@ import {
 
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
+  const [arrangementEditor, setArrangementEditor] = useState<{
+    trackId: MelodicTrackId;
+    draft: string;
+    error: string | null;
+  } | null>(null);
   const tracks = getOrderedTracks(song);
   const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
@@ -47,6 +55,77 @@ export function WorkstationShell() {
   const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
     setSong((currentSong) => updateMelodicTrackStep(currentSong, trackId, stepIndex, updates));
   };
+
+  const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
+    setArrangementEditor({
+      trackId,
+      draft: serializeMelodicTrackArrangement(song.tracks[trackId]),
+      error: null,
+    });
+  };
+
+  const closeMelodicTrackEditor = () => {
+    setArrangementEditor(null);
+  };
+
+  const updateArrangementDraft = (draft: string) => {
+    setArrangementEditor((currentEditor) => {
+      if (currentEditor === null) {
+        return null;
+      }
+
+      return {
+        ...currentEditor,
+        draft,
+        error: null,
+      };
+    });
+  };
+
+  const applyMelodicTrackArrangement = () => {
+    if (arrangementEditor === null) {
+      return;
+    }
+
+    const parsedArrangement = parseMelodicTrackArrangement(arrangementEditor.draft, song.transport.loopLength);
+
+    if (!parsedArrangement.ok) {
+      setArrangementEditor((currentEditor) => {
+        if (currentEditor === null) {
+          return null;
+        }
+
+        return {
+          ...currentEditor,
+          error: parsedArrangement.error,
+        };
+      });
+      return;
+    }
+
+    setSong((currentSong) =>
+      replaceMelodicTrackArrangement(currentSong, arrangementEditor.trackId, parsedArrangement.entries),
+    );
+    setArrangementEditor(null);
+  };
+
+  useEffect(() => {
+    if (arrangementEditor === null) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setArrangementEditor(null);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [arrangementEditor]);
 
   return (
     <main className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines">
@@ -112,6 +191,7 @@ export function WorkstationShell() {
           <div className="min-w-0">
             <SequencerMatrix
               engine={engine}
+              onOpenMelodicTrackEditor={openMelodicTrackEditor}
               onToggleTrackMute={toggleTrackMute}
               onUpdateMelodicStep={updateMelodicStep}
               song={song}
@@ -127,6 +207,18 @@ export function WorkstationShell() {
           </aside>
         </section>
       </div>
+
+      {arrangementEditor !== null ? (
+        <MelodicArrangementEditor
+          trackId={arrangementEditor.trackId}
+          loopLength={song.transport.loopLength}
+          draft={arrangementEditor.draft}
+          error={arrangementEditor.error}
+          onChangeDraft={updateArrangementDraft}
+          onClose={closeMelodicTrackEditor}
+          onApply={applyMelodicTrackArrangement}
+        />
+      ) : null}
     </main>
   );
 }
@@ -397,6 +489,109 @@ function MetaRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2 border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0">
       <span className="uppercase tracking-[0.18em] text-white/30">{label}</span>
       <span className="font-medium text-white/70">{value}</span>
+    </div>
+  );
+}
+
+function MelodicArrangementEditor({
+  trackId,
+  loopLength,
+  draft,
+  error,
+  onChangeDraft,
+  onClose,
+  onApply,
+}: {
+  trackId: MelodicTrackId;
+  loopLength: number;
+  draft: string;
+  error: string | null;
+  onChangeDraft: (draft: string) => void;
+  onClose: () => void;
+  onApply: () => void;
+}) {
+  const trackLabel = labelByTrackId[trackId];
+  const accentColor = waveformLineColorByTrackId[trackId];
+
+  return (
+    <div className="fixed inset-0 z-[260] flex items-center justify-center p-4">
+      <button
+        type="button"
+        aria-label="Close arrangement editor"
+        className="absolute inset-0 bg-black/70 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-2xl rounded-2xl border border-white/[0.08] bg-[#090b14] p-5 shadow-2xl shadow-black/60">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/35">
+              Voice Arrangement
+            </p>
+            <h2
+              className="mt-1 font-[var(--oc-mono)] text-lg font-bold uppercase tracking-[0.1em]"
+              style={{ color: accentColor }}
+            >
+              {trackLabel}
+            </h2>
+            <p className="mt-2 max-w-xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/50">
+              One step per line in the format <span className="text-white/80">1: E4</span>. Notes are
+              case-insensitive. Steps above {loopLength} are ignored when you apply.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="rounded-md border border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
+
+        <label
+          htmlFor={`arrangement-${trackId}`}
+          className="mb-2 block font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.2em] text-white/40"
+        >
+          {trackLabel} Arrangement Text
+        </label>
+        <textarea
+          id={`arrangement-${trackId}`}
+          aria-label={`${trackLabel} arrangement text`}
+          value={draft}
+          autoFocus
+          spellCheck={false}
+          className="min-h-[360px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 font-[var(--oc-mono)] text-sm leading-6 text-white outline-none transition focus:border-white/20"
+          onChange={(event) => {
+            onChangeDraft(event.currentTarget.value);
+          }}
+        />
+
+        {error !== null ? (
+          <div className="mt-3 rounded-lg border border-[var(--oc-noise)]/35 bg-[var(--oc-noise)]/[0.08] px-3 py-2 font-[var(--oc-mono)] text-[10px] text-[var(--oc-noise)]">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="rounded-md font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.16em] text-[#07080e]"
+            style={{ backgroundColor: accentColor }}
+            onClick={onApply}
+          >
+            Apply Arrangement
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -80,6 +80,50 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Pattern Ruler")).toBeTruthy();
   });
 
+  it("opens the voice text editor with the current arrangement", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    expect(textarea.value).toBe("1: C5\n5: E5\n9: G5\n13: E5");
+  });
+
+  it("applies a pasted voice arrangement and ignores steps beyond the loop length", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    fireEvent.change(textarea, {
+      target: {
+        value: "1: e4\n3: g4\n5: a4\n17: c5",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+
+    expect(screen.queryByLabelText("Pulse I arrangement text")).toBeNull();
+    expect(screen.getByRole("button", { name: "Enable Pulse I step 2" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Disable Pulse I step 3" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Enable Pulse I step 9" })).toBeTruthy();
+
+    const pulseStepOneNote = screen.getByLabelText("Pulse I step 1 note");
+    const pulseStepThreeNote = screen.getByLabelText("Pulse I step 3 note");
+
+    expect(pulseStepOneNote.textContent).toBe("E4");
+    expect(pulseStepThreeNote.textContent).toBe("G4");
+  });
+
   it("renders the sample deck sidebar", () => {
     render(React.createElement(WorkstationShell));
 

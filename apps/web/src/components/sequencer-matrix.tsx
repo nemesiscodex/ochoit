@@ -36,6 +36,7 @@ export function SequencerMatrix({
   playbackState,
   nextStep,
   onToggleTrackMute,
+  onOpenMelodicTrackEditor,
   onUpdateMelodicStep,
 }: {
   engine: AudioEngine | null;
@@ -43,6 +44,7 @@ export function SequencerMatrix({
   playbackState: "stopped" | "playing";
   nextStep: number;
   onToggleTrackMute: (trackId: TrackId) => void;
+  onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
 }) {
   const tracks = getOrderedTracks(song);
@@ -55,6 +57,7 @@ export function SequencerMatrix({
           key={track.id}
           engine={engine}
           nextStep={nextStep}
+          onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
           onToggleTrackMute={onToggleTrackMute}
           onUpdateMelodicStep={onUpdateMelodicStep}
           playbackState={playbackState}
@@ -114,6 +117,7 @@ function StepRuler({
 function SequencerRow({
   engine,
   nextStep,
+  onOpenMelodicTrackEditor,
   onToggleTrackMute,
   onUpdateMelodicStep,
   playbackState,
@@ -121,6 +125,7 @@ function SequencerRow({
 }: {
   engine: AudioEngine | null;
   nextStep: number;
+  onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onToggleTrackMute: (trackId: TrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
   playbackState: "stopped" | "playing";
@@ -181,6 +186,20 @@ function SequencerRow({
           <span>Vol {Math.round(track.volume * 100)}%</span>
           <span>{track.muted ? "Muted" : "Active"}</span>
         </div>
+        {track.kind === "pulse" || track.kind === "triangle" ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label={`Edit ${labelByTrackId[track.id]} arrangement as text`}
+            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            onClick={() => {
+              onOpenMelodicTrackEditor(track.id);
+            }}
+          >
+            Text Edit
+          </Button>
+        ) : null}
       </div>
 
       {/* Step grid */}

@@ -10,6 +10,7 @@ describe("sequencer-matrix", () => {
     render(
       <SequencerMatrix
         engine={null}
+        onOpenMelodicTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
@@ -29,6 +30,7 @@ describe("sequencer-matrix", () => {
     const { container } = render(
       <SequencerMatrix
         engine={null}
+        onOpenMelodicTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
@@ -48,6 +50,7 @@ describe("sequencer-matrix", () => {
     render(
       <SequencerMatrix
         engine={null}
+        onOpenMelodicTrackEditor={() => {}}
         onToggleTrackMute={onToggleTrackMute}
         onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
@@ -67,6 +70,7 @@ describe("sequencer-matrix", () => {
     render(
       <SequencerMatrix
         engine={null}
+        onOpenMelodicTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={onUpdateMelodicStep}
         song={createDefaultSongDocument()}
@@ -96,6 +100,7 @@ describe("sequencer-matrix", () => {
     render(
       <SequencerMatrix
         engine={engine}
+        onOpenMelodicTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
         onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
@@ -108,5 +113,25 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Select note D3" }));
 
     expect(previewNote).toHaveBeenCalledWith("triangle", "D3");
+  });
+
+  it("opens the text editor for a melodic voice", () => {
+    const onOpenMelodicTrackEditor = vi.fn();
+
+    render(
+      <SequencerMatrix
+        engine={null}
+        onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
+        onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    expect(onOpenMelodicTrackEditor).toHaveBeenCalledWith("pulse1");
   });
 });
