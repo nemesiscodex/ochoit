@@ -98,11 +98,29 @@ describe("pulse-voice", () => {
     const song = createDefaultSongDocument();
     const { context, output, createdBuffers, createdGains, createdSources } = createMockAudioContext();
     const voice = new PulseVoice(context, output);
-    const step = song.tracks.pulse1.steps[4];
+    const sustainedSong = {
+      ...song,
+      tracks: {
+        ...song.tracks,
+        pulse1: {
+          ...song.tracks.pulse1,
+          steps: song.tracks.pulse1.steps.map((step, index) =>
+            index === 4
+              ? {
+                  ...step,
+                  enabled: true,
+                  length: 3,
+                }
+              : step,
+          ),
+        },
+      },
+    };
+    const step = sustainedSong.tracks.pulse1.steps[4];
     const stepDuration = 60 / song.transport.bpm / song.transport.stepsPerBeat;
-    const expectedStopTime = 1.5 + Math.max(stepDuration - 0.002, 0.002) + 0.01;
+    const expectedStopTime = 1.5 + Math.max(stepDuration * 3 - 0.002, 0.002) + 0.01;
 
-    voice.configure(song.tracks.pulse1, song.transport);
+    voice.configure(sustainedSong.tracks.pulse1, sustainedSong.transport);
     voice.scheduleStep(4, 1.5);
     voice.scheduleStep(12, 2);
 

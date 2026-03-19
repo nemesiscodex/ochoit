@@ -16,6 +16,8 @@ import {
   getOrderedTracks,
 } from "@/features/song/song-document";
 import {
+  getMelodicStepState,
+  getMelodicTrackMaxLength,
   getDefaultSampleTrigger,
   getNoiseTriggerPresetForStep,
   type MelodicStepUpdates,
@@ -332,6 +334,9 @@ function MelodicStepGrid({
       {track.steps.map((step, index) => {
         const isQuarterBoundary = index % 4 === 0;
         const isActive = playbackState === "playing" && nextStep === index;
+        const melodicStepState = getMelodicStepState(track, index);
+        const isHeldStep = melodicStepState.kind === "hold";
+        const maxLength = melodicStepState.kind === "start" ? getMelodicTrackMaxLength(track, index) : 1;
 
         return (
           <div
@@ -340,48 +345,117 @@ function MelodicStepGrid({
             aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
             className={cn(
               "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
-              step.enabled
+              melodicStepState.kind === "start"
                 ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
+                : isHeldStep
+                  ? "border-white/[0.08] bg-white/[0.05] text-white/50"
                 : isQuarterBoundary
                   ? "border-white/[0.08] bg-white/[0.04] text-white/30"
                   : "border-white/[0.05] bg-white/[0.02] text-white/20",
               isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
             )}
           >
-            {/* Step number + toggle */}
-            <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
-              <span>{index + 1}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
-                aria-pressed={step.enabled}
-                className={cn(
-                  "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
-                  step.enabled && "text-white/60",
-                )}
-                onClick={() => {
-                  onUpdateMelodicStep(track.id, index, { enabled: !step.enabled });
-                }}
-              >
-                {step.enabled ? "On" : "Off"}
-              </Button>
-            </div>
+            {melodicStepState.kind === "hold" ? (
+              <>
+                <div className="mb-1 flex items-center justify-between text-[8px] text-white/35">
+                  <span>{index + 1}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Release ${labelByTrackId[track.id]} before step ${index + 1}`}
+                    className="h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/45 hover:bg-white/[0.08] hover:text-white"
+                    onClick={() => {
+                      onUpdateMelodicStep(track.id, melodicStepState.startIndex, {
+                        length: melodicStepState.offset,
+                      });
+                    }}
+                  >
+                    Cut
+                  </Button>
+                </div>
+                <div className="flex h-6 items-center justify-center rounded-sm border border-white/[0.06] bg-black/20 px-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-white/65">
+                  Hold {melodicStepState.note}
+                </div>
+                <div className="mt-1 text-center text-[7px] uppercase tracking-[0.14em] text-white/28">
+                  {melodicStepState.offset + 1}/{melodicStepState.length}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
+                  <span>{index + 1}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
+                    aria-pressed={step.enabled}
+                    className={cn(
+                      "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
+                      step.enabled && "text-white/60",
+                    )}
+                    onClick={() => {
+                      onUpdateMelodicStep(track.id, index, { enabled: !step.enabled });
+                    }}
+                  >
+                    {step.enabled ? "On" : "Off"}
+                  </Button>
+                </div>
 
-            {/* Note picker grid */}
-            <NotePicker
-              selectedNote={step.note}
-              disabled={!step.enabled}
-              accentColor={accentColor}
-              ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} note`}
-              onSelectNote={(note) => {
-                onUpdateMelodicStep(track.id, index, { note });
-              }}
-              onHoverNote={(note) => {
-                engine?.previewNote(track.id, note);
-              }}
-            />
+                <NotePicker
+                  selectedNote={step.note}
+                  disabled={!step.enabled}
+                  accentColor={accentColor}
+                  ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} note`}
+                  onSelectNote={(note) => {
+                    onUpdateMelodicStep(track.id, index, { note });
+                  }}
+                  onHoverNote={(note) => {
+                    engine?.previewNote(track.id, note);
+                  }}
+                />
+
+                <div className="mt-1 flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Shorten ${labelByTrackId[track.id]} step ${index + 1} duration`}
+                    disabled={!step.enabled || step.length <= 1}
+                    className="h-4 min-w-0 rounded-sm px-1 text-[8px] font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
+                    onClick={() => {
+                      onUpdateMelodicStep(track.id, index, {
+                        length: Math.max(1, step.length - 1),
+                      });
+                    }}
+                  >
+                    -
+                  </Button>
+                  <div
+                    aria-label={`${labelByTrackId[track.id]} step ${index + 1} duration`}
+                    className="flex-1 rounded-sm border border-white/[0.05] bg-black/20 px-1 py-0.5 text-center text-[7px] font-semibold uppercase tracking-[0.14em] text-white/50"
+                  >
+                    {step.enabled ? `${step.length} st` : "--"}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Extend ${labelByTrackId[track.id]} step ${index + 1} duration`}
+                    disabled={!step.enabled || step.length >= maxLength}
+                    className="h-4 min-w-0 rounded-sm px-1 text-[8px] font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
+                    onClick={() => {
+                      onUpdateMelodicStep(track.id, index, {
+                        length: Math.min(maxLength, step.length + 1),
+                      });
+                    }}
+                  >
+                    +
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         );
       })}

@@ -102,6 +102,40 @@ describe("sequencer-matrix", () => {
     expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(2, "triangle", 0, { note: "D3" });
   });
 
+  it("offers extend and release controls for sustained melodic notes", () => {
+    const onUpdateMelodicStep = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = {
+      ...song.tracks.pulse1.steps[0],
+      enabled: true,
+      length: 3,
+    };
+
+    render(
+      <SequencerMatrix
+        engine={null}
+        onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
+        onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={onUpdateMelodicStep}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
+        song={song}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("3 st");
+    expect(screen.getAllByText("Hold C5")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Extend Pulse I step 1 duration" }));
+    fireEvent.click(screen.getByRole("button", { name: "Release Pulse I before step 2" }));
+
+    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(1, "pulse1", 0, { length: 4 });
+    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(2, "pulse1", 0, { length: 1 });
+  });
+
   it("passes the hovered melodic track to the audio preview", () => {
     const previewNote = vi.fn();
     const engine = {

@@ -15,6 +15,7 @@ const pulseDutySchema = z.union([
   z.literal(0.75),
 ]);
 const loopLengthSchema = z.number().int().min(8).max(64).multipleOf(4);
+const melodicStepLengthSchema = z.number().int().min(1).max(64);
 const trackSettingsSchema = z.object({
   muted: z.boolean(),
   solo: z.boolean(),
@@ -26,12 +27,14 @@ const pulseStepSchema = z.object({
   note: noteSchema,
   volume: levelSchema,
   duty: pulseDutySchema,
+  length: melodicStepLengthSchema,
 });
 
 const triangleStepSchema = z.object({
   enabled: z.boolean(),
   note: noteSchema,
   volume: levelSchema,
+  length: melodicStepLengthSchema,
 });
 
 const noiseStepSchema = z.object({
@@ -171,6 +174,10 @@ export const songDocumentSchema = z
       });
     }
 
+    validateMelodicTrack(song.tracks.pulse1, ctx, "pulse1");
+    validateMelodicTrack(song.tracks.pulse2, ctx, "pulse2");
+    validateMelodicTrack(song.tracks.triangle, ctx, "triangle");
+
     const sampleIds = new Set(song.samples.map((sample) => sample.id));
     song.tracks.sample.steps.forEach((step, index) => {
       if (!step.enabled || step.sampleId === null) {
@@ -200,7 +207,7 @@ export type SerializedSampleAsset = z.infer<typeof serializedSampleAssetSchema>;
 const baseTimestamp = "2026-03-18T00:00:00.000Z";
 const defaultLoopLength = 16;
 
-function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z.infer<typeof pulseDutySchema> }>) {
+function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z.infer<typeof pulseDutySchema>; length?: number }>) {
   const seededSteps = new Map(pattern.map((entry) => [entry.index, entry]));
 
   return Array.from({ length: defaultLoopLength }, (_, index) => {
@@ -211,11 +218,12 @@ function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z
       note: step?.note ?? "C4",
       volume: 0.84,
       duty: step?.duty ?? 0.5,
+      length: step?.length ?? 1,
     };
   });
 }
 
-function createTriangleSteps(pattern: Array<{ index: number; note: string }>) {
+function createTriangleSteps(pattern: Array<{ index: number; note: string; length?: number }>) {
   const seededSteps = new Map(pattern.map((entry) => [entry.index, entry]));
 
   return Array.from({ length: defaultLoopLength }, (_, index) => {
@@ -225,6 +233,7 @@ function createTriangleSteps(pattern: Array<{ index: number; note: string }>) {
       enabled: step !== undefined,
       note: step?.note ?? "C3",
       volume: 0.72,
+      length: step?.length ?? 1,
     };
   });
 }
@@ -356,4 +365,40 @@ export function getOrderedTracks(song: SongDocument): Track[] {
 
 export function parseSongDocument(input: unknown): SongDocument {
   return songDocumentSchema.parse(input);
+}
+
+function validateMelodicTrack(
+  track: SongDocument["tracks"]["pulse1"] | SongDocument["tracks"]["pulse2"] | SongDocument["tracks"]["triangle"],
+  ctx: z.RefinementCtx,
+  trackId: "pulse1" | "pulse2" | "triangle",
+) {
+  let activeNoteEnd = -1;
+
+  track.steps.forEach((step, index) => {
+    if (!step.enabled) {
+      return;
+    }
+
+    if (index < activeNoteEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Track "${trackId}" contains overlapping melodic notes.`,
+        path: ["tracks", trackId, "steps", index, "enabled"],
+      });
+      return;
+    }
+
+    const endIndexExclusive = index + step.length;
+
+    if (endIndexExclusive > track.steps.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Track "${trackId}" has a note at step ${index + 1} that exceeds the loop length.`,
+        path: ["tracks", trackId, "steps", index, "length"],
+      });
+      return;
+    }
+
+    activeNoteEnd = endIndexExclusive;
+  });
 }

@@ -91,11 +91,29 @@ describe("triangle-voice", () => {
     const song = createDefaultSongDocument();
     const { context, output, createdBuffers, createdGains, createdSources } = createMockAudioContext();
     const voice = new TriangleVoice(context, output);
-    const step = song.tracks.triangle.steps[8];
+    const sustainedSong = {
+      ...song,
+      tracks: {
+        ...song.tracks,
+        triangle: {
+          ...song.tracks.triangle,
+          steps: song.tracks.triangle.steps.map((step, index) =>
+            index === 8
+              ? {
+                  ...step,
+                  enabled: true,
+                  length: 4,
+                }
+              : step,
+          ),
+        },
+      },
+    };
+    const step = sustainedSong.tracks.triangle.steps[8];
     const stepDuration = 60 / song.transport.bpm / song.transport.stepsPerBeat;
-    const expectedStopTime = 2.5 + Math.max(stepDuration - 0.002, 0.002) + 0.01;
+    const expectedStopTime = 2.5 + Math.max(stepDuration * 4 - 0.002, 0.002) + 0.01;
 
-    voice.configure(song.tracks.triangle, song.transport);
+    voice.configure(sustainedSong.tracks.triangle, sustainedSong.transport);
     voice.scheduleStep(8, 2.5);
     voice.scheduleStep(12, 3);
 

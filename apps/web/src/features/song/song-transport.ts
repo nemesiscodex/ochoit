@@ -88,9 +88,13 @@ function resizePulseTrack(
     ...track,
     steps: Array.from({ length: loopLength }, (_, index) => {
       const step = track.steps[index];
+      const nextEnabledStepIndex = findNextEnabledStepIndex(track.steps, index + 1, loopLength);
 
       if (step !== undefined) {
-        return step;
+        return {
+          ...step,
+          length: step.enabled ? clampMelodicStepLength(step.length, index, loopLength, nextEnabledStepIndex) : 1,
+        };
       }
 
       return {
@@ -98,6 +102,7 @@ function resizePulseTrack(
         note: "C4",
         volume: track.volume,
         duty: 0.5,
+        length: 1,
       };
     }),
   };
@@ -108,18 +113,51 @@ function resizeTriangleTrack(track: SongDocument["tracks"]["triangle"], loopLeng
     ...track,
     steps: Array.from({ length: loopLength }, (_, index) => {
       const step = track.steps[index];
+      const nextEnabledStepIndex = findNextEnabledStepIndex(track.steps, index + 1, loopLength);
 
       if (step !== undefined) {
-        return step;
+        return {
+          ...step,
+          length: step.enabled ? clampMelodicStepLength(step.length, index, loopLength, nextEnabledStepIndex) : 1,
+        };
       }
 
       return {
         enabled: false,
         note: "C3",
         volume: track.volume,
+        length: 1,
       };
     }),
   };
+}
+
+function clampMelodicStepLength(
+  length: number,
+  stepIndex: number,
+  loopLength: number,
+  nextEnabledStepIndex: number | null,
+) {
+  const maxLength = Math.min(
+    loopLength - stepIndex,
+    nextEnabledStepIndex === null ? loopLength - stepIndex : nextEnabledStepIndex - stepIndex,
+  );
+
+  return Math.max(1, Math.min(Math.round(length), maxLength));
+}
+
+function findNextEnabledStepIndex(
+  steps: ReadonlyArray<{ enabled: boolean }>,
+  startIndex: number,
+  loopLength: number,
+) {
+  for (let index = startIndex; index < loopLength; index += 1) {
+    if (steps[index]?.enabled) {
+      return index;
+    }
+  }
+
+  return null;
 }
 
 function resizeNoiseTrack(track: SongDocument["tracks"]["noise"], loopLength: number) {

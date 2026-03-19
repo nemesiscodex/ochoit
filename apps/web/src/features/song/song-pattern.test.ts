@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDefaultSongDocument } from "@/features/song/song-document";
 import {
+  getMelodicStepState,
   noteEntryOptions,
   parseMelodicTrackArrangement,
   parseNoiseTrackArrangement,
@@ -23,21 +24,47 @@ describe("song-pattern", () => {
     expect(noteEntryOptions.at(-1)).toBe("B8");
   });
 
-  it("updates melodic steps immutably", () => {
+  it("updates melodic steps immutably and supports duration changes", () => {
     const song = createDefaultSongDocument();
-    const updatedSong = updateMelodicTrackStep(song, "triangle", 1, {
-      enabled: true,
+    const updatedSong = updateMelodicTrackStep(song, "triangle", 0, {
+      length: 3,
       note: "D3",
     });
 
     expect(updatedSong).not.toBe(song);
-    expect(updatedSong.tracks.triangle.steps[1]).toEqual({
-      ...song.tracks.triangle.steps[1],
-      enabled: true,
+    expect(updatedSong.tracks.triangle.steps[0]).toEqual({
+      ...song.tracks.triangle.steps[0],
       note: "D3",
+      length: 3,
     });
-    expect(updatedSong.tracks.triangle.steps[0]).toEqual(song.tracks.triangle.steps[0]);
+    expect(getMelodicStepState(updatedSong.tracks.triangle, 1)).toEqual({
+      kind: "hold",
+      note: "D3",
+      startIndex: 0,
+      length: 3,
+      offset: 1,
+    });
     expect(updatedSong.tracks.noise).toEqual(song.tracks.noise);
+  });
+
+  it("starts a new melodic note by truncating the previous held note", () => {
+    const song = createDefaultSongDocument();
+    const sustainedSong = updateMelodicTrackStep(song, "pulse1", 0, { length: 4 });
+    const splitSong = updateMelodicTrackStep(sustainedSong, "pulse1", 2, {
+      enabled: true,
+      note: "G4",
+    });
+
+    expect(splitSong.tracks.pulse1.steps[0]).toMatchObject({
+      enabled: true,
+      length: 2,
+      note: "C5",
+    });
+    expect(splitSong.tracks.pulse1.steps[2]).toMatchObject({
+      enabled: true,
+      length: 1,
+      note: "G4",
+    });
   });
 
   it("updates noise and sample steps immutably", () => {
@@ -77,10 +104,11 @@ describe("song-pattern", () => {
     expect(updateSampleTrackStep(song, song.transport.loopLength, { enabled: false })).toBe(song);
   });
 
-  it("serializes the enabled melodic arrangement as step and note pairs", () => {
+  it("serializes the enabled melodic arrangement as note ranges", () => {
     const song = createDefaultSongDocument();
+    const sustainedSong = updateMelodicTrackStep(song, "pulse1", 0, { length: 3 });
 
-    expect(serializeMelodicTrackArrangement(song.tracks.pulse1)).toBe("1: C5\n5: E5\n9: G5\n13: E5");
+    expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1)).toBe("1-3: C5\n5: E5\n9: G5\n13: E5");
   });
 
   it("serializes the enabled noise and sample arrangements", () => {
@@ -92,14 +120,14 @@ describe("song-pattern", () => {
     expect(serializeSampleTrackArrangement(song.tracks.sample)).toBe("8: mic-001@1\n16: mic-001@1");
   });
 
-  it("parses a pasted melodic arrangement, normalizes note casing, and ignores steps past the loop length", () => {
-    const result = parseMelodicTrackArrangement("1: e4\n3: g4\n17: c5", 16);
+  it("parses ranged melodic arrangements, normalizes note casing, and ignores steps past the loop length", () => {
+    const result = parseMelodicTrackArrangement("1-3: e4\n5: g4\n17-20: c5", 16);
 
     expect(result).toEqual({
       ok: true,
       entries: [
-        { stepIndex: 0, note: "E4" },
-        { stepIndex: 2, note: "G4" },
+        { stepIndex: 0, note: "E4", length: 3 },
+        { stepIndex: 4, note: "G4", length: 1 },
       ],
     });
   });
@@ -132,7 +160,11 @@ describe("song-pattern", () => {
   it("rejects invalid arrangement lines", () => {
     expect(parseMelodicTrackArrangement("1 - E4", 16)).toEqual({
       ok: false,
-      error: 'Line 1 must match "<step>: <value>" like "1: E4".',
+      error: 'Line 1 must match "<step>: <value>" or "<start>-<end>: <value>" like "1-4: E4".',
+    });
+    expect(parseMelodicTrackArrangement("3-1: E4", 16)).toEqual({
+      ok: false,
+      error: "Line 1 must use an end step greater than or equal to the start step.",
     });
     expect(parseMelodicTrackArrangement("1: H4", 16)).toEqual({
       ok: false,
@@ -157,26 +189,48 @@ describe("song-pattern", () => {
     });
   });
 
-  it("replaces a melodic voice arrangement and clears unspecified steps", () => {
+  it("replaces a melodic voice arrangement and clears unspecified steps while preserving durations", () => {
     const song = createDefaultSongDocument();
     const updatedSong = replaceMelodicTrackArrangement(song, "pulse1", [
-      { stepIndex: 0, note: "E4" },
-      { stepIndex: 2, note: "G4" },
+      { stepIndex: 0, note: "E4", length: 3 },
+      { stepIndex: 4, note: "G4", length: 2 },
     ]);
 
     expect(updatedSong.tracks.pulse1.steps[0]).toEqual({
       ...song.tracks.pulse1.steps[0],
       enabled: true,
       note: "E4",
+      length: 3,
     });
     expect(updatedSong.tracks.pulse1.steps[1]).toEqual({
       ...song.tracks.pulse1.steps[1],
       enabled: false,
+      length: 1,
     });
-    expect(updatedSong.tracks.pulse1.steps[2]).toEqual({
-      ...song.tracks.pulse1.steps[2],
+    expect(updatedSong.tracks.pulse1.steps[4]).toEqual({
+      ...song.tracks.pulse1.steps[4],
       enabled: true,
       note: "G4",
+      length: 2,
+    });
+  });
+
+  it("truncates overlapping melodic arrangement entries to keep tracks monophonic", () => {
+    const song = createDefaultSongDocument();
+    const updatedSong = replaceMelodicTrackArrangement(song, "triangle", [
+      { stepIndex: 0, note: "C3", length: 4 },
+      { stepIndex: 2, note: "E3", length: 3 },
+    ]);
+
+    expect(updatedSong.tracks.triangle.steps[0]).toMatchObject({
+      enabled: true,
+      length: 2,
+      note: "C3",
+    });
+    expect(updatedSong.tracks.triangle.steps[2]).toMatchObject({
+      enabled: true,
+      length: 3,
+      note: "E3",
     });
   });
 

@@ -65,7 +65,7 @@ export class PulseVoice {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
     const buffer = this.getWaveBuffer(step.duty);
-    const noteDuration = Math.max(this.stepDuration - noteAttackSeconds, noteAttackSeconds);
+    const noteDuration = Math.max(this.stepDuration * step.length - noteAttackSeconds, noteAttackSeconds);
     const noteEndTime = time + noteDuration;
     const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
     const playbackRate = (getFrequencyForNote(step.note) * buffer.length) / buffer.sampleRate;

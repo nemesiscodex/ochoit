@@ -124,6 +124,30 @@ describe("workstation-shell", () => {
     expect(pulseStepThreeNote.textContent).toBe("G4");
   });
 
+  it("applies ranged melodic arrangements and renders held steps", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    fireEvent.change(textarea, {
+      target: {
+        value: "1-3: e4\n5-6: g4",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+
+    expect(screen.queryByLabelText("Pulse I arrangement text")).toBeNull();
+    expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("3 st");
+    expect(screen.getAllByText("Hold E4")).toHaveLength(2);
+    expect(screen.getByLabelText("Pulse I step 5 duration").textContent).toBe("2 st");
+  });
+
   it("opens the noise trigger text editor with the current arrangement", () => {
     render(React.createElement(WorkstationShell));
 
@@ -232,6 +256,20 @@ describe("workstation-shell", () => {
     }
 
     expect(pulseStepOneNote.disabled).toBe(true);
+  });
+
+  it("extends and shortens melodic step durations from the grid controls", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Extend Pulse I step 1 duration" }));
+
+    expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("2 st");
+    expect(screen.getByText("Hold C5")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Shorten Pulse I step 1 duration" }));
+
+    expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("1 st");
+    expect(screen.queryByText("Hold C5")).toBeNull();
   });
 
   it("updates the noise trigger controls from the picker", () => {

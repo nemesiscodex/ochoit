@@ -43,6 +43,7 @@ describe("song-transport", () => {
       note: "C4",
       volume: song.tracks.pulse1.volume,
       duty: 0.5,
+      length: 1,
     });
     expect(updatedSong.tracks.sample.steps[19]).toEqual({
       enabled: false,

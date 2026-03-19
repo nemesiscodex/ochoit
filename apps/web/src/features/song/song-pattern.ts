@@ -1,16 +1,33 @@
 import type {
   NoiseTrack,
+  PulseTrack,
   SampleTrack,
   SerializedSampleAsset,
   SongDocument,
   TrackId,
+  TriangleTrack,
 } from "@/features/song/song-document";
 
 const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const noteOctaves = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
+const minMelodicStepLength = 1;
+const defaultMelodicStepLength = 1;
 
 type NoteName = (typeof noteNames)[number];
 type NoteOctave = (typeof noteOctaves)[number];
+type MelodicTrack = PulseTrack | TriangleTrack;
+
+type ParsedArrangementLine =
+  | {
+      ok: true;
+      stepNumber: number;
+      value: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
 export type NoteValue = `${NoteName}${NoteOctave}`;
 
 export const melodicTrackIds = ["pulse1", "pulse2", "triangle"] as const;
@@ -22,6 +39,7 @@ export type TriggerTrackId = (typeof triggerTrackIds)[number];
 export type MelodicStepUpdates = {
   enabled?: boolean;
   note?: NoteValue;
+  length?: number;
 };
 
 export type NoiseTriggerPresetId =
@@ -56,7 +74,25 @@ export type SampleStepUpdates = {
 export type MelodicArrangementEntry = {
   stepIndex: number;
   note: NoteValue;
+  length: number;
 };
+
+export type MelodicStepState =
+  | {
+      kind: "start";
+      note: NoteValue;
+      length: number;
+    }
+  | {
+      kind: "hold";
+      note: NoteValue;
+      startIndex: number;
+      length: number;
+      offset: number;
+    }
+  | {
+      kind: "rest";
+    };
 
 export type NoiseArrangementEntry = {
   stepIndex: number;
@@ -117,6 +153,7 @@ export const noiseTriggerPresets = [
 export const samplePlaybackRateOptions = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 
 const arrangementLinePattern = /^(\d+)\s*:\s*(.+)$/;
+const melodicArrangementLinePattern = /^(\d+)(?:\s*-\s*(\d+))?\s*:\s*(.+)$/;
 const arrangementNotePattern = /^([A-Ga-g])(#?)([0-8])$/;
 const supportedNoteSet = new Set(noteEntryOptions);
 const samplePlaybackRateMin = 0.25;
@@ -138,6 +175,73 @@ export function isTriggerTrackId(trackId: TrackId): trackId is TriggerTrackId {
   return triggerTrackIds.includes(trackId as TriggerTrackId);
 }
 
+export function getMelodicTrackMaxLength(track: MelodicTrack, stepIndex: number) {
+  const step = track.steps[stepIndex];
+
+  if (step === undefined || !step.enabled) {
+    return defaultMelodicStepLength;
+  }
+
+  const nextEnabledStepIndex = findNextEnabledMelodicStepIndex(track, stepIndex);
+  const loopLength = track.steps.length;
+
+  return nextEnabledStepIndex === null ? loopLength - stepIndex : nextEnabledStepIndex - stepIndex;
+}
+
+export function getMelodicArrangementEntries(track: MelodicTrack): MelodicArrangementEntry[] {
+  return track.steps.flatMap((step, index) => {
+    if (!step.enabled) {
+      return [];
+    }
+
+      return [
+        {
+          stepIndex: index,
+          note: step.note as NoteValue,
+          length: clampMelodicStepLength(step.length, index, track.steps.length),
+        },
+      ];
+  });
+}
+
+export function getMelodicStepState(track: MelodicTrack, stepIndex: number): MelodicStepState {
+  const currentStep = track.steps[stepIndex];
+
+  if (currentStep?.enabled) {
+    return {
+      kind: "start",
+      note: currentStep.note as NoteValue,
+      length: clampMelodicStepLength(currentStep.length, stepIndex, track.steps.length),
+    };
+  }
+
+  for (let index = stepIndex - 1; index >= 0; index -= 1) {
+    const step = track.steps[index];
+
+    if (!step?.enabled) {
+      continue;
+    }
+
+    const length = clampMelodicStepLength(step.length, index, track.steps.length);
+
+    if (stepIndex < index + length) {
+      return {
+        kind: "hold",
+        note: step.note as NoteValue,
+        startIndex: index,
+        length,
+        offset: stepIndex - index,
+      };
+    }
+
+    break;
+  }
+
+  return {
+    kind: "rest",
+  };
+}
+
 export function updateMelodicTrackStep(
   song: SongDocument,
   trackId: MelodicTrackId,
@@ -154,7 +258,7 @@ export function updateMelodicTrackStep(
         ...song,
         tracks: {
           ...song.tracks,
-          pulse1: updatePulseTrackStep(song.tracks.pulse1, stepIndex, updates),
+          pulse1: updateMelodicTrack(song.tracks.pulse1, stepIndex, updates),
         },
       };
     case "pulse2":
@@ -162,7 +266,7 @@ export function updateMelodicTrackStep(
         ...song,
         tracks: {
           ...song.tracks,
-          pulse2: updatePulseTrackStep(song.tracks.pulse2, stepIndex, updates),
+          pulse2: updateMelodicTrack(song.tracks.pulse2, stepIndex, updates),
         },
       };
     case "triangle":
@@ -170,7 +274,7 @@ export function updateMelodicTrackStep(
         ...song,
         tracks: {
           ...song.tracks,
-          triangle: updateTriangleTrackStep(song.tracks.triangle, stepIndex, updates),
+          triangle: updateMelodicTrack(song.tracks.triangle, stepIndex, updates),
         },
       };
   }
@@ -234,16 +338,14 @@ export function updateSampleTrackStep(song: SongDocument, stepIndex: number, upd
   };
 }
 
-export function serializeMelodicTrackArrangement(
-  track: SongDocument["tracks"]["pulse1"] | SongDocument["tracks"]["pulse2"] | SongDocument["tracks"]["triangle"],
-) {
-  return track.steps
-    .flatMap((step, index) => {
-      if (!step.enabled) {
-        return [];
+export function serializeMelodicTrackArrangement(track: MelodicTrack) {
+  return getMelodicArrangementEntries(track)
+    .map((entry) => {
+      if (entry.length === 1) {
+        return `${entry.stepIndex + 1}: ${entry.note}`;
       }
 
-      return `${index + 1}: ${step.note}`;
+      return `${entry.stepIndex + 1}-${entry.stepIndex + entry.length}: ${entry.note}`;
     })
     .join("\n");
 }
@@ -275,10 +377,10 @@ export function serializeSampleTrackArrangement(track: SampleTrack) {
 
 export function parseMelodicTrackArrangement(input: string, loopLength: number): ParseMelodicArrangementResult {
   const lines = splitArrangementLines(input);
-  const entriesByStep = new Map<number, NoteValue>();
+  const entriesByStep = new Map<number, MelodicArrangementEntry>();
 
   for (const [lineIndex, line] of lines.entries()) {
-    const parsedLine = parseArrangementLine(line, lineIndex);
+    const parsedLine = parseMelodicArrangementLine(line, lineIndex);
 
     if (!parsedLine.ok) {
       return parsedLine;
@@ -297,14 +399,20 @@ export function parseMelodicTrackArrangement(input: string, loopLength: number):
       continue;
     }
 
-    entriesByStep.set(parsedLine.stepNumber - 1, note);
+    const finalEndStep = Math.min(parsedLine.endStepNumber ?? parsedLine.stepNumber, loopLength);
+
+    entriesByStep.set(parsedLine.stepNumber - 1, {
+      stepIndex: parsedLine.stepNumber - 1,
+      note,
+      length: finalEndStep - parsedLine.stepNumber + 1,
+    });
   }
 
   return {
     ok: true,
-    entries: Array.from(entriesByStep.entries())
-      .map(([stepIndex, note]) => ({ stepIndex, note }))
-      .sort((left: MelodicArrangementEntry, right: MelodicArrangementEntry) => left.stepIndex - right.stepIndex),
+    entries: Array.from(entriesByStep.values()).sort(
+      (left: MelodicArrangementEntry, right: MelodicArrangementEntry) => left.stepIndex - right.stepIndex,
+    ),
   };
 }
 
@@ -401,22 +509,13 @@ export function replaceMelodicTrackArrangement(
   trackId: MelodicTrackId,
   entries: readonly MelodicArrangementEntry[],
 ): SongDocument {
-  const entriesByStep = new Map(entries.map((entry) => [entry.stepIndex, entry.note]));
-
   switch (trackId) {
     case "pulse1":
       return {
         ...song,
         tracks: {
           ...song.tracks,
-          pulse1: {
-            ...song.tracks.pulse1,
-            steps: song.tracks.pulse1.steps.map((step, index) => ({
-              ...step,
-              enabled: entriesByStep.has(index),
-              note: entriesByStep.get(index) ?? step.note,
-            })),
-          },
+          pulse1: buildMelodicTrack(song.tracks.pulse1, entries),
         },
       };
     case "pulse2":
@@ -424,14 +523,7 @@ export function replaceMelodicTrackArrangement(
         ...song,
         tracks: {
           ...song.tracks,
-          pulse2: {
-            ...song.tracks.pulse2,
-            steps: song.tracks.pulse2.steps.map((step, index) => ({
-              ...step,
-              enabled: entriesByStep.has(index),
-              note: entriesByStep.get(index) ?? step.note,
-            })),
-          },
+          pulse2: buildMelodicTrack(song.tracks.pulse2, entries),
         },
       };
     case "triangle":
@@ -439,14 +531,7 @@ export function replaceMelodicTrackArrangement(
         ...song,
         tracks: {
           ...song.tracks,
-          triangle: {
-            ...song.tracks.triangle,
-            steps: song.tracks.triangle.steps.map((step, index) => ({
-              ...step,
-              enabled: entriesByStep.has(index),
-              note: entriesByStep.get(index) ?? step.note,
-            })),
-          },
+          triangle: buildMelodicTrack(song.tracks.triangle, entries),
         },
       };
   }
@@ -553,6 +638,116 @@ export function formatPlaybackRateLabel(playbackRate: number) {
   return `${formatSamplePlaybackRate(playbackRate)}x`;
 }
 
+function updateMelodicTrack<TTrack extends MelodicTrack>(
+  track: TTrack,
+  stepIndex: number,
+  updates: MelodicStepUpdates,
+) {
+  const entries = getMelodicArrangementEntries(track);
+  const existingEntryIndex = entries.findIndex((entry) => entry.stepIndex === stepIndex);
+
+  if (updates.enabled === false) {
+    if (existingEntryIndex === -1) {
+      return track;
+    }
+
+    const nextEntries = entries.filter((entry) => entry.stepIndex !== stepIndex);
+    return buildMelodicTrack(track, nextEntries);
+  }
+
+  if (existingEntryIndex !== -1) {
+    const nextEntries = entries.map((entry) => {
+      if (entry.stepIndex !== stepIndex) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        note: updates.note ?? entry.note,
+        length:
+          updates.length === undefined
+            ? entry.length
+            : clampMelodicStepLength(updates.length, stepIndex, track.steps.length),
+      };
+    });
+
+    return buildMelodicTrack(track, nextEntries);
+  }
+
+  if (updates.enabled !== true) {
+    return track;
+  }
+
+  const coveringEntry = entries.find(
+    (entry) => entry.stepIndex < stepIndex && stepIndex < entry.stepIndex + entry.length,
+  );
+  const nextEntries = entries
+    .map((entry) =>
+      coveringEntry !== undefined && entry.stepIndex === coveringEntry.stepIndex
+        ? {
+            ...entry,
+            length: stepIndex - entry.stepIndex,
+          }
+        : entry,
+    )
+    .filter((entry) => entry.length >= minMelodicStepLength);
+
+  nextEntries.push({
+    stepIndex,
+    note: updates.note ?? (track.steps[stepIndex]?.note as NoteValue | undefined) ?? "C4",
+    length:
+      updates.length === undefined
+        ? defaultMelodicStepLength
+        : clampMelodicStepLength(updates.length, stepIndex, track.steps.length),
+  });
+
+  return buildMelodicTrack(track, nextEntries);
+}
+
+function buildMelodicTrack<TTrack extends MelodicTrack>(
+  track: TTrack,
+  entries: readonly MelodicArrangementEntry[],
+) {
+  const dedupedEntriesByStep = new Map(entries.map((entry) => [entry.stepIndex, entry]));
+  const sortedEntries = Array.from(dedupedEntriesByStep.values())
+    .filter((entry) => entry.stepIndex >= 0 && entry.stepIndex < track.steps.length)
+    .sort((left, right) => left.stepIndex - right.stepIndex);
+  const normalizedEntries = sortedEntries.map((entry, index) => {
+    const nextStart = sortedEntries[index + 1]?.stepIndex ?? track.steps.length;
+    const maxLength = Math.min(track.steps.length - entry.stepIndex, nextStart - entry.stepIndex);
+
+    return {
+      ...entry,
+      length: Math.max(minMelodicStepLength, Math.min(Math.round(entry.length), maxLength)),
+    };
+  });
+  const steps = track.steps.map((step) => ({
+    ...step,
+    enabled: false,
+    length: defaultMelodicStepLength,
+  }));
+
+  normalizedEntries.forEach((entry) => {
+    const step = steps[entry.stepIndex];
+
+    if (step === undefined) {
+      return;
+    }
+
+    steps[entry.stepIndex] = {
+      ...step,
+      enabled: true,
+      note: entry.note,
+      length: entry.length,
+    };
+  });
+
+  return {
+    ...track,
+    steps,
+  };
+}
+
 function normalizeArrangementNote(rawNote: string): NoteValue | null {
   const match = arrangementNotePattern.exec(rawNote.trim());
 
@@ -571,10 +766,55 @@ function splitArrangementLines(input: string) {
     .filter((line) => line.length > 0);
 }
 
-function parseArrangementLine(
+function parseMelodicArrangementLine(
   line: string,
   lineIndex: number,
-): { ok: true; stepNumber: number; value: string } | { ok: false; error: string } {
+):
+  | {
+      ok: true;
+      stepNumber: number;
+      endStepNumber: number | null;
+      value: string;
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
+  const match = melodicArrangementLinePattern.exec(line);
+
+  if (match === null) {
+    return {
+      ok: false,
+      error: `Line ${lineIndex + 1} must match "<step>: <value>" or "<start>-<end>: <value>" like "1-4: E4".`,
+    };
+  }
+
+  const stepNumber = Number(match[1]);
+  const endStepNumber = match[2] === undefined ? null : Number(match[2]);
+
+  if (!Number.isInteger(stepNumber) || stepNumber < 1) {
+    return {
+      ok: false,
+      error: `Line ${lineIndex + 1} must use a step number starting at 1.`,
+    };
+  }
+
+  if (endStepNumber !== null && (!Number.isInteger(endStepNumber) || endStepNumber < stepNumber)) {
+    return {
+      ok: false,
+      error: `Line ${lineIndex + 1} must use an end step greater than or equal to the start step.`,
+    };
+  }
+
+  return {
+    ok: true,
+    stepNumber,
+    endStepNumber,
+    value: match[3].trim(),
+  };
+}
+
+function parseArrangementLine(line: string, lineIndex: number): ParsedArrangementLine {
   const match = arrangementLinePattern.exec(line);
 
   if (match === null) {
@@ -691,38 +931,16 @@ function formatSamplePlaybackRate(playbackRate: number) {
   return playbackRate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-function updatePulseTrackStep(
-  track: SongDocument["tracks"]["pulse1"] | SongDocument["tracks"]["pulse2"],
-  stepIndex: number,
-  updates: MelodicStepUpdates,
-) {
-  return {
-    ...track,
-    steps: track.steps.map((step, index) => {
-      if (index !== stepIndex) {
-        return step;
-      }
-
-      return {
-        ...step,
-        ...updates,
-      };
-    }),
-  };
+function clampMelodicStepLength(length: number, stepIndex: number, loopLength: number) {
+  return Math.max(minMelodicStepLength, Math.min(Math.round(length), loopLength - stepIndex));
 }
 
-function updateTriangleTrackStep(track: SongDocument["tracks"]["triangle"], stepIndex: number, updates: MelodicStepUpdates) {
-  return {
-    ...track,
-    steps: track.steps.map((step, index) => {
-      if (index !== stepIndex) {
-        return step;
-      }
+function findNextEnabledMelodicStepIndex(track: MelodicTrack, stepIndex: number) {
+  for (let index = stepIndex + 1; index < track.steps.length; index += 1) {
+    if (track.steps[index]?.enabled) {
+      return index;
+    }
+  }
 
-      return {
-        ...step,
-        ...updates,
-      };
-    }),
-  };
+  return null;
 }
