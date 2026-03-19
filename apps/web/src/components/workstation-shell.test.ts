@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -87,8 +87,24 @@ describe("workstation-shell", () => {
 
     expect(
       screen.getByText(
-        /Pulse voices 1 and 2, the triangle voice, the noise voice, transport playback, and per-voice waveform monitoring are live/i,
+        /Pulse voices 1 and 2, the triangle voice, the noise voice, the PCM sample voice, transport playback, and per-voice waveform monitoring are live/i,
       ),
     ).toBeTruthy();
+  });
+
+  it("toggles the mute state for a specific voice", () => {
+    render(React.createElement(WorkstationShell));
+
+    const pulseRowHeading = screen.getByRole("heading", { name: "Pulse I" });
+    const pulseRow = pulseRowHeading.closest('[data-slot="card"]');
+
+    if (!(pulseRow instanceof HTMLElement)) {
+      throw new Error("Expected Pulse I row card.");
+    }
+
+    fireEvent.click(within(pulseRow).getByRole("button", { name: "Mute Pulse I" }));
+
+    expect(within(pulseRow).getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
+    expect(within(pulseRow).getByText("yes")).toBeTruthy();
   });
 });

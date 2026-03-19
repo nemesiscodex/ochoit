@@ -10,7 +10,7 @@ import { waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/compon
 import { WaveformCanvas } from "@/components/waveform-canvas";
 import { sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
-import { createDefaultSongDocument, getOrderedTracks, type SongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type TrackId } from "@/features/song/song-document";
 import {
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
@@ -25,6 +25,19 @@ export function WorkstationShell() {
   const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
   const audioReady = engineState === "running" || engineState === "suspended";
+
+  const toggleTrackMute = (trackId: TrackId) => {
+    setSong((currentSong) => ({
+      ...currentSong,
+      tracks: {
+        ...currentSong.tracks,
+        [trackId]: {
+          ...currentSong.tracks[trackId],
+          muted: !currentSong.tracks[trackId].muted,
+        },
+      },
+    }));
+  };
 
   return (
     <main className="min-h-full overflow-auto bg-[#050816] text-white">
@@ -47,7 +60,7 @@ export function WorkstationShell() {
                       </h1>
                       <p className="max-w-3xl text-sm text-slate-300">
                         A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        Pulse voices 1 and 2, the triangle voice, the noise voice, transport playback, and per-voice waveform monitoring are live,
+                        Pulse voices 1 and 2, the triangle voice, the noise voice, the PCM sample voice, transport playback, and per-voice waveform monitoring are live,
                         while the editor rows are still being connected to real sequencing data.
                       </p>
                     </div>
@@ -158,7 +171,7 @@ export function WorkstationShell() {
                     <SidebarPanel
                       icon={Gauge}
                       title="Next Engine Step"
-                      body="Add the PCM sample voice, then keep wiring the step grid up for note and trigger editing."
+                      body="Hook the step grid up for note and trigger editing across the live voices."
                     />
                   </div>
                 </CardContent>
@@ -196,6 +209,7 @@ export function WorkstationShell() {
 
             <SequencerMatrix
               engine={engine}
+              onToggleTrackMute={toggleTrackMute}
               song={song}
               playbackState={transportState.playbackState}
               nextStep={transportState.nextStep}

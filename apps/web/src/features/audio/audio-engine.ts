@@ -1,6 +1,7 @@
 import { NoiseVoice } from "@/features/audio/noise-voice";
 import { AudioTransport } from "@/features/audio/audio-transport";
 import { PulseVoice } from "@/features/audio/pulse-voice";
+import { SampleVoice } from "@/features/audio/sample-voice";
 import { TriangleVoice } from "@/features/audio/triangle-voice";
 import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
 
@@ -24,6 +25,7 @@ export class AudioEngine {
   private readonly pulseVoice2: PulseVoice;
   private readonly triangleVoice: TriangleVoice;
   private readonly noiseVoice: NoiseVoice;
+  private readonly sampleVoice: SampleVoice;
   private readonly unsubscribeTransport: () => void;
 
   private constructor(
@@ -35,6 +37,7 @@ export class AudioEngine {
     pulseVoice2: PulseVoice,
     triangleVoice: TriangleVoice,
     noiseVoice: NoiseVoice,
+    sampleVoice: SampleVoice,
     unsubscribeTransport: () => void,
   ) {
     this.context = context;
@@ -45,6 +48,7 @@ export class AudioEngine {
     this.pulseVoice2 = pulseVoice2;
     this.triangleVoice = triangleVoice;
     this.noiseVoice = noiseVoice;
+    this.sampleVoice = sampleVoice;
     this.unsubscribeTransport = unsubscribeTransport;
   }
 
@@ -89,6 +93,7 @@ export class AudioEngine {
     const pulseVoice2 = new PulseVoice(context, voices.pulse2.input);
     const triangleVoice = new TriangleVoice(context, voices.triangle.input);
     const noiseVoice = new NoiseVoice(context, voices.noise.input);
+    const sampleVoice = new SampleVoice(context, voices.sample.input);
     const unsubscribeTransport = transport.subscribe((event) => {
       if (event.type !== "scheduled-steps") {
         return;
@@ -99,6 +104,7 @@ export class AudioEngine {
         pulseVoice2.scheduleStep(step, time);
         triangleVoice.scheduleStep(step, time);
         noiseVoice.scheduleStep(step, time);
+        sampleVoice.scheduleStep(step, time);
       });
     });
 
@@ -111,6 +117,7 @@ export class AudioEngine {
       pulseVoice2,
       triangleVoice,
       noiseVoice,
+      sampleVoice,
       unsubscribeTransport,
     );
   }
@@ -148,6 +155,7 @@ export class AudioEngine {
     this.pulseVoice2.configure(song.tracks.pulse2, song.transport);
     this.triangleVoice.configure(song.tracks.triangle, song.transport);
     this.noiseVoice.configure(song.tracks.noise, song.transport);
+    this.sampleVoice.configure(song.tracks.sample, song.samples);
     this.transport.configure(song.transport);
   }
 

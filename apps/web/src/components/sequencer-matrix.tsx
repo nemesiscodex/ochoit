@@ -1,11 +1,12 @@
+import { Button } from "@ochoit/ui/components/button";
 import { Card, CardContent } from "@ochoit/ui/components/card";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Activity } from "lucide-react";
+import { Activity, Volume2, VolumeX } from "lucide-react";
 
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
 import { useTrackWaveform } from "@/features/audio/use-track-waveform";
-import { type SongDocument, type Track, getOrderedTracks } from "@/features/song/song-document";
+import { type SongDocument, type Track, type TrackId, getOrderedTracks } from "@/features/song/song-document";
 
 import {
   accentByTrackId,
@@ -23,11 +24,13 @@ export function SequencerMatrix({
   song,
   playbackState,
   nextStep,
+  onToggleTrackMute,
 }: {
   engine: AudioEngine | null;
   song: SongDocument;
   playbackState: "stopped" | "playing";
   nextStep: number;
+  onToggleTrackMute: (trackId: TrackId) => void;
 }) {
   const tracks = getOrderedTracks(song);
 
@@ -41,6 +44,7 @@ export function SequencerMatrix({
           engine={engine}
           loopLength={song.transport.loopLength}
           nextStep={nextStep}
+          onToggleTrackMute={onToggleTrackMute}
           playbackState={playbackState}
           sampleCount={song.samples.length}
           track={track}
@@ -98,6 +102,7 @@ function SequencerRow({
   engine,
   loopLength,
   nextStep,
+  onToggleTrackMute,
   playbackState,
   sampleCount,
   track,
@@ -106,6 +111,7 @@ function SequencerRow({
   engine: AudioEngine | null;
   loopLength: number;
   nextStep: number;
+  onToggleTrackMute: (trackId: TrackId) => void;
   playbackState: "stopped" | "playing";
   sampleCount: number;
   track: Track;
@@ -125,14 +131,32 @@ function SequencerRow({
                 {labelByTrackId[track.id]}
               </h3>
             </div>
-            <span
-              className={cn(
-                "rounded-none border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.22em]",
-                accentClassName,
-              )}
-            >
-              {track.kind}
-            </span>
+            <div className="flex items-start gap-2">
+              <span
+                className={cn(
+                  "rounded-none border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.22em]",
+                  accentClassName,
+                )}
+              >
+                {track.kind}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-sm"
+                aria-label={`${track.muted ? "Unmute" : "Mute"} ${labelByTrackId[track.id]}`}
+                aria-pressed={track.muted}
+                className={cn(
+                  "border-white/15 bg-white/5 text-white hover:bg-white/10",
+                  track.muted && "border-[#ff8c69]/45 bg-[#ff8c69]/12 text-[#ffb39b] hover:bg-[#ff8c69]/18",
+                )}
+                onClick={() => {
+                  onToggleTrackMute(track.id);
+                }}
+              >
+                {track.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+              </Button>
+            </div>
           </div>
 
           <p className="mt-3 text-sm text-slate-300">{getTrackSummary(track)}</p>
