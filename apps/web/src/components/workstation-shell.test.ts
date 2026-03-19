@@ -87,7 +87,7 @@ describe("workstation-shell", () => {
 
     expect(
       screen.getByText(
-        /Pulse voices 1 and 2, the triangle voice, the noise voice, the PCM sample voice, transport playback, and per-voice waveform monitoring are live/i,
+        /Pulse and triangle note entry, the full five-voice playback engine, transport playback, and per-voice waveform monitoring are live/i,
       ),
     ).toBeTruthy();
   });
@@ -106,5 +106,35 @@ describe("workstation-shell", () => {
 
     expect(within(pulseRow).getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
     expect(within(pulseRow).getByText("yes")).toBeTruthy();
+  });
+
+  it("updates melodic steps from the note-entry controls", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable Pulse I step 2" }));
+
+    const pulseStepTwoNote = screen.getByLabelText("Pulse I step 2 note");
+
+    if (!(pulseStepTwoNote instanceof HTMLSelectElement)) {
+      throw new Error("Expected Pulse I step 2 note to be a select.");
+    }
+
+    expect(pulseStepTwoNote.disabled).toBe(false);
+
+    fireEvent.change(pulseStepTwoNote, {
+      target: { value: "D5" },
+    });
+
+    expect(pulseStepTwoNote.value).toBe("D5");
+
+    fireEvent.click(screen.getByRole("button", { name: "Disable Pulse I step 1" }));
+
+    const pulseStepOneNote = screen.getByLabelText("Pulse I step 1 note");
+
+    if (!(pulseStepOneNote instanceof HTMLSelectElement)) {
+      throw new Error("Expected Pulse I step 1 note to be a select.");
+    }
+
+    expect(pulseStepOneNote.disabled).toBe(true);
   });
 });

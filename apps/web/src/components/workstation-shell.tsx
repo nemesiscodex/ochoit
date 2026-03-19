@@ -12,6 +12,11 @@ import { sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type TrackId } from "@/features/song/song-document";
 import {
+  type MelodicStepUpdates,
+  type MelodicTrackId,
+  updateMelodicTrackStep,
+} from "@/features/song/song-pattern";
+import {
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
   SONG_BPM_RANGE,
@@ -39,6 +44,10 @@ export function WorkstationShell() {
     }));
   };
 
+  const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
+    setSong((currentSong) => updateMelodicTrackStep(currentSong, trackId, stepIndex, updates));
+  };
+
   return (
     <main className="min-h-full overflow-auto bg-[#050816] text-white">
       <div className="relative isolate">
@@ -60,8 +69,8 @@ export function WorkstationShell() {
                       </h1>
                       <p className="max-w-3xl text-sm text-slate-300">
                         A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        Pulse voices 1 and 2, the triangle voice, the noise voice, the PCM sample voice, transport playback, and per-voice waveform monitoring are live,
-                        while the editor rows are still being connected to real sequencing data.
+                        Pulse and triangle note entry, the full five-voice playback engine, transport playback, and per-voice waveform monitoring are live,
+                        while the noise and PCM trigger editors, mixer controls, and sample workflow still need wiring.
                       </p>
                     </div>
                   </div>
@@ -171,7 +180,7 @@ export function WorkstationShell() {
                     <SidebarPanel
                       icon={Gauge}
                       title="Next Engine Step"
-                      body="Hook the step grid up for note and trigger editing across the live voices."
+                      body="Add trigger editing for the noise and PCM lanes, then land the missing per-voice controls."
                     />
                   </div>
                 </CardContent>
@@ -203,13 +212,14 @@ export function WorkstationShell() {
                 </h2>
               </div>
               <div className="rounded-none border border-white/10 bg-white/5 px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-white/70">
-                Live waveform canvas online; row controls and step grid land next
+                Pulse / triangle note entry live; trigger rows next
               </div>
             </div>
 
             <SequencerMatrix
               engine={engine}
               onToggleTrackMute={toggleTrackMute}
+              onUpdateMelodicStep={updateMelodicStep}
               song={song}
               playbackState={transportState.playbackState}
               nextStep={transportState.nextStep}

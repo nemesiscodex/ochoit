@@ -10,6 +10,7 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -28,6 +29,7 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="playing"
         nextStep={4}
@@ -46,6 +48,7 @@ describe("sequencer-matrix", () => {
       <SequencerMatrix
         engine={null}
         onToggleTrackMute={onToggleTrackMute}
+        onUpdateMelodicStep={() => {}}
         song={createDefaultSongDocument()}
         playbackState="stopped"
         nextStep={0}
@@ -55,5 +58,28 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mute Pulse I" }));
 
     expect(onToggleTrackMute).toHaveBeenCalledWith("pulse1");
+  });
+
+  it("calls the melodic step update callback for pulse and triangle note editing", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    render(
+      <SequencerMatrix
+        engine={null}
+        onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={onUpdateMelodicStep}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Disable Pulse I step 1" }));
+    fireEvent.change(screen.getByLabelText("Triangle step 1 note"), {
+      target: { value: "D3" },
+    });
+
+    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(1, "pulse1", 0, { enabled: false });
+    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(2, "triangle", 0, { note: "D3" });
   });
 });

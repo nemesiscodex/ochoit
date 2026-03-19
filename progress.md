@@ -20,7 +20,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Implement triangle voice
 - [x] Implement noise voice
 - [x] Implement PCM sample voice
-- [ ] Add note entry UI for pulse and triangle voices
+- [x] Add note entry UI for pulse and triangle voices
 - [ ] Add trigger UI for noise and PCM voices
 - [ ] Add per-voice mute and volume controls
 - [ ] Add duty cycle controls for pulse voices
