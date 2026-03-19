@@ -1,27 +1,25 @@
-import { Link } from "@tanstack/react-router";
-
 export default function Header() {
-  const links = [{ to: "/", label: "Studio" }] as const;
-
   return (
-    <header className="border-b border-white/10 bg-[#040712]/95 px-4 py-3 backdrop-blur md:px-6">
+    <header className="border-b border-white/[0.06] bg-[#07080e]/95 px-4 py-2.5 backdrop-blur-sm md:px-6">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-8 items-center justify-center rounded-md bg-gradient-to-br from-[var(--oc-pulse1)] to-[var(--oc-noise)]">
+            <span className="font-[var(--oc-display)] text-xs font-black text-[#07080e]">O</span>
+          </div>
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.34em] text-cyan-200/75">Ochoit</p>
-            <p className="mt-1 font-mono text-sm uppercase tracking-[0.24em] text-white">NES Music System</p>
+            <p className="font-[var(--oc-display)] text-base leading-tight font-bold tracking-wide text-white">
+              Ochoit
+            </p>
+            <p className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.28em] text-white/40">
+              8-Bit Workstation
+            </p>
           </div>
         </div>
 
-        <nav className="flex items-center gap-4 font-mono text-[11px] uppercase tracking-[0.24em] text-white/75">
-          {links.map(({ to, label }) => {
-            return (
-              <Link key={to} to={to} className="transition-colors hover:text-white">
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex items-center gap-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.2em] text-white/35">
+          <span className="hidden sm:inline">NES-Inspired Sequencer</span>
+          <div className="size-1.5 rounded-full bg-[var(--oc-play)]" />
+        </div>
       </div>
     </header>
   );

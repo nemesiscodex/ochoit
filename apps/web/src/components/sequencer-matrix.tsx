@@ -1,7 +1,6 @@
 import { Button } from "@ochoit/ui/components/button";
-import { Card, CardContent } from "@ochoit/ui/components/card";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Activity, Volume2, VolumeX } from "lucide-react";
+import { Volume2, VolumeX } from "lucide-react";
 
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
@@ -17,18 +16,18 @@ import {
 import {
   type MelodicStepUpdates,
   type MelodicTrackId,
-  noteEntryOptions,
 } from "@/features/song/song-pattern";
 
 import {
   accentByTrackId,
   getStepLabel,
-  getTrackControls,
-  getTrackSummary,
   labelByTrackId,
+  shortLabelByTrackId,
+  voiceColorByTrackId,
   waveformGlowColorByTrackId,
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
+import { NotePicker } from "@/components/note-picker";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
@@ -49,25 +48,24 @@ export function SequencerMatrix({
   const tracks = getOrderedTracks(song);
 
   return (
-    <div className="grid gap-3">
+    <div className="flex flex-col gap-2">
       <StepRuler loopLength={song.transport.loopLength} nextStep={nextStep} playbackState={playbackState} />
-      {tracks.map((track, index) => (
+      {tracks.map((track) => (
         <SequencerRow
           key={track.id}
-          barNumber={index + 1}
           engine={engine}
-          loopLength={song.transport.loopLength}
           nextStep={nextStep}
           onToggleTrackMute={onToggleTrackMute}
           onUpdateMelodicStep={onUpdateMelodicStep}
           playbackState={playbackState}
-          sampleCount={song.samples.length}
           track={track}
         />
       ))}
     </div>
   );
 }
+
+/* ─────────── Step Ruler ─────────── */
 
 function StepRuler({
   loopLength,
@@ -79,12 +77,12 @@ function StepRuler({
   playbackState: "stopped" | "playing";
 }) {
   return (
-    <div className="rounded-none border border-white/10 bg-[#091022]/85 p-3 backdrop-blur">
-      <div className="mb-3 flex items-center justify-between gap-3 font-mono text-[11px] uppercase tracking-[0.24em] text-white/65">
+    <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-2 backdrop-blur">
+      <div className="mb-2 flex items-center justify-between px-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">
         <span>Pattern Ruler</span>
         <span>{loopLength} step loop</span>
       </div>
-      <div className="grid grid-cols-8 gap-2 md:grid-cols-16">
+      <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
         {Array.from({ length: loopLength }, (_, index) => {
           const isQuarterBoundary = index % 4 === 0;
           const isActive = playbackState === "playing" && nextStep === index;
@@ -94,16 +92,15 @@ function StepRuler({
               key={`ruler-step-${index}`}
               aria-current={isActive ? "step" : undefined}
               className={cn(
-                "rounded-none border px-2 py-2 text-center font-mono text-[10px] uppercase tracking-[0.18em]",
+                "rounded-sm py-1.5 text-center font-[var(--oc-mono)] text-[10px] font-medium transition-all",
                 isActive
-                  ? "border-cyan-200/75 bg-cyan-200/15 text-cyan-100 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"
+                  ? "oc-playhead-active bg-[var(--oc-play)]/15 text-[var(--oc-play)]"
                   : isQuarterBoundary
-                    ? "border-white/15 bg-white/[0.07] text-white/80"
-                    : "border-white/10 bg-white/5 text-white/45",
+                    ? "bg-white/[0.06] text-white/50"
+                    : "bg-white/[0.03] text-white/25",
               )}
             >
-              <div className="text-[9px] text-white/40">Step</div>
-              <div className="mt-1">{index + 1}</div>
+              {index + 1}
             </div>
           );
         })}
@@ -112,131 +109,106 @@ function StepRuler({
   );
 }
 
+/* ─────────── Sequencer Row ─────────── */
+
 function SequencerRow({
-  barNumber,
   engine,
-  loopLength,
   nextStep,
   onToggleTrackMute,
   onUpdateMelodicStep,
   playbackState,
-  sampleCount,
   track,
 }: {
-  barNumber: number;
   engine: AudioEngine | null;
-  loopLength: number;
   nextStep: number;
   onToggleTrackMute: (trackId: TrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
   playbackState: "stopped" | "playing";
-  sampleCount: number;
   track: Track;
 }) {
-  const accentClassName = accentByTrackId[track.id];
-
   return (
-    <Card className="border-white/10 bg-[#091022]/85 backdrop-blur">
-      <CardContent className="grid gap-3 px-0 py-0 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="border-b border-white/10 p-4 lg:border-r lg:border-b-0">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-white/60">
-                Row {barNumber.toString().padStart(2, "0")}
-              </p>
-              <h3 className="mt-2 font-mono text-lg uppercase tracking-[0.16em] text-white">
-                {labelByTrackId[track.id]}
-              </h3>
-            </div>
-            <div className="flex items-start gap-2">
-              <span
-                className={cn(
-                  "rounded-none border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.22em]",
-                  accentClassName,
-                )}
-              >
-                {track.kind}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                aria-label={`${track.muted ? "Unmute" : "Mute"} ${labelByTrackId[track.id]}`}
-                aria-pressed={track.muted}
-                className={cn(
-                  "border-white/15 bg-white/5 text-white hover:bg-white/10",
-                  track.muted && "border-[#ff8c69]/45 bg-[#ff8c69]/12 text-[#ffb39b] hover:bg-[#ff8c69]/18",
-                )}
-                onClick={() => {
-                  onToggleTrackMute(track.id);
-                }}
-              >
-                {track.muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-              </Button>
-            </div>
+    <div
+      className="oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]"
+      style={{ borderLeftColor: voiceColorByTrackId[track.id], borderLeftWidth: "3px" }}
+    >
+      {/* Voice info panel */}
+      <div className="flex flex-col gap-2 border-b border-white/[0.06] p-3 lg:border-r lg:border-b-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-block size-2 rounded-full"
+              style={{ backgroundColor: waveformLineColorByTrackId[track.id] }}
+            />
+            <h3 className="font-[var(--oc-mono)] text-sm font-bold uppercase tracking-[0.12em] text-white">
+              {labelByTrackId[track.id]}
+            </h3>
           </div>
-
-          <p className="mt-3 text-sm text-slate-300">{getTrackSummary(track)}</p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {getTrackControls(track).map((control) => (
-              <span
-                key={control}
-                className={cn(
-                  "rounded-none border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.22em]",
-                  accentClassName,
-                )}
-              >
-                {control}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] uppercase tracking-[0.2em] text-white/65">
-            <MiniStat label="Track Vol" value={`${Math.round(track.volume * 100)}%`} />
-            <MiniStat label="Muted" value={track.muted ? "yes" : "no"} />
-            <MiniStat label="Sample" value={track.id === "sample" ? `${sampleCount}` : "n/a"} />
-          </div>
-        </div>
-
-        <div className="grid gap-3 p-4">
-          <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)]">
-            <div className="rounded-none border border-white/10 bg-black/20 p-3">
-              <div className="mb-3 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.24em] text-white/65">
-                <span>Waveform</span>
-                <Activity className="size-4 text-cyan-200" />
-              </div>
-              <VoiceWaveformPanel engine={engine} track={track} />
-            </div>
-
-            <div className="rounded-none border border-white/10 bg-black/20 p-3">
-              <div className="mb-3 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.24em] text-white/65">
-                <span>Step Grid</span>
-                <span>{loopLength} steps</span>
-              </div>
-              {track.kind === "pulse" || track.kind === "triangle" ? (
-                <MelodicStepGrid
-                  accentClassName={accentClassName}
-                  nextStep={nextStep}
-                  onUpdateMelodicStep={onUpdateMelodicStep}
-                  playbackState={playbackState}
-                  track={track}
-                />
-              ) : (
-                <StaticStepGrid
-                  accentClassName={accentClassName}
-                  nextStep={nextStep}
-                  playbackState={playbackState}
-                  track={track}
-                />
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "rounded-sm px-1.5 py-0.5 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.18em]",
+                accentByTrackId[track.id],
               )}
-            </div>
+            >
+              {shortLabelByTrackId[track.id]}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`${track.muted ? "Unmute" : "Mute"} ${labelByTrackId[track.id]}`}
+              aria-pressed={track.muted}
+              className={cn(
+                "size-7 text-white/40 hover:bg-white/[0.06] hover:text-white",
+                track.muted && "text-[var(--oc-noise)] hover:text-[var(--oc-noise)]",
+              )}
+              onClick={() => {
+                onToggleTrackMute(track.id);
+              }}
+            >
+              {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+            </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Inline waveform */}
+        <div className="oc-waveform-wrap rounded-sm border border-white/[0.05] bg-black/30">
+          <VoiceWaveformPanel engine={engine} track={track} />
+        </div>
+
+        {/* Volume readout */}
+        <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/25">
+          <span>Vol {Math.round(track.volume * 100)}%</span>
+          <span>{track.muted ? "Muted" : "Active"}</span>
+        </div>
+      </div>
+
+      {/* Step grid */}
+      <div className="p-2">
+        {track.kind === "pulse" || track.kind === "triangle" ? (
+          <MelodicStepGrid
+            accentClassName={accentByTrackId[track.id]}
+            accentColor={waveformLineColorByTrackId[track.id]}
+            engine={engine}
+            nextStep={nextStep}
+            onUpdateMelodicStep={onUpdateMelodicStep}
+            playbackState={playbackState}
+            track={track}
+          />
+        ) : (
+          <StaticStepGrid
+            accentClassName={accentByTrackId[track.id]}
+            nextStep={nextStep}
+            playbackState={playbackState}
+            track={track}
+          />
+        )}
+      </div>
+    </div>
   );
 }
+
+/* ─────────── Voice Waveform ─────────── */
 
 function VoiceWaveformPanel({
   engine,
@@ -255,37 +227,35 @@ function VoiceWaveformPanel({
     <WaveformCanvas
       ariaLabel={`${labelByTrackId[track.id]} waveform`}
       samples={waveform}
-      className="h-20 w-full"
+      className="h-14 w-full"
+      backgroundColor="rgba(7, 8, 14, 0.85)"
       glowColor={waveformGlowColorByTrackId[track.id]}
       lineColor={waveformLineColorByTrackId[track.id]}
     />
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-none border border-white/10 bg-black/20 px-2 py-2">
-      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">{label}</div>
-      <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-white/80">{value}</div>
-    </div>
-  );
-}
+/* ─────────── Melodic Step Grid ─────────── */
 
 function MelodicStepGrid({
   accentClassName,
+  accentColor,
+  engine,
   nextStep,
   onUpdateMelodicStep,
   playbackState,
   track,
 }: {
   accentClassName: string;
+  accentColor: string;
+  engine: AudioEngine | null;
   nextStep: number;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
   playbackState: "stopped" | "playing";
   track: PulseTrack | TriangleTrack;
 }) {
   return (
-    <div className="grid grid-cols-4 gap-2 md:grid-cols-8 xl:grid-cols-16">
+    <div className="grid grid-cols-4 gap-1 md:grid-cols-8 xl:grid-cols-16">
       {track.steps.map((step, index) => {
         const isQuarterBoundary = index % 4 === 0;
         const isActive = playbackState === "playing" && nextStep === index;
@@ -296,26 +266,27 @@ function MelodicStepGrid({
             aria-current={isActive ? "step" : undefined}
             aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
             className={cn(
-              "rounded-none border px-2 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors",
+              "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
               step.enabled
-                ? `${accentClassName} shadow-[0_0_0_1px_rgba(255,255,255,0.03)]`
+                ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
                 : isQuarterBoundary
-                  ? "border-white/15 bg-white/[0.07] text-white/45"
-                  : "border-white/10 bg-white/5 text-white/35",
-              isActive && "border-cyan-200/80 bg-cyan-200/15 text-white shadow-[0_0_0_1px_rgba(139,211,255,0.35)]",
+                  ? "border-white/[0.08] bg-white/[0.04] text-white/30"
+                  : "border-white/[0.05] bg-white/[0.02] text-white/20",
+              isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
             )}
           >
-            <div className="mb-2 flex items-center justify-between gap-2 text-[9px] text-white/45">
+            {/* Step number + toggle */}
+            <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
               <span>{index + 1}</span>
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
                 aria-pressed={step.enabled}
                 className={cn(
-                  "h-6 rounded-none border-white/15 bg-black/25 px-2 text-[9px] uppercase tracking-[0.16em] text-white hover:bg-white/10",
-                  step.enabled && "border-white/25 bg-black/35",
+                  "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
+                  step.enabled && "text-white/60",
                 )}
                 onClick={() => {
                   onUpdateMelodicStep(track.id, index, { enabled: !step.enabled });
@@ -325,33 +296,27 @@ function MelodicStepGrid({
               </Button>
             </div>
 
-            <select
-              aria-label={`${labelByTrackId[track.id]} step ${index + 1} note`}
-              className={cn(
-                "h-8 w-full rounded-none border border-white/10 bg-[#050816]/90 px-2 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-white outline-none",
-                "focus:border-cyan-200/65",
-                !step.enabled && "cursor-not-allowed opacity-45",
-              )}
+            {/* Note picker grid */}
+            <NotePicker
+              selectedNote={step.note}
               disabled={!step.enabled}
-              value={step.note}
-              onChange={(event) => {
-                onUpdateMelodicStep(track.id, index, {
-                  note: event.currentTarget.value as MelodicStepUpdates["note"],
-                });
+              accentColor={accentColor}
+              ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} note`}
+              onSelectNote={(note) => {
+                onUpdateMelodicStep(track.id, index, { note });
               }}
-            >
-              {noteEntryOptions.map((note) => (
-                <option key={note} value={note}>
-                  {note}
-                </option>
-              ))}
-            </select>
+              onHoverNote={(note) => {
+                engine?.previewNote(track.id, note);
+              }}
+            />
           </div>
         );
       })}
     </div>
   );
 }
+
+/* ─────────── Static Step Grid (Noise / Sample) ─────────── */
 
 function StaticStepGrid({
   accentClassName,
@@ -365,7 +330,7 @@ function StaticStepGrid({
   track: Track;
 }) {
   return (
-    <div className="grid grid-cols-8 gap-2 md:grid-cols-16">
+    <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
       {track.steps.map((step, index) => {
         const isQuarterBoundary = index % 4 === 0;
         const isActive = playbackState === "playing" && nextStep === index;
@@ -376,17 +341,17 @@ function StaticStepGrid({
             aria-current={isActive ? "step" : undefined}
             aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
             className={cn(
-              "rounded-none border px-2 py-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] transition-colors",
+              "oc-step-cell rounded-sm border px-1 py-2.5 text-center font-[var(--oc-mono)] text-[10px] font-medium transition-all",
               step.enabled
-                ? `${accentClassName} shadow-[0_0_0_1px_rgba(255,255,255,0.03)]`
+                ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
                 : isQuarterBoundary
-                  ? "border-white/15 bg-white/[0.07] text-white/45"
-                  : "border-white/10 bg-white/5 text-white/35",
-              isActive && "border-cyan-200/80 bg-cyan-200/15 text-white shadow-[0_0_0_1px_rgba(139,211,255,0.35)]",
+                  ? "border-white/[0.08] bg-white/[0.04] text-white/30"
+                  : "border-white/[0.05] bg-white/[0.02] text-white/20",
+              isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
             )}
           >
-            <div className="mb-2 text-[9px] text-white/45">{index + 1}</div>
-            <div className="text-white">{getStepLabel(track, index)}</div>
+            <div className="mb-1 text-[8px] text-white/25">{index + 1}</div>
+            <div className="text-white/80">{getStepLabel(track, index)}</div>
           </div>
         );
       })}

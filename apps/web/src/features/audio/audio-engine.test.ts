@@ -131,10 +131,36 @@ vi.mock("@/features/audio/sample-voice", () => ({
 import { AudioEngine } from "@/features/audio/audio-engine";
 import { createDefaultSongDocument, trackOrder } from "@/features/song/song-document";
 
+class MockAudioParam {
+  value: number;
+  readonly setValueAtTime: ReturnType<typeof vi.fn<(value: number, time: number) => void>>;
+  readonly linearRampToValueAtTime: ReturnType<typeof vi.fn<(value: number, time: number) => void>>;
+
+  constructor(initialValue: number) {
+    this.value = initialValue;
+    this.setValueAtTime = vi.fn((value: number) => {
+      this.value = value;
+    });
+    this.linearRampToValueAtTime = vi.fn((value: number) => {
+      this.value = value;
+    });
+  }
+}
+
 class MockGainNode {
-  readonly gain = { value: 1 };
+  readonly gain = new MockAudioParam(1);
   readonly connect = vi.fn<(destination: AudioNode) => void>();
   readonly disconnect = vi.fn<() => void>();
+}
+
+class MockOscillatorNode {
+  type: OscillatorType = "sine";
+  readonly frequency = new MockAudioParam(0);
+  onended: (() => void) | null = null;
+  readonly connect = vi.fn<(destination: AudioNode) => void>();
+  readonly disconnect = vi.fn<() => void>();
+  readonly start = vi.fn<(when?: number) => void>();
+  readonly stop = vi.fn<(when?: number) => void>();
 }
 
 class MockAnalyserNode {
@@ -152,14 +178,21 @@ class MockAnalyserNode {
 
 class MockAudioContext {
   state: AudioContextState = "suspended";
+  currentTime = 0;
   readonly destination = {} as AudioDestinationNode;
   readonly sampleRate = 48_000;
   readonly createdAnalysers: MockAnalyserNode[] = [];
   readonly createdGains: MockGainNode[] = [];
+  readonly createdOscillators: MockOscillatorNode[] = [];
   readonly createGain = vi.fn(() => {
     const gain = new MockGainNode();
     this.createdGains.push(gain);
     return gain as unknown as GainNode;
+  });
+  readonly createOscillator = vi.fn(() => {
+    const oscillator = new MockOscillatorNode();
+    this.createdOscillators.push(oscillator);
+    return oscillator as unknown as OscillatorNode;
   });
   readonly createAnalyser = vi.fn(() => {
     const analyser = new MockAnalyserNode(120 + this.createdAnalysers.length);
@@ -324,5 +357,21 @@ describe("audio-engine", () => {
       expect((voice.gain as unknown as MockGainNode).disconnect).toHaveBeenCalledTimes(1);
       expect((voice.analyser as unknown as MockAnalyserNode).disconnect).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("uses the preview voice waveform for hovered melodic notes", async () => {
+    const engine = await AudioEngine.create();
+
+    mockContext.state = "running";
+
+    engine.previewNote("triangle", "C4", 180);
+    engine.previewNote("pulse1", "E4");
+
+    expect(mockContext.createdOscillators).toHaveLength(2);
+    expect(mockContext.createdOscillators[0]?.type).toBe("triangle");
+    expect(mockContext.createdOscillators[1]?.type).toBe("square");
+    expect(mockContext.createdOscillators[0]?.frequency.setValueAtTime).toHaveBeenCalled();
+    expect(mockContext.createdOscillators[0]?.start).toHaveBeenCalledWith(mockContext.currentTime);
+    expect(mockContext.createdOscillators[0]?.stop).toHaveBeenCalledWith(mockContext.currentTime + 0.19);
   });
 });

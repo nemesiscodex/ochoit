@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -48,8 +48,6 @@ describe("workstation-shell", () => {
 
     expect(screen.getByDisplayValue("172")).toBeTruthy();
     expect(screen.getByDisplayValue("20")).toBeTruthy();
-    expect(screen.getByText("172 bpm")).toBeTruthy();
-    expect(screen.getAllByText("20 steps").length).toBeGreaterThan(0);
   });
 
   it("forwards play and stop actions to the audio engine hook", () => {
@@ -58,7 +56,7 @@ describe("workstation-shell", () => {
 
     const { rerender } = render(React.createElement(WorkstationShell));
 
-    fireEvent.click(screen.getByRole("button", { name: "Play Pattern" }));
+    fireEvent.click(screen.getByRole("button", { name: /play/i }));
 
     expect(stoppedResult.startTransport).toHaveBeenCalledTimes(1);
 
@@ -66,7 +64,7 @@ describe("workstation-shell", () => {
     mockUseAudioEngine.mockReturnValueOnce(playingResult);
     rerender(React.createElement(WorkstationShell));
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    fireEvent.click(screen.getByRole("button", { name: /stop/i }));
 
     expect(playingResult.stopTransport).toHaveBeenCalledTimes(1);
   });
@@ -82,57 +80,52 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Pattern Ruler")).toBeTruthy();
   });
 
-  it("describes the live audio engine status with the triangle voice included", () => {
+  it("renders the sample deck sidebar", () => {
     render(React.createElement(WorkstationShell));
 
-    expect(
-      screen.getByText(
-        /Pulse and triangle note entry, the full five-voice playback engine, transport playback, and per-voice waveform monitoring are live/i,
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText("Sample Deck")).toBeTruthy();
+    expect(screen.getByText("Song Info")).toBeTruthy();
   });
 
   it("toggles the mute state for a specific voice", () => {
     render(React.createElement(WorkstationShell));
 
-    const pulseRowHeading = screen.getByRole("heading", { name: "Pulse I" });
-    const pulseRow = pulseRowHeading.closest('[data-slot="card"]');
+    const muteButton = screen.getByRole("button", { name: "Mute Pulse I" });
 
-    if (!(pulseRow instanceof HTMLElement)) {
-      throw new Error("Expected Pulse I row card.");
-    }
+    fireEvent.click(muteButton);
 
-    fireEvent.click(within(pulseRow).getByRole("button", { name: "Mute Pulse I" }));
-
-    expect(within(pulseRow).getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
-    expect(within(pulseRow).getByText("yes")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
   });
 
   it("updates melodic steps from the note-entry controls", () => {
     render(React.createElement(WorkstationShell));
 
+    // Enable Pulse I step 2
     fireEvent.click(screen.getByRole("button", { name: "Enable Pulse I step 2" }));
 
+    // Open the note picker for Pulse I step 2
     const pulseStepTwoNote = screen.getByLabelText("Pulse I step 2 note");
 
-    if (!(pulseStepTwoNote instanceof HTMLSelectElement)) {
-      throw new Error("Expected Pulse I step 2 note to be a select.");
+    if (!(pulseStepTwoNote instanceof HTMLButtonElement)) {
+      throw new Error("Expected Pulse I step 2 note to be a button.");
     }
 
     expect(pulseStepTwoNote.disabled).toBe(false);
 
-    fireEvent.change(pulseStepTwoNote, {
-      target: { value: "D5" },
-    });
+    // Open the picker and select D5
+    fireEvent.click(pulseStepTwoNote);
+    fireEvent.click(screen.getByRole("button", { name: "Select note D5" }));
 
-    expect(pulseStepTwoNote.value).toBe("D5");
+    // The trigger button should now show D5
+    expect(pulseStepTwoNote.textContent).toBe("D5");
 
+    // Disable Pulse I step 1
     fireEvent.click(screen.getByRole("button", { name: "Disable Pulse I step 1" }));
 
     const pulseStepOneNote = screen.getByLabelText("Pulse I step 1 note");
 
-    if (!(pulseStepOneNote instanceof HTMLSelectElement)) {
-      throw new Error("Expected Pulse I step 1 note to be a select.");
+    if (!(pulseStepOneNote instanceof HTMLButtonElement)) {
+      throw new Error("Expected Pulse I step 1 note to be a button.");
     }
 
     expect(pulseStepOneNote.disabled).toBe(true);

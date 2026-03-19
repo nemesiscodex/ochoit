@@ -1,9 +1,11 @@
 import { NoiseVoice } from "@/features/audio/noise-voice";
 import { AudioTransport } from "@/features/audio/audio-transport";
+import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { PulseVoice } from "@/features/audio/pulse-voice";
 import { SampleVoice } from "@/features/audio/sample-voice";
 import { TriangleVoice } from "@/features/audio/triangle-voice";
 import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
+import type { MelodicTrackId, NoteValue } from "@/features/song/song-pattern";
 
 export type AudioEngineState = AudioContextState | "closed";
 
@@ -15,6 +17,10 @@ export type VoiceBus = {
 };
 
 const analyserFftSize = 1024;
+
+function getPreviewOscillatorType(trackId: MelodicTrackId): OscillatorType {
+  return trackId === "triangle" ? "triangle" : "square";
+}
 
 export class AudioEngine {
   readonly context: AudioContext;
@@ -175,6 +181,44 @@ export class AudioEngine {
     const waveform = new Uint8Array(sampleSize);
     this.voices[trackId].analyser.getByteTimeDomainData(waveform);
     return waveform;
+  }
+
+  /**
+   * Play a short preview tone at the given note.
+   * Used for hover-preview in the note picker grid.
+   */
+  previewNote(trackId: MelodicTrackId, note: NoteValue, durationMs = 120) {
+    if (this.context.state !== "running") {
+      return;
+    }
+
+    const now = this.context.currentTime;
+    const durationSec = durationMs / 1000;
+    const attackSec = 0.003;
+    const releaseSec = 0.025;
+    const volume = 0.25;
+
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+
+    oscillator.type = getPreviewOscillatorType(trackId);
+    oscillator.frequency.setValueAtTime(getFrequencyForNote(note), now);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(volume, now + attackSec);
+    gain.gain.setValueAtTime(volume, now + durationSec - releaseSec);
+    gain.gain.linearRampToValueAtTime(0.0001, now + durationSec);
+
+    oscillator.connect(gain);
+    gain.connect(this.masterGain);
+
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+
+    oscillator.start(now);
+    oscillator.stop(now + durationSec + 0.01);
   }
 
   async close() {

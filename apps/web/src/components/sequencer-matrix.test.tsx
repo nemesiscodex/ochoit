@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
+import type { AudioEngine } from "@/features/audio/audio-engine";
 import { createDefaultSongDocument } from "@/features/song/song-document";
 
 describe("sequencer-matrix", () => {
@@ -74,12 +75,38 @@ describe("sequencer-matrix", () => {
       />,
     );
 
+    // Disable Pulse I step 1 (it starts enabled)
     fireEvent.click(screen.getByRole("button", { name: "Disable Pulse I step 1" }));
-    fireEvent.change(screen.getByLabelText("Triangle step 1 note"), {
-      target: { value: "D3" },
-    });
+
+    // Open note picker for Triangle step 1 and select D3
+    fireEvent.click(screen.getByLabelText("Triangle step 1 note"));
+    fireEvent.click(screen.getByRole("button", { name: "Select note D3" }));
 
     expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(1, "pulse1", 0, { enabled: false });
     expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(2, "triangle", 0, { note: "D3" });
+  });
+
+  it("passes the hovered melodic track to the audio preview", () => {
+    const previewNote = vi.fn();
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      previewNote,
+    } as unknown as AudioEngine;
+
+    render(
+      <SequencerMatrix
+        engine={engine}
+        onToggleTrackMute={() => {}}
+        onUpdateMelodicStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Triangle step 1 note"));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Select note D3" }));
+
+    expect(previewNote).toHaveBeenCalledWith("triangle", "D3");
   });
 });

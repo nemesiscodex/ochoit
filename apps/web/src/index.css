@@ -1,1 +1,187 @@
 @import "@ochoit/ui/globals.css";
+
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Anybody:wght@400;700;900&display=swap");
+
+/* ── ochoit workstation tokens ── */
+
+:root {
+  --oc-bg: #07080e;
+  --oc-surface: #0d0f18;
+  --oc-surface-raised: #121522;
+  --oc-border: rgba(255 255 255 / 0.07);
+  --oc-border-bright: rgba(255 255 255 / 0.14);
+
+  /* voice palette */
+  --oc-pulse1: #ffcf4a;
+  --oc-pulse2: #5cb8ff;
+  --oc-triangle: #4ae06a;
+  --oc-noise: #ff6b4a;
+  --oc-sample: #ff5ea0;
+
+  /* ui accents */
+  --oc-play: #3ddc84;
+  --oc-stop: #ff6b4a;
+  --oc-accent: #a78bfa;
+
+  /* type */
+  --oc-mono: "JetBrains Mono", ui-monospace, monospace;
+  --oc-display: "Anybody", system-ui, sans-serif;
+
+  /* glow */
+  --oc-glow-spread: 18px;
+}
+
+/* ── base body ── */
+
+body {
+  background: var(--oc-bg);
+  color: #e2e4ec;
+  font-family: var(--oc-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── subtle CRT scanline overlay ── */
+
+.oc-scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.06) 2px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  z-index: 50;
+}
+
+/* ── step cell hover ── */
+
+.oc-step-cell {
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.oc-step-cell:hover {
+  border-color: rgba(255 255 255 / 0.22);
+  background: rgba(255 255 255 / 0.06);
+}
+
+/* voice row glow on hover */
+.oc-voice-row {
+  transition: box-shadow 0.25s ease;
+}
+
+/* ── active playhead pulse ── */
+
+@keyframes oc-playhead-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px 1px rgba(61, 220, 132, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 14px 3px rgba(61, 220, 132, 0.6);
+  }
+}
+
+.oc-playhead-active {
+  animation: oc-playhead-pulse 0.6s ease-in-out infinite;
+}
+
+/* ── transport button glow ── */
+
+.oc-btn-play {
+  transition:
+    background 0.15s,
+    box-shadow 0.2s;
+}
+.oc-btn-play:hover {
+  box-shadow: 0 0 16px 2px rgba(61, 220, 132, 0.35);
+}
+
+.oc-btn-stop {
+  transition:
+    background 0.15s,
+    box-shadow 0.2s;
+}
+.oc-btn-stop:hover {
+  box-shadow: 0 0 12px 2px rgba(255, 107, 74, 0.3);
+}
+
+/* ── waveform container ── */
+
+.oc-waveform-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.oc-waveform-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.25) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255 255 255 / 0.12);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255 255 255 / 0.22);
+}
+
+/* ── Note picker ── */
+
+.oc-note-picker-panel {
+  animation: oc-note-picker-enter 0.15s ease-out;
+}
+
+@keyframes oc-note-picker-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.oc-note-cell {
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s,
+    box-shadow 0.15s;
+}
+
+.oc-note-trigger {
+  cursor: pointer;
+}
+
+/* tailwind grid-cols-16 utility */
+@utility grid-cols-16 {
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+}

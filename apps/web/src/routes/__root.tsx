@@ -19,13 +19,26 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Ochoit | NES Music System",
+        title: "Ochoit — 8-Bit Music Workstation",
+      },
+      {
+        name: "description",
+        content: "A browser-based NES-inspired 5-voice chiptune sequencer with pulse, triangle, noise, and PCM sample lanes.",
       },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "preconnect",
+        href: "https://fonts.googleapis.com",
+      },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
       },
     ],
   }),
@@ -40,9 +53,11 @@ function RootDocument() {
         <HeadContent />
       </head>
       <body>
-        <div className="grid h-svh grid-rows-[auto_1fr]">
+        <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
           <Header />
-          <Outlet />
+          <div className="overflow-auto">
+            <Outlet />
+          </div>
         </div>
         <Toaster richColors />
         <TanStackRouterDevtools position="bottom-left" />

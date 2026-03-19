@@ -1,8 +1,7 @@
 import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@ochoit/ui/components/card";
 import { cn } from "@ochoit/ui/lib/utils";
-import { AudioWaveform, Gauge, Minus, Mic, Play, Plus, Save, Square } from "lucide-react";
+import { Mic, Pause, Play, Save, Square, Upload, Zap } from "lucide-react";
 import { useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
@@ -30,6 +29,7 @@ export function WorkstationShell() {
   const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
   const audioReady = engineState === "running" || engineState === "suspended";
+  const isPlaying = transportState.playbackState === "playing";
 
   const toggleTrackMute = (trackId: TrackId) => {
     setSong((currentSong) => ({
@@ -49,173 +49,67 @@ export function WorkstationShell() {
   };
 
   return (
-    <main className="min-h-full overflow-auto bg-[#050816] text-white">
-      <div className="relative isolate">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,209,102,0.16),_transparent_28%),radial-gradient(circle_at_85%_12%,_rgba(74,222,255,0.14),_transparent_24%),linear-gradient(180deg,_rgba(255,255,255,0.04),_rgba(255,255,255,0))]" />
-        <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:22px_22px]" />
+    <main className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines">
+      {/* Ambient gradient backdrop */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute top-0 left-[8%] h-[340px] w-[420px] rounded-full bg-[var(--oc-pulse1)]/[0.04] blur-[100px]" />
+        <div className="absolute top-[40px] right-[12%] h-[280px] w-[350px] rounded-full bg-[var(--oc-pulse2)]/[0.04] blur-[100px]" />
+        <div className="absolute bottom-[20%] left-[30%] h-[200px] w-[300px] rounded-full bg-[var(--oc-triangle)]/[0.03] blur-[80px]" />
+      </div>
 
-        <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-5 md:px-6 lg:px-8">
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_360px]">
-            <Card className="border-white/10 bg-[#091022]/85 backdrop-blur">
-              <CardHeader className="gap-4 border-b border-white/10 pb-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="space-y-2">
-                    <p className="font-mono text-[11px] uppercase tracking-[0.32em] text-cyan-200/80">
-                      8-Bit Music System / NES-Inspired
-                    </p>
-                    <div className="space-y-2">
-                      <h1 className="font-mono text-3xl uppercase tracking-[0.2em] text-white md:text-4xl">
-                        Ochoit Workstation
-                      </h1>
-                      <p className="max-w-3xl text-sm text-slate-300">
-                        A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        Pulse and triangle note entry, the full five-voice playback engine, transport playback, and per-voice waveform monitoring are live,
-                        while the noise and PCM trigger editors, mixer controls, and sample workflow still need wiring.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-[0.2em] text-slate-300 sm:grid-cols-4">
-                    <Metric label="Mode" value={song.meta.engineMode} />
-                    <Metric label="Tempo" value={`${song.transport.bpm} bpm`} />
-                    <Metric label="Loop" value={`${song.transport.loopLength} steps`} />
-                    <Metric label="Voices" value={`${tracks.length}`} />
-                    <Metric label="Audio" value={engineState} />
-                  </div>
-                </div>
-
-                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-                  <TransportStrip
-                    song={song}
-                    engineState={engineState}
-                    startTransport={startTransport}
-                    stopTransport={stopTransport}
-                    playbackState={transportState.playbackState}
-                    onBpmChange={(nextBpm) => {
-                      setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
-                    }}
-                    onLoopLengthChange={(nextLoopLength) => {
-                      setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
-                    }}
-                  />
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
-                      <Save className="size-4" />
-                      Save
-                    </Button>
-                    <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
-                      Load
-                    </Button>
-                    <Button variant="outline" className="border-white/15 bg-white/5 text-white hover:bg-white/10">
-                      Export
-                    </Button>
-                    <Button
-                      className="bg-[#ffd166] text-[#091022] hover:bg-[#ffe09b]"
-                      onClick={() => {
-                        void initializeAudio();
-                      }}
-                    >
-                      {engineState === "initializing" ? "Booting..." : audioReady ? "Resume Audio" : "Start Audio"}
-                    </Button>
-                  </div>
-                </div>
-
-                {errorMessage !== null ? (
-                  <div className="rounded-none border border-[#ff8c69]/45 bg-[#ff8c69]/10 px-3 py-2 text-sm text-[#ffd8cb]">
-                    {errorMessage}
-                  </div>
-                ) : null}
-              </CardHeader>
-            </Card>
-
-            <div className="grid gap-4">
-              <Card className="border-white/10 bg-[#091022]/85 backdrop-blur">
-                <CardHeader className="border-b border-white/10 pb-4">
-                  <CardTitle className="font-mono text-xs uppercase tracking-[0.28em] text-white/85">
-                    Sample Deck
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm text-slate-300">
-                  <div className="rounded-none border border-dashed border-[#ff70a6]/45 bg-[#ff70a6]/6 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div>
-                        <p className="font-mono text-xs uppercase tracking-[0.24em] text-[#ff70a6]">
-                          Voice 5 Input
-                        </p>
-                        <p className="mt-1 text-slate-300">Record 1-2 seconds, trim, then trigger it on the PCM lane.</p>
-                      </div>
-                      <Mic className="size-5 text-[#ff70a6]" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button className="bg-[#ff70a6] text-[#091022] hover:bg-[#ff98be]">Record</Button>
-                      <Button
-                        variant="outline"
-                        className="border-white/15 bg-white/5 text-white hover:bg-white/10"
-                      >
-                        Preview
-                      </Button>
-                    </div>
-                    <div className="mt-4 rounded-none border border-white/10 bg-black/20 p-3">
-                      <div className="mb-2 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.22em] text-white/65">
-                        <span>Trim Window</span>
-                        <span>{song.samples[0]?.name ?? "No Sample"}</span>
-                      </div>
-                      <WaveformCanvas
-                        ariaLabel="PCM trim preview waveform"
-                        samples={sampleDeckPreviewWaveform}
-                        className="h-14 w-full"
-                        backgroundColor="rgba(5, 8, 22, 0.88)"
-                        glowColor={waveformGlowColorByTrackId.sample}
-                        lineColor={waveformLineColorByTrackId.sample}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <SidebarPanel
-                      icon={AudioWaveform}
-                      title="Storage Format"
-                      body="Versioned JSON document with song metadata, transport state, fixed tracks, and serialized mono PCM sample data."
-                    />
-                    <SidebarPanel
-                      icon={Gauge}
-                      title="Next Engine Step"
-                      body="Add trigger editing for the noise and PCM lanes, then land the missing per-voice controls."
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-white/10 bg-[#091022]/85 backdrop-blur">
-                <CardHeader className="border-b border-white/10 pb-4">
-                  <CardTitle className="font-mono text-xs uppercase tracking-[0.28em] text-white/85">
-                    Screen Architecture
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-3 text-sm text-slate-300">
-                  <ArchitectureItem title="Top strip" description="Transport, session status, save/load, and audio initialization." />
-                  <ArchitectureItem title="Main editor" description="Five stacked voice rows with waveform preview, per-track controls, and the 16-step grid." />
-                  <ArchitectureItem title="Right rail" description="PCM recorder, trim area, file format notes, and implementation milestones." />
-                </CardContent>
-              </Card>
+      <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6 lg:px-8">
+        {/* ── Transport + Controls Bar ── */}
+        <section className="flex flex-col gap-3">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <TransportStrip
+              song={song}
+              engineState={engineState}
+              startTransport={startTransport}
+              stopTransport={stopTransport}
+              isPlaying={isPlaying}
+              onBpmChange={(nextBpm) => {
+                setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
+              }}
+              onLoopLengthChange={(nextLoopLength) => {
+                setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <AudioInitButton
+                engineState={engineState}
+                audioReady={audioReady}
+                initializeAudio={initializeAudio}
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-10 border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.07] hover:text-white"
+                aria-label="Save song"
+              >
+                <Save className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-10 border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.07] hover:text-white"
+                aria-label="Load song"
+              >
+                <Upload className="size-4" />
+              </Button>
             </div>
-          </section>
+          </div>
 
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-cyan-200/80">
-                  Sequencer Matrix
-                </p>
-                <h2 className="mt-1 font-mono text-xl uppercase tracking-[0.18em] text-white">
-                  One Row Per Voice
-                </h2>
-              </div>
-              <div className="rounded-none border border-white/10 bg-white/5 px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-white/70">
-                Pulse / triangle note entry live; trigger rows next
-              </div>
+          {errorMessage !== null ? (
+            <div className="rounded-md border border-[var(--oc-noise)]/30 bg-[var(--oc-noise)]/[0.06] px-3 py-2 font-[var(--oc-mono)] text-xs text-[var(--oc-noise)]">
+              {errorMessage}
             </div>
+          ) : null}
+        </section>
 
+        {/* ── Grid: Sequencer (left) + Sample Deck (right) ── */}
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
+          {/* Sequencer Matrix */}
+          <div className="min-w-0">
             <SequencerMatrix
               engine={engine}
               onToggleTrackMute={toggleTrackMute}
@@ -224,19 +118,27 @@ export function WorkstationShell() {
               playbackState={transportState.playbackState}
               nextStep={transportState.nextStep}
             />
-          </section>
-        </div>
+          </div>
+
+          {/* Sample Deck Sidebar */}
+          <aside className="flex flex-col gap-3">
+            <SampleDeck sampleName={song.samples[0]?.name ?? null} />
+            <SongMeta song={song} engineState={engineState} trackCount={tracks.length} />
+          </aside>
+        </section>
       </div>
     </main>
   );
 }
+
+/* ─────────── Transport Strip ─────────── */
 
 function TransportStrip({
   song,
   engineState,
   startTransport,
   stopTransport,
-  playbackState,
+  isPlaying,
   onBpmChange,
   onLoopLengthChange,
 }: {
@@ -244,67 +146,80 @@ function TransportStrip({
   engineState: AudioBootstrapState;
   startTransport: () => Promise<void>;
   stopTransport: () => void;
-  playbackState: "stopped" | "playing";
+  isPlaying: boolean;
   onBpmChange: (value: number) => void;
   onLoopLengthChange: (value: number) => void;
 }) {
   return (
-    <div className="grid gap-3 rounded-none border border-white/10 bg-black/20 p-3 lg:grid-cols-[auto_minmax(0,220px)_minmax(0,220px)_minmax(0,1fr)] lg:items-center">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-2 backdrop-blur">
+      {/* Play / Stop */}
+      <div className="flex items-center gap-1.5">
         <Button
-          className="bg-[#7ae582] text-[#091022] hover:bg-[#a7f0af]"
+          className={cn(
+            "oc-btn-play h-10 rounded-md px-4 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.12em]",
+            isPlaying
+              ? "bg-[var(--oc-play)]/20 text-[var(--oc-play)] hover:bg-[var(--oc-play)]/30"
+              : "bg-[var(--oc-play)] text-[#07080e] hover:bg-[var(--oc-play)]/90",
+          )}
           onClick={() => {
             void startTransport();
           }}
         >
-          <Play className="size-4" />
-          {playbackState === "playing" ? "Playing" : "Play Pattern"}
+          {isPlaying ? <Pause className="mr-1.5 size-3.5" /> : <Play className="mr-1.5 size-3.5" />}
+          {isPlaying ? "Playing" : "Play"}
         </Button>
         <Button
           variant="outline"
-          className="border-white/15 bg-white/5 text-white hover:bg-white/10"
-          disabled={playbackState !== "playing"}
+          className="oc-btn-stop h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-xs uppercase tracking-[0.12em] text-white/60 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+          disabled={!isPlaying}
           onClick={() => {
             stopTransport();
           }}
         >
-          <Square className="size-4" />
+          <Square className="mr-1.5 size-3.5" />
           Stop
         </Button>
       </div>
 
+      {/* Divider */}
+      <div className="mx-1 hidden h-6 w-px bg-white/[0.08] lg:block" />
+
+      {/* BPM */}
       <TransportField
         label="BPM"
         value={song.transport.bpm}
         min={SONG_BPM_RANGE.min}
         max={SONG_BPM_RANGE.max}
         step={1}
-        accentClassName="border-[#ffd166]/40 bg-[#ffd166]/8 text-[#ffd166]"
-        valueSuffix="beats/min"
         onChange={onBpmChange}
         parseValue={(rawValue) => resolveSongBpmInput(rawValue, song.transport.bpm)}
       />
 
+      {/* Loop Length */}
       <TransportField
-        label="Loop Length"
+        label="Loop"
         value={song.transport.loopLength}
         min={SONG_LOOP_LENGTH_RANGE.min}
         max={SONG_LOOP_LENGTH_RANGE.max}
         step={SONG_LOOP_LENGTH_RANGE.step}
-        accentClassName="border-[#8bd3ff]/40 bg-[#8bd3ff]/8 text-[#8bd3ff]"
-        valueSuffix="steps"
         onChange={onLoopLengthChange}
         parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, song.transport.loopLength)}
+        suffix="st"
       />
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        <TransportChip label="Steps / Beat" value={`${song.transport.stepsPerBeat}`} />
-        <TransportChip label="Audio" value={engineState} />
-        <TransportChip label="Playback" value={playbackState} />
+      {/* Divider */}
+      <div className="mx-1 hidden h-6 w-px bg-white/[0.08] lg:block" />
+
+      {/* Status chips */}
+      <div className="flex items-center gap-2">
+        <StatusChip label="Audio" value={engineState} />
+        <StatusChip label="Playback" value={isPlaying ? "playing" : "stopped"} />
       </div>
     </div>
   );
 }
+
+/* ─────────── Transport Field ─────────── */
 
 function TransportField({
   label,
@@ -312,8 +227,7 @@ function TransportField({
   min,
   max,
   step,
-  valueSuffix,
-  accentClassName,
+  suffix,
   onChange,
   parseValue,
 }: {
@@ -322,116 +236,167 @@ function TransportField({
   min: number;
   max: number;
   step: number;
-  valueSuffix: string;
-  accentClassName: string;
+  suffix?: string;
   onChange: (value: number) => void;
   parseValue: (rawValue: string) => number;
 }) {
   const inputId = `transport-${label.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (
-    <div className={cn("rounded-none border p-2", accentClassName)}>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <label htmlFor={inputId} className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/80">
-          {label}
-        </label>
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/50">
-          {min}-{max}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-none border-white/10 bg-black/25 px-0 text-white hover:bg-white/10"
-          aria-label={`Decrease ${label}`}
-          onClick={() => {
-            onChange(value - step);
-          }}
-        >
-          <Minus className="size-4" />
-        </Button>
-
-        <div className="rounded-none border border-white/10 bg-[#050816]/85 px-2 py-2">
-          <Input
-            id={inputId}
-            type="number"
-            inputMode="numeric"
-            min={min}
-            max={max}
-            step={step}
-            value={value}
-            aria-label={label}
-            className="h-7 border-0 bg-transparent px-0 text-center font-mono text-base uppercase tracking-[0.18em] text-white focus-visible:ring-0"
-            onChange={(event) => {
-              onChange(parseValue(event.currentTarget.value));
-            }}
-          />
-          <div className="mt-1 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
-            {valueSuffix}
-          </div>
-        </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-none border-white/10 bg-black/25 px-0 text-white hover:bg-white/10"
-          aria-label={`Increase ${label}`}
-          onClick={() => {
-            onChange(value + step);
-          }}
-        >
-          <Plus className="size-4" />
-        </Button>
-      </div>
+    <div className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-black/20 px-2.5 py-1.5">
+      <label
+        htmlFor={inputId}
+        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/40"
+      >
+        {label}
+      </label>
+      <Input
+        id={inputId}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={label === "Loop" ? "Loop Length" : label}
+        className="h-7 w-14 border-0 bg-transparent px-0 text-center font-[var(--oc-mono)] text-sm font-semibold text-white focus-visible:ring-0"
+        onChange={(event) => {
+          onChange(parseValue(event.currentTarget.value));
+        }}
+      />
+      {suffix ? (
+        <span className="font-[var(--oc-mono)] text-[9px] uppercase text-white/30">{suffix}</span>
+      ) : null}
     </div>
   );
 }
 
-function SidebarPanel({
-  icon: Icon,
-  title,
-  body,
+/* ─────────── Audio Init Button ─────────── */
+
+function AudioInitButton({
+  engineState,
+  audioReady,
+  initializeAudio,
 }: {
-  icon: typeof AudioWaveform;
-  title: string;
-  body: string;
+  engineState: AudioBootstrapState;
+  audioReady: boolean;
+  initializeAudio: () => Promise<unknown>;
 }) {
   return (
-    <div className="rounded-none border border-white/10 bg-black/20 p-3">
-      <div className="mb-2 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.24em] text-white/75">
-        <Icon className="size-4 text-cyan-200" />
-        <span>{title}</span>
+    <Button
+      className={cn(
+        "h-10 rounded-md px-4 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.1em] transition-all",
+        audioReady
+          ? "bg-[var(--oc-accent)]/15 text-[var(--oc-accent)] hover:bg-[var(--oc-accent)]/25"
+          : "bg-[var(--oc-accent)] text-white hover:bg-[var(--oc-accent)]/90",
+      )}
+      onClick={() => {
+        void initializeAudio();
+      }}
+    >
+      <Zap className="mr-1.5 size-3.5" />
+      {engineState === "initializing" ? "Booting…" : audioReady ? "Audio On" : "Start Audio"}
+    </Button>
+  );
+}
+
+/* ─────────── Status Chip ─────────── */
+
+function StatusChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
+      <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/30">{label}</span>
+      <span className="font-[var(--oc-mono)] text-[10px] font-medium uppercase tracking-[0.12em] text-white/70">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/* ─────────── Sample Deck ─────────── */
+
+function SampleDeck({ sampleName }: { sampleName: string | null }) {
+  return (
+    <div className="rounded-lg border border-[var(--oc-sample)]/20 bg-[var(--oc-surface)] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-sample)]">
+          Sample Deck
+        </h2>
+        <Mic className="size-4 text-[var(--oc-sample)]/60" />
       </div>
-      <p className="text-sm text-slate-300">{body}</p>
+
+      <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-white/35">
+        Record 1-2s, trim, trigger on the PCM lane.
+      </p>
+
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <Button
+          className="h-8 rounded-md bg-[var(--oc-sample)] font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[#07080e] hover:bg-[var(--oc-sample)]/85"
+        >
+          Record
+        </Button>
+        <Button
+          variant="outline"
+          className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.07] hover:text-white"
+        >
+          Preview
+        </Button>
+      </div>
+
+      <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
+        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
+          <span>Trim</span>
+          <span>{sampleName ?? "No Sample"}</span>
+        </div>
+        <div className="oc-waveform-wrap rounded-sm">
+          <WaveformCanvas
+            ariaLabel="PCM trim preview waveform"
+            samples={sampleDeckPreviewWaveform}
+            className="h-12 w-full"
+            backgroundColor="rgba(7, 8, 14, 0.9)"
+            glowColor={waveformGlowColorByTrackId.sample}
+            lineColor={waveformLineColorByTrackId.sample}
+          />
+        </div>
+      </div>
     </div>
   );
 }
 
-function ArchitectureItem({ title, description }: { title: string; description: string }) {
+/* ─────────── Song Metadata ─────────── */
+
+function SongMeta({
+  song,
+  engineState,
+  trackCount,
+}: {
+  song: SongDocument;
+  engineState: AudioBootstrapState;
+  trackCount: number;
+}) {
   return (
-    <div className="rounded-none border border-white/10 bg-black/20 p-3">
-      <p className="font-mono text-[11px] uppercase tracking-[0.24em] text-cyan-200/80">{title}</p>
-      <p className="mt-2 text-slate-300">{description}</p>
+    <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-4">
+      <h2 className="mb-3 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">
+        Song Info
+      </h2>
+      <div className="grid gap-2 font-[var(--oc-mono)] text-[10px]">
+        <MetaRow label="Name" value={song.meta.name} />
+        <MetaRow label="Author" value={song.meta.author} />
+        <MetaRow label="Mode" value={song.meta.engineMode} />
+        <MetaRow label="Tempo" value={`${song.transport.bpm} bpm`} />
+        <MetaRow label="Loop" value={`${song.transport.loopLength} steps`} />
+        <MetaRow label="Voices" value={`${trackCount}`} />
+        <MetaRow label="Audio" value={engineState} />
+      </div>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-none border border-white/10 bg-black/20 px-3 py-2">
-      <div className="font-mono text-[10px] tracking-[0.22em] text-white/50 uppercase">{label}</div>
-      <div className="mt-1 font-mono text-sm uppercase tracking-[0.18em] text-white">{value}</div>
-    </div>
-  );
-}
-
-function TransportChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-none border border-white/10 bg-white/5 px-3 py-2">
-      <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">{label}</div>
-      <div className="mt-1 font-mono text-sm uppercase tracking-[0.16em] text-white">{value}</div>
+    <div className="flex items-center justify-between gap-2 border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0">
+      <span className="uppercase tracking-[0.18em] text-white/30">{label}</span>
+      <span className="font-medium text-white/70">{value}</span>
     </div>
   );
 }
