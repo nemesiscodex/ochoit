@@ -1,11 +1,12 @@
-import type {
-  NoiseTrack,
-  PulseTrack,
-  SampleTrack,
-  SerializedSampleAsset,
-  SongDocument,
-  TrackId,
-  TriangleTrack,
+import {
+  DEFAULT_PULSE_DUTY,
+  type NoiseTrack,
+  type PulseTrack,
+  type SampleTrack,
+  type SerializedSampleAsset,
+  type SongDocument,
+  type TrackId,
+  type TriangleTrack,
 } from "@/features/song/song-document";
 
 const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
@@ -515,7 +516,7 @@ export function replaceMelodicTrackArrangement(
         ...song,
         tracks: {
           ...song.tracks,
-          pulse1: buildMelodicTrack(song.tracks.pulse1, entries),
+          pulse1: buildMelodicTrack(song.tracks.pulse1, entries, { normalizePulseDuty: true }),
         },
       };
     case "pulse2":
@@ -523,7 +524,7 @@ export function replaceMelodicTrackArrangement(
         ...song,
         tracks: {
           ...song.tracks,
-          pulse2: buildMelodicTrack(song.tracks.pulse2, entries),
+          pulse2: buildMelodicTrack(song.tracks.pulse2, entries, { normalizePulseDuty: true }),
         },
       };
     case "triangle":
@@ -707,6 +708,7 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
 function buildMelodicTrack<TTrack extends MelodicTrack>(
   track: TTrack,
   entries: readonly MelodicArrangementEntry[],
+  options?: { normalizePulseDuty?: boolean },
 ) {
   const dedupedEntriesByStep = new Map(entries.map((entry) => [entry.stepIndex, entry]));
   const sortedEntries = Array.from(dedupedEntriesByStep.values())
@@ -723,6 +725,7 @@ function buildMelodicTrack<TTrack extends MelodicTrack>(
   });
   const steps = track.steps.map((step) => ({
     ...step,
+    ...(track.kind === "pulse" && options?.normalizePulseDuty ? { duty: DEFAULT_PULSE_DUTY } : {}),
     enabled: false,
     length: defaultMelodicStepLength,
   }));

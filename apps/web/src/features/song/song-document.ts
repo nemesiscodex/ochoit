@@ -3,6 +3,7 @@ import { z } from "zod";
 export const SONG_DOCUMENT_KIND = "ochoit-song";
 export const SONG_DOCUMENT_VERSION = 1 as const;
 export const SONG_STORAGE_KEY = `ochoit.song.v${SONG_DOCUMENT_VERSION}`;
+export const DEFAULT_PULSE_DUTY = 0.5 as const;
 
 export const trackOrder = ["pulse1", "pulse2", "triangle", "noise", "sample"] as const;
 
@@ -217,7 +218,7 @@ function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z
       enabled: step !== undefined,
       note: step?.note ?? "C4",
       volume: 0.84,
-      duty: step?.duty ?? 0.5,
+      duty: step?.duty ?? DEFAULT_PULSE_DUTY,
       length: step?.length ?? 1,
     };
   });

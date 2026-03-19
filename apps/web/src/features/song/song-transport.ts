@@ -1,4 +1,4 @@
-import type { SongDocument } from "@/features/song/song-document";
+import { DEFAULT_PULSE_DUTY, type SongDocument } from "@/features/song/song-document";
 
 export const SONG_BPM_RANGE = {
   min: 40,
@@ -101,7 +101,7 @@ function resizePulseTrack(
         enabled: false,
         note: "C4",
         volume: track.volume,
-        duty: 0.5,
+        duty: DEFAULT_PULSE_DUTY,
         length: 1,
       };
     }),

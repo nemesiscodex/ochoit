@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, DEFAULT_PULSE_DUTY } from "@/features/song/song-document";
 import {
   getMelodicStepState,
   noteEntryOptions,
@@ -201,18 +201,36 @@ describe("song-pattern", () => {
       enabled: true,
       note: "E4",
       length: 3,
+      duty: DEFAULT_PULSE_DUTY,
     });
     expect(updatedSong.tracks.pulse1.steps[1]).toEqual({
       ...song.tracks.pulse1.steps[1],
       enabled: false,
       length: 1,
+      duty: DEFAULT_PULSE_DUTY,
     });
     expect(updatedSong.tracks.pulse1.steps[4]).toEqual({
       ...song.tracks.pulse1.steps[4],
       enabled: true,
       note: "G4",
       length: 2,
+      duty: DEFAULT_PULSE_DUTY,
     });
+  });
+
+  it("normalizes pulse duty when replacing a pulse arrangement from text entries", () => {
+    const song = createDefaultSongDocument();
+    const updatedSong = replaceMelodicTrackArrangement(song, "pulse1", [
+      { stepIndex: 0, note: "C5", length: 1 },
+      { stepIndex: 4, note: "C5", length: 1 },
+      { stepIndex: 8, note: "C5", length: 1 },
+      { stepIndex: 12, note: "C5", length: 1 },
+    ]);
+
+    expect(updatedSong.tracks.pulse1.steps[0]?.duty).toBe(DEFAULT_PULSE_DUTY);
+    expect(updatedSong.tracks.pulse1.steps[4]?.duty).toBe(DEFAULT_PULSE_DUTY);
+    expect(updatedSong.tracks.pulse1.steps[8]?.duty).toBe(DEFAULT_PULSE_DUTY);
+    expect(updatedSong.tracks.pulse1.steps[12]?.duty).toBe(DEFAULT_PULSE_DUTY);
   });
 
   it("truncates overlapping melodic arrangement entries to keep tracks monophonic", () => {
