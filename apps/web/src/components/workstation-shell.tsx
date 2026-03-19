@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { WaveformCanvas } from "@/components/waveform-canvas";
+import type { AudioEngine } from "@/features/audio/audio-engine";
+import { previewWaveformByTrackId, sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
+import { useTrackWaveform } from "@/features/audio/use-track-waveform";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import {
   createDefaultSongDocument,
@@ -31,20 +35,28 @@ import {
   updateSongTransport,
 } from "@/features/song/song-transport";
 
-const waveformPreviewByTrackId: Record<TrackId, number[]> = {
-  pulse1: [18, 18, 18, 7, 7, 18, 18, 18, 7, 7, 18, 18],
-  pulse2: [16, 16, 8, 8, 16, 16, 8, 8, 16, 16, 8, 8],
-  triangle: [4, 8, 12, 16, 20, 16, 12, 8, 4, 8, 12, 16],
-  noise: [5, 16, 8, 20, 7, 14, 11, 19, 6, 17, 9, 15],
-  sample: [3, 9, 18, 13, 7, 17, 10, 5, 14, 8, 12, 4],
-};
-
 const accentByTrackId: Record<TrackId, string> = {
   pulse1: "border-[#ffd166]/45 bg-[#ffd166]/10 text-[#ffd166]",
   pulse2: "border-[#8bd3ff]/45 bg-[#8bd3ff]/10 text-[#8bd3ff]",
   triangle: "border-[#7ae582]/45 bg-[#7ae582]/10 text-[#7ae582]",
   noise: "border-[#ff8c69]/45 bg-[#ff8c69]/10 text-[#ff8c69]",
   sample: "border-[#ff70a6]/45 bg-[#ff70a6]/10 text-[#ff70a6]",
+};
+
+const waveformLineColorByTrackId: Record<TrackId, string> = {
+  pulse1: "#ffd166",
+  pulse2: "#8bd3ff",
+  triangle: "#7ae582",
+  noise: "#ff8c69",
+  sample: "#ff70a6",
+};
+
+const waveformGlowColorByTrackId: Record<TrackId, string> = {
+  pulse1: "rgba(255, 209, 102, 0.32)",
+  pulse2: "rgba(139, 211, 255, 0.32)",
+  triangle: "rgba(122, 229, 130, 0.28)",
+  noise: "rgba(255, 140, 105, 0.32)",
+  sample: "rgba(255, 112, 166, 0.34)",
 };
 
 const labelByTrackId: Record<TrackId, string> = {
@@ -58,7 +70,7 @@ const labelByTrackId: Record<TrackId, string> = {
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
   const tracks = getOrderedTracks(song);
-  const { engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
+  const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
   const audioReady = engineState === "running" || engineState === "suspended";
 
@@ -83,8 +95,8 @@ export function WorkstationShell() {
                       </h1>
                       <p className="max-w-3xl text-sm text-slate-300">
                         A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        Pulse voice 1 and the transport are live, while the editor rows are still being
-                        connected to real sequencing data.
+                        Pulse voice 1, transport playback, and per-voice waveform monitoring are live,
+                        while the editor rows are still being connected to real sequencing data.
                       </p>
                     </div>
                   </div>
@@ -124,9 +136,9 @@ export function WorkstationShell() {
                       Export
                     </Button>
                     <Button
-                        className="bg-[#ffd166] text-[#091022] hover:bg-[#ffe09b]"
-                        onClick={() => {
-                          void initializeAudio();
+                      className="bg-[#ffd166] text-[#091022] hover:bg-[#ffe09b]"
+                      onClick={() => {
+                        void initializeAudio();
                       }}
                     >
                       {engineState === "initializing" ? "Booting..." : audioReady ? "Resume Audio" : "Start Audio"}
@@ -174,15 +186,14 @@ export function WorkstationShell() {
                         <span>Trim Window</span>
                         <span>{song.samples[0]?.name ?? "No Sample"}</span>
                       </div>
-                      <div className="flex h-14 items-end gap-1">
-                        {waveformPreviewByTrackId.sample.map((height, index) => (
-                          <span
-                            key={`${index}-pcm`}
-                            className="flex-1 bg-[#ff70a6]/65"
-                            style={{ height: `${height * 2.2}px` }}
-                          />
-                        ))}
-                      </div>
+                      <WaveformCanvas
+                        ariaLabel="PCM trim preview waveform"
+                        samples={sampleDeckPreviewWaveform}
+                        className="h-14 w-full"
+                        backgroundColor="rgba(5, 8, 22, 0.88)"
+                        glowColor={waveformGlowColorByTrackId.sample}
+                        lineColor={waveformLineColorByTrackId.sample}
+                      />
                     </div>
                   </div>
 
@@ -195,7 +206,7 @@ export function WorkstationShell() {
                     <SidebarPanel
                       icon={Gauge}
                       title="Next Engine Step"
-                      body="Route analyser taps per voice so each row can replace the placeholder waveform with live capture."
+                      body="Hook the step grid up for note and trigger editing across all five voices."
                     />
                   </div>
                 </CardContent>
@@ -227,7 +238,7 @@ export function WorkstationShell() {
                 </h2>
               </div>
               <div className="rounded-none border border-white/10 bg-white/5 px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-white/70">
-                Waveform canvas, row controls, and step grid live here
+                Live waveform canvas online; row controls and step grid land next
               </div>
             </div>
 
@@ -236,6 +247,7 @@ export function WorkstationShell() {
                 <VoiceRow
                   key={track.id}
                   barNumber={index + 1}
+                  engine={engine}
                   song={song}
                   track={track}
                 />
@@ -408,15 +420,16 @@ function TransportField({
 
 function VoiceRow({
   barNumber,
+  engine,
   song,
   track,
 }: {
   barNumber: number;
+  engine: AudioEngine | null;
   song: SongDocument;
   track: Track;
 }) {
   const accentClassName = accentByTrackId[track.id];
-  const waveformHeights = waveformPreviewByTrackId[track.id];
 
   return (
     <Card className="border-white/10 bg-[#091022]/85 backdrop-blur">
@@ -466,15 +479,7 @@ function VoiceRow({
                 <span>Waveform</span>
                 <Activity className="size-4 text-cyan-200" />
               </div>
-              <div className="flex h-20 items-center gap-1">
-                {waveformHeights.map((height, index) => (
-                  <span
-                    key={`${track.id}-wave-${index}`}
-                    className={cn("flex-1 rounded-none", accentClassName)}
-                    style={{ height: `${height * 2}px` }}
-                  />
-                ))}
-              </div>
+              <VoiceWaveformPanel engine={engine} track={track} />
             </div>
 
             <div className="rounded-none border border-white/10 bg-black/20 p-3">
@@ -503,6 +508,30 @@ function VoiceRow({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function VoiceWaveformPanel({
+  engine,
+  track,
+}: {
+  engine: AudioEngine | null;
+  track: Track;
+}) {
+  const waveform = useTrackWaveform({
+    engine,
+    trackId: track.id,
+    fallbackWaveform: previewWaveformByTrackId[track.id],
+  });
+
+  return (
+    <WaveformCanvas
+      ariaLabel={`${labelByTrackId[track.id]} waveform`}
+      samples={waveform}
+      className="h-20 w-full"
+      glowColor={waveformGlowColorByTrackId[track.id]}
+      lineColor={waveformLineColorByTrackId[track.id]}
+    />
   );
 }
 
