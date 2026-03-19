@@ -15,7 +15,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Build the transport bar with play, stop, BPM, and loop length
 - [x] Add per-voice analysers for waveform capture
 - [x] Build a reusable waveform canvas component
-- [ ] Build five sequencer rows with one row per voice
+- [x] Build five sequencer rows with one row per voice
 - [ ] Implement pulse voice 2
 - [ ] Implement triangle voice
 - [ ] Implement noise voice

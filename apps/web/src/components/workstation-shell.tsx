@@ -2,31 +2,15 @@ import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@ochoit/ui/components/card";
 import { cn } from "@ochoit/ui/lib/utils";
-import {
-  Activity,
-  AudioWaveform,
-  Gauge,
-  Minus,
-  Mic,
-  Play,
-  Plus,
-  Save,
-  Square,
-} from "lucide-react";
+import { AudioWaveform, Gauge, Minus, Mic, Play, Plus, Save, Square } from "lucide-react";
 import { useState } from "react";
 
+import { SequencerMatrix } from "@/components/sequencer-matrix";
+import { waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { WaveformCanvas } from "@/components/waveform-canvas";
-import type { AudioEngine } from "@/features/audio/audio-engine";
-import { previewWaveformByTrackId, sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
-import { useTrackWaveform } from "@/features/audio/use-track-waveform";
+import { sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
-import {
-  createDefaultSongDocument,
-  getOrderedTracks,
-  type SongDocument,
-  type Track,
-  type TrackId,
-} from "@/features/song/song-document";
+import { createDefaultSongDocument, getOrderedTracks, type SongDocument } from "@/features/song/song-document";
 import {
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
@@ -34,38 +18,6 @@ import {
   SONG_LOOP_LENGTH_RANGE,
   updateSongTransport,
 } from "@/features/song/song-transport";
-
-const accentByTrackId: Record<TrackId, string> = {
-  pulse1: "border-[#ffd166]/45 bg-[#ffd166]/10 text-[#ffd166]",
-  pulse2: "border-[#8bd3ff]/45 bg-[#8bd3ff]/10 text-[#8bd3ff]",
-  triangle: "border-[#7ae582]/45 bg-[#7ae582]/10 text-[#7ae582]",
-  noise: "border-[#ff8c69]/45 bg-[#ff8c69]/10 text-[#ff8c69]",
-  sample: "border-[#ff70a6]/45 bg-[#ff70a6]/10 text-[#ff70a6]",
-};
-
-const waveformLineColorByTrackId: Record<TrackId, string> = {
-  pulse1: "#ffd166",
-  pulse2: "#8bd3ff",
-  triangle: "#7ae582",
-  noise: "#ff8c69",
-  sample: "#ff70a6",
-};
-
-const waveformGlowColorByTrackId: Record<TrackId, string> = {
-  pulse1: "rgba(255, 209, 102, 0.32)",
-  pulse2: "rgba(139, 211, 255, 0.32)",
-  triangle: "rgba(122, 229, 130, 0.28)",
-  noise: "rgba(255, 140, 105, 0.32)",
-  sample: "rgba(255, 112, 166, 0.34)",
-};
-
-const labelByTrackId: Record<TrackId, string> = {
-  pulse1: "Pulse I",
-  pulse2: "Pulse II",
-  triangle: "Triangle",
-  noise: "Noise",
-  sample: "PCM",
-};
 
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
@@ -242,17 +194,12 @@ export function WorkstationShell() {
               </div>
             </div>
 
-            <div className="grid gap-3">
-              {tracks.map((track, index) => (
-                <VoiceRow
-                  key={track.id}
-                  barNumber={index + 1}
-                  engine={engine}
-                  song={song}
-                  track={track}
-                />
-              ))}
-            </div>
+            <SequencerMatrix
+              engine={engine}
+              song={song}
+              playbackState={transportState.playbackState}
+              nextStep={transportState.nextStep}
+            />
           </section>
         </div>
       </div>
@@ -418,123 +365,6 @@ function TransportField({
   );
 }
 
-function VoiceRow({
-  barNumber,
-  engine,
-  song,
-  track,
-}: {
-  barNumber: number;
-  engine: AudioEngine | null;
-  song: SongDocument;
-  track: Track;
-}) {
-  const accentClassName = accentByTrackId[track.id];
-
-  return (
-    <Card className="border-white/10 bg-[#091022]/85 backdrop-blur">
-      <CardContent className="grid gap-3 px-0 py-0 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="border-b border-white/10 p-4 lg:border-r lg:border-b-0">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.28em] text-white/60">
-                Row {barNumber.toString().padStart(2, "0")}
-              </p>
-              <h3 className="mt-2 font-mono text-lg uppercase tracking-[0.16em] text-white">
-                {labelByTrackId[track.id]}
-              </h3>
-            </div>
-            <span className={cn("rounded-none border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.22em]", accentClassName)}>
-              {track.kind}
-            </span>
-          </div>
-
-          <p className="mt-3 text-sm text-slate-300">{getTrackSummary(track)}</p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {getTrackControls(track).map((control) => (
-              <span
-                key={control}
-                className={cn(
-                  "rounded-none border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.22em]",
-                  accentClassName,
-                )}
-              >
-                {control}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-2 text-[11px] uppercase tracking-[0.2em] text-white/65">
-            <MiniStat label="Track Vol" value={`${Math.round(track.volume * 100)}%`} />
-            <MiniStat label="Muted" value={track.muted ? "yes" : "no"} />
-            <MiniStat label="Sample" value={track.id === "sample" ? `${song.samples.length}` : "n/a"} />
-          </div>
-        </div>
-
-        <div className="grid gap-3 p-4">
-          <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)]">
-            <div className="rounded-none border border-white/10 bg-black/20 p-3">
-              <div className="mb-3 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.24em] text-white/65">
-                <span>Waveform</span>
-                <Activity className="size-4 text-cyan-200" />
-              </div>
-              <VoiceWaveformPanel engine={engine} track={track} />
-            </div>
-
-            <div className="rounded-none border border-white/10 bg-black/20 p-3">
-              <div className="mb-3 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.24em] text-white/65">
-                <span>Step Grid</span>
-                <span>{song.transport.loopLength} steps</span>
-              </div>
-              <div className="grid grid-cols-8 gap-2 md:grid-cols-16">
-                {track.steps.map((step, index) => (
-                  <div
-                    key={`${track.id}-step-${index}`}
-                    className={cn(
-                      "rounded-none border px-2 py-2 text-center font-mono text-[10px] uppercase tracking-[0.18em] transition-colors",
-                      step.enabled
-                        ? `${accentClassName} shadow-[0_0_0_1px_rgba(255,255,255,0.03)]`
-                        : "border-white/10 bg-white/5 text-white/35",
-                    )}
-                  >
-                    <div className="mb-2 text-[9px] text-white/45">{index + 1}</div>
-                    <div className="text-white">{getStepLabel(track, index)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function VoiceWaveformPanel({
-  engine,
-  track,
-}: {
-  engine: AudioEngine | null;
-  track: Track;
-}) {
-  const waveform = useTrackWaveform({
-    engine,
-    trackId: track.id,
-    fallbackWaveform: previewWaveformByTrackId[track.id],
-  });
-
-  return (
-    <WaveformCanvas
-      ariaLabel={`${labelByTrackId[track.id]} waveform`}
-      samples={waveform}
-      className="h-20 w-full"
-      glowColor={waveformGlowColorByTrackId[track.id]}
-      lineColor={waveformLineColorByTrackId[track.id]}
-    />
-  );
-}
-
 function SidebarPanel({
   icon: Icon,
   title,
@@ -580,78 +410,4 @@ function TransportChip({ label, value }: { label: string; value: string }) {
       <div className="mt-1 font-mono text-sm uppercase tracking-[0.16em] text-white">{value}</div>
     </div>
   );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-none border border-white/10 bg-black/20 px-2 py-2">
-      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">{label}</div>
-      <div className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-white/80">{value}</div>
-    </div>
-  );
-}
-
-function getTrackSummary(track: Track) {
-  switch (track.kind) {
-    case "pulse":
-      return "Pulse lanes carry the lead and harmony phrases, with duty-cycle shaping called out in the row controls.";
-    case "triangle":
-      return "Triangle anchors the low-end pattern and stays note-driven for bass movement.";
-    case "noise":
-      return "Noise acts as the percussion lane, using discrete hits and period changes instead of pitched notes.";
-    case "sample":
-      return "PCM handles short recorded sounds from the sample deck, trimmed and triggered on the grid.";
-  }
-}
-
-function getTrackControls(track: Track) {
-  switch (track.kind) {
-    case "pulse":
-      return [`duty ${getPulseDutyLabel(track)}`, "note grid", "volume"];
-    case "triangle":
-      return ["note grid", "bass lane", "volume"];
-    case "noise":
-      return ["noise mode", "period index", "hit grid"];
-    case "sample":
-      return ["recorded sample", "trim preview", "trigger grid"];
-  }
-}
-
-function getStepLabel(track: Track, index: number) {
-  switch (track.kind) {
-    case "pulse": {
-      const step = track.steps[index];
-      return step.enabled ? step.note : "--";
-    }
-    case "triangle": {
-      const step = track.steps[index];
-      return step.enabled ? step.note : "--";
-    }
-    case "noise": {
-      const step = track.steps[index];
-      if (!step.enabled) {
-        return "--";
-      }
-
-      return step.mode === "short" ? "sn" : "nz";
-    }
-    case "sample": {
-      const step = track.steps[index];
-      if (!step.enabled) {
-        return "--";
-      }
-
-      return step.sampleId === null ? "pcm" : "hit";
-    }
-  }
-}
-
-function getPulseDutyLabel(track: Extract<Track, { kind: "pulse" }>) {
-  const pulseStep = track.steps.find((step) => step.enabled);
-
-  if (pulseStep === undefined) {
-    return "50%";
-  }
-
-  return `${pulseStep.duty * 100}%`;
 }

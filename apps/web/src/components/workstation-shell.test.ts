@@ -70,4 +70,15 @@ describe("workstation-shell", () => {
 
     expect(playingResult.stopTransport).toHaveBeenCalledTimes(1);
   });
+
+  it("renders the full five-row sequencer matrix", () => {
+    render(React.createElement(WorkstationShell));
+
+    expect(screen.getByRole("heading", { name: "Pulse I" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pulse II" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Triangle" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Noise" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "PCM" })).toBeTruthy();
+    expect(screen.getByText("Pattern Ruler")).toBeTruthy();
+  });
 });
