@@ -18,7 +18,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Build five sequencer rows with one row per voice
 - [x] Implement pulse voice 2
 - [x] Implement triangle voice
-- [ ] Implement noise voice
+- [x] Implement noise voice
 - [ ] Implement PCM sample voice
 - [ ] Add note entry UI for pulse and triangle voices
 - [ ] Add trigger UI for noise and PCM voices

@@ -17,6 +17,9 @@ const audioEngineMocks = vi.hoisted(() => {
   const triangleVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
   const triangleConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
   const triangleScheduleStep = vi.fn<(step: number, time: number) => void>();
+  const noiseVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
+  const noiseConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
+  const noiseScheduleStep = vi.fn<(step: number, time: number) => void>();
   const createTransport = vi.fn(async () => transport);
 
   class MockPulseVoice {
@@ -47,6 +50,20 @@ const audioEngineMocks = vi.hoisted(() => {
     }
   }
 
+  class MockNoiseVoice {
+    constructor(context: AudioContext, output: AudioNode) {
+      noiseVoiceConstructor(context, output);
+    }
+
+    configure(track: unknown, transport: unknown) {
+      noiseConfigure(track, transport);
+    }
+
+    scheduleStep(step: number, time: number) {
+      noiseScheduleStep(step, time);
+    }
+  }
+
   transport.subscribe.mockImplementation(() => unsubscribeTransport);
 
   return {
@@ -57,8 +74,12 @@ const audioEngineMocks = vi.hoisted(() => {
     triangleVoiceConstructor,
     triangleConfigure,
     triangleScheduleStep,
+    noiseVoiceConstructor,
+    noiseConfigure,
+    noiseScheduleStep,
     PulseVoice: MockPulseVoice,
     TriangleVoice: MockTriangleVoice,
+    NoiseVoice: MockNoiseVoice,
     transport,
     unsubscribeTransport,
   };
@@ -76,6 +97,10 @@ vi.mock("@/features/audio/pulse-voice", () => ({
 
 vi.mock("@/features/audio/triangle-voice", () => ({
   TriangleVoice: audioEngineMocks.TriangleVoice,
+}));
+
+vi.mock("@/features/audio/noise-voice", () => ({
+  NoiseVoice: audioEngineMocks.NoiseVoice,
 }));
 
 import { AudioEngine } from "@/features/audio/audio-engine";
@@ -139,6 +164,9 @@ describe("audio-engine", () => {
     audioEngineMocks.triangleVoiceConstructor.mockClear();
     audioEngineMocks.triangleConfigure.mockClear();
     audioEngineMocks.triangleScheduleStep.mockClear();
+    audioEngineMocks.noiseVoiceConstructor.mockClear();
+    audioEngineMocks.noiseConfigure.mockClear();
+    audioEngineMocks.noiseScheduleStep.mockClear();
     audioEngineMocks.transport.configure.mockClear();
     audioEngineMocks.transport.disconnect.mockClear();
     audioEngineMocks.transport.start.mockClear();
@@ -168,6 +196,7 @@ describe("audio-engine", () => {
     expect(audioEngineMocks.pulseVoiceConstructor).toHaveBeenNthCalledWith(1, mockContext, engine.voices.pulse1.input);
     expect(audioEngineMocks.pulseVoiceConstructor).toHaveBeenNthCalledWith(2, mockContext, engine.voices.pulse2.input);
     expect(audioEngineMocks.triangleVoiceConstructor).toHaveBeenCalledWith(mockContext, engine.voices.triangle.input);
+    expect(audioEngineMocks.noiseVoiceConstructor).toHaveBeenCalledWith(mockContext, engine.voices.noise.input);
     expect(mockContext.createAnalyser).toHaveBeenCalledTimes(trackOrder.length);
 
     trackOrder.forEach((trackId, index) => {
@@ -204,6 +233,10 @@ describe("audio-engine", () => {
           muted: true,
           volume: 0.3,
         },
+        noise: {
+          ...song.tracks.noise,
+          volume: 0.57,
+        },
       },
     };
 
@@ -212,6 +245,7 @@ describe("audio-engine", () => {
     expect(engine.masterGain.gain.value).toBe(0.61);
     expect((engine.voices.pulse1.gain as unknown as MockGainNode).gain.value).toBe(0.43);
     expect((engine.voices.triangle.gain as unknown as MockGainNode).gain.value).toBe(0);
+    expect((engine.voices.noise.gain as unknown as MockGainNode).gain.value).toBe(0.57);
     expect(audioEngineMocks.pulseConfigure).toHaveBeenNthCalledWith(
       1,
       mutedTriangleSong.tracks.pulse1,
@@ -227,6 +261,10 @@ describe("audio-engine", () => {
       mutedTriangleSong.tracks.triangle,
       mutedTriangleSong.transport,
     );
+    expect(audioEngineMocks.noiseConfigure).toHaveBeenCalledWith(
+      mutedTriangleSong.tracks.noise,
+      mutedTriangleSong.transport,
+    );
 
     const subscribeListener = audioEngineMocks.transport.subscribe.mock.calls[0]?.[0];
     subscribeListener?.({
@@ -237,6 +275,7 @@ describe("audio-engine", () => {
     expect(audioEngineMocks.pulseScheduleStep).toHaveBeenNthCalledWith(1, 4, 1.5);
     expect(audioEngineMocks.pulseScheduleStep).toHaveBeenNthCalledWith(2, 4, 1.5);
     expect(audioEngineMocks.triangleScheduleStep).toHaveBeenCalledWith(4, 1.5);
+    expect(audioEngineMocks.noiseScheduleStep).toHaveBeenCalledWith(4, 1.5);
 
     await engine.close();
 

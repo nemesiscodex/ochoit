@@ -1,3 +1,4 @@
+import { NoiseVoice } from "@/features/audio/noise-voice";
 import { AudioTransport } from "@/features/audio/audio-transport";
 import { PulseVoice } from "@/features/audio/pulse-voice";
 import { TriangleVoice } from "@/features/audio/triangle-voice";
@@ -22,6 +23,7 @@ export class AudioEngine {
   private readonly pulseVoice1: PulseVoice;
   private readonly pulseVoice2: PulseVoice;
   private readonly triangleVoice: TriangleVoice;
+  private readonly noiseVoice: NoiseVoice;
   private readonly unsubscribeTransport: () => void;
 
   private constructor(
@@ -32,6 +34,7 @@ export class AudioEngine {
     pulseVoice1: PulseVoice,
     pulseVoice2: PulseVoice,
     triangleVoice: TriangleVoice,
+    noiseVoice: NoiseVoice,
     unsubscribeTransport: () => void,
   ) {
     this.context = context;
@@ -41,6 +44,7 @@ export class AudioEngine {
     this.pulseVoice1 = pulseVoice1;
     this.pulseVoice2 = pulseVoice2;
     this.triangleVoice = triangleVoice;
+    this.noiseVoice = noiseVoice;
     this.unsubscribeTransport = unsubscribeTransport;
   }
 
@@ -84,6 +88,7 @@ export class AudioEngine {
     const pulseVoice1 = new PulseVoice(context, voices.pulse1.input);
     const pulseVoice2 = new PulseVoice(context, voices.pulse2.input);
     const triangleVoice = new TriangleVoice(context, voices.triangle.input);
+    const noiseVoice = new NoiseVoice(context, voices.noise.input);
     const unsubscribeTransport = transport.subscribe((event) => {
       if (event.type !== "scheduled-steps") {
         return;
@@ -93,6 +98,7 @@ export class AudioEngine {
         pulseVoice1.scheduleStep(step, time);
         pulseVoice2.scheduleStep(step, time);
         triangleVoice.scheduleStep(step, time);
+        noiseVoice.scheduleStep(step, time);
       });
     });
 
@@ -104,6 +110,7 @@ export class AudioEngine {
       pulseVoice1,
       pulseVoice2,
       triangleVoice,
+      noiseVoice,
       unsubscribeTransport,
     );
   }
@@ -140,6 +147,7 @@ export class AudioEngine {
     this.pulseVoice1.configure(song.tracks.pulse1, song.transport);
     this.pulseVoice2.configure(song.tracks.pulse2, song.transport);
     this.triangleVoice.configure(song.tracks.triangle, song.transport);
+    this.noiseVoice.configure(song.tracks.noise, song.transport);
     this.transport.configure(song.transport);
   }
 

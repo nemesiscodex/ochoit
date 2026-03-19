@@ -87,7 +87,7 @@ describe("workstation-shell", () => {
 
     expect(
       screen.getByText(
-        /Pulse voices 1 and 2, the triangle voice, transport playback, and per-voice waveform monitoring are live/i,
+        /Pulse voices 1 and 2, the triangle voice, the noise voice, transport playback, and per-voice waveform monitoring are live/i,
       ),
     ).toBeTruthy();
   });

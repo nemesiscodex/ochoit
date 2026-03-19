@@ -47,7 +47,7 @@ export function WorkstationShell() {
                       </h1>
                       <p className="max-w-3xl text-sm text-slate-300">
                         A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        Pulse voices 1 and 2, the triangle voice, transport playback, and per-voice waveform monitoring are live,
+                        Pulse voices 1 and 2, the triangle voice, the noise voice, transport playback, and per-voice waveform monitoring are live,
                         while the editor rows are still being connected to real sequencing data.
                       </p>
                     </div>
@@ -158,7 +158,7 @@ export function WorkstationShell() {
                     <SidebarPanel
                       icon={Gauge}
                       title="Next Engine Step"
-                      body="Add the dedicated noise voice, then keep wiring the step grid up for note and trigger editing."
+                      body="Add the PCM sample voice, then keep wiring the step grid up for note and trigger editing."
                     />
                   </div>
                 </CardContent>
