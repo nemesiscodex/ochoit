@@ -137,7 +137,8 @@ describe("audio-engine", () => {
     const engine = await AudioEngine.create();
 
     expect(audioEngineMocks.createTransport).toHaveBeenCalledWith(mockContext);
-    expect(audioEngineMocks.pulseVoiceConstructor).toHaveBeenCalledWith(mockContext, engine.voices.pulse1.input);
+    expect(audioEngineMocks.pulseVoiceConstructor).toHaveBeenNthCalledWith(1, mockContext, engine.voices.pulse1.input);
+    expect(audioEngineMocks.pulseVoiceConstructor).toHaveBeenNthCalledWith(2, mockContext, engine.voices.pulse2.input);
     expect(mockContext.createAnalyser).toHaveBeenCalledTimes(trackOrder.length);
 
     trackOrder.forEach((trackId, index) => {
@@ -182,8 +183,14 @@ describe("audio-engine", () => {
     expect(engine.masterGain.gain.value).toBe(0.61);
     expect((engine.voices.pulse1.gain as unknown as MockGainNode).gain.value).toBe(0.43);
     expect((engine.voices.triangle.gain as unknown as MockGainNode).gain.value).toBe(0);
-    expect(audioEngineMocks.pulseConfigure).toHaveBeenCalledWith(
+    expect(audioEngineMocks.pulseConfigure).toHaveBeenNthCalledWith(
+      1,
       mutedTriangleSong.tracks.pulse1,
+      mutedTriangleSong.transport,
+    );
+    expect(audioEngineMocks.pulseConfigure).toHaveBeenNthCalledWith(
+      2,
+      mutedTriangleSong.tracks.pulse2,
       mutedTriangleSong.transport,
     );
     expect(audioEngineMocks.transport.configure).toHaveBeenCalledWith(mutedTriangleSong.transport);
@@ -194,7 +201,8 @@ describe("audio-engine", () => {
       steps: [{ step: 4, time: 1.5, loopCount: 0 }],
     });
 
-    expect(audioEngineMocks.pulseScheduleStep).toHaveBeenCalledWith(4, 1.5);
+    expect(audioEngineMocks.pulseScheduleStep).toHaveBeenNthCalledWith(1, 4, 1.5);
+    expect(audioEngineMocks.pulseScheduleStep).toHaveBeenNthCalledWith(2, 4, 1.5);
 
     await engine.close();
 

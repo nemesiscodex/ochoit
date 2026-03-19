@@ -19,6 +19,7 @@ export class AudioEngine {
   readonly voices: Record<TrackId, VoiceBus>;
   readonly transport: AudioTransport;
   private readonly pulseVoice1: PulseVoice;
+  private readonly pulseVoice2: PulseVoice;
   private readonly unsubscribeTransport: () => void;
 
   private constructor(
@@ -27,6 +28,7 @@ export class AudioEngine {
     voices: Record<TrackId, VoiceBus>,
     transport: AudioTransport,
     pulseVoice1: PulseVoice,
+    pulseVoice2: PulseVoice,
     unsubscribeTransport: () => void,
   ) {
     this.context = context;
@@ -34,6 +36,7 @@ export class AudioEngine {
     this.voices = voices;
     this.transport = transport;
     this.pulseVoice1 = pulseVoice1;
+    this.pulseVoice2 = pulseVoice2;
     this.unsubscribeTransport = unsubscribeTransport;
   }
 
@@ -75,6 +78,7 @@ export class AudioEngine {
     ) as Record<TrackId, VoiceBus>;
 
     const pulseVoice1 = new PulseVoice(context, voices.pulse1.input);
+    const pulseVoice2 = new PulseVoice(context, voices.pulse2.input);
     const unsubscribeTransport = transport.subscribe((event) => {
       if (event.type !== "scheduled-steps") {
         return;
@@ -82,10 +86,11 @@ export class AudioEngine {
 
       event.steps.forEach(({ step, time }) => {
         pulseVoice1.scheduleStep(step, time);
+        pulseVoice2.scheduleStep(step, time);
       });
     });
 
-    return new AudioEngine(context, masterGain, voices, transport, pulseVoice1, unsubscribeTransport);
+    return new AudioEngine(context, masterGain, voices, transport, pulseVoice1, pulseVoice2, unsubscribeTransport);
   }
 
   get state(): AudioEngineState {
@@ -118,6 +123,7 @@ export class AudioEngine {
       this.setVoiceVolume(track.id, track.muted ? 0 : track.volume);
     });
     this.pulseVoice1.configure(song.tracks.pulse1, song.transport);
+    this.pulseVoice2.configure(song.tracks.pulse2, song.transport);
     this.transport.configure(song.transport);
   }
 

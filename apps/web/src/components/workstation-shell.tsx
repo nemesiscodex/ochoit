@@ -47,7 +47,7 @@ export function WorkstationShell() {
                       </h1>
                       <p className="max-w-3xl text-sm text-slate-300">
                         A five-voice browser sequencer with pulse, triangle, noise, and PCM lanes.
-                        Pulse voice 1, transport playback, and per-voice waveform monitoring are live,
+                        Pulse voices 1 and 2, transport playback, and per-voice waveform monitoring are live,
                         while the editor rows are still being connected to real sequencing data.
                       </p>
                     </div>
