@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
+import { createTriangleCycle, TriangleVoice } from "@/features/audio/triangle-voice";
 import { createDefaultSongDocument } from "@/features/song/song-document";
-import { createPulseCycle, PulseVoice } from "@/features/audio/pulse-voice";
 
 class MockAudioParam {
   value = 1;
@@ -82,29 +82,22 @@ function createMockAudioContext() {
   };
 }
 
-describe("pulse-voice", () => {
-  it("maps note names to equal-temperament frequencies", () => {
-    expect(getFrequencyForNote("A4")).toBe(440);
-    expect(getFrequencyForNote("C5")).toBeCloseTo(523.251, 3);
-    expect(getFrequencyForNote("Bb3")).toBeCloseTo(233.082, 3);
+describe("triangle-voice", () => {
+  it("creates a triangle waveform cycle", () => {
+    expect(Array.from(createTriangleCycle(8))).toEqual([0, 0.5, 1, 0.5, 0, -0.5, -1, -0.5]);
   });
 
-  it("creates a duty-cycle pulse waveform", () => {
-    expect(Array.from(createPulseCycle(0.25, 8))).toEqual([1, 1, -1, -1, -1, -1, -1, -1]);
-    expect(Array.from(createPulseCycle(0.75, 8))).toEqual([1, 1, 1, 1, 1, 1, -1, -1]);
-  });
-
-  it("schedules an enabled pulse step with a cached waveform buffer", () => {
+  it("schedules an enabled triangle step with a cached waveform buffer", () => {
     const song = createDefaultSongDocument();
     const { context, output, createdBuffers, createdGains, createdSources } = createMockAudioContext();
-    const voice = new PulseVoice(context, output);
-    const step = song.tracks.pulse1.steps[4];
+    const voice = new TriangleVoice(context, output);
+    const step = song.tracks.triangle.steps[8];
     const stepDuration = 60 / song.transport.bpm / song.transport.stepsPerBeat;
-    const expectedStopTime = 1.5 + Math.max(stepDuration - 0.002, 0.002) + 0.01;
+    const expectedStopTime = 2.5 + Math.max(stepDuration - 0.002, 0.002) + 0.01;
 
-    voice.configure(song.tracks.pulse1, song.transport);
-    voice.scheduleStep(4, 1.5);
-    voice.scheduleStep(12, 2);
+    voice.configure(song.tracks.triangle, song.transport);
+    voice.scheduleStep(8, 2.5);
+    voice.scheduleStep(12, 3);
 
     expect(createdBuffers).toHaveLength(1);
     expect(createdSources).toHaveLength(2);
@@ -116,11 +109,11 @@ describe("pulse-voice", () => {
 
     expect(firstSource?.buffer).toBe(createdBuffers[0]);
     expect(firstSource?.loop).toBe(true);
-    expect(firstSource?.playbackRate.setValueAtTime).toHaveBeenCalledWith(expectedPlaybackRate, 1.5);
-    expect(firstGain?.gain.cancelScheduledValues).toHaveBeenCalledWith(1.5);
-    expect(firstGain?.gain.setValueAtTime).toHaveBeenNthCalledWith(1, 0, 1.5);
-    expect(firstGain?.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(1, step.volume, 1.502);
-    expect(firstSource?.start).toHaveBeenCalledWith(1.5);
+    expect(firstSource?.playbackRate.setValueAtTime).toHaveBeenCalledWith(expectedPlaybackRate, 2.5);
+    expect(firstGain?.gain.cancelScheduledValues).toHaveBeenCalledWith(2.5);
+    expect(firstGain?.gain.setValueAtTime).toHaveBeenNthCalledWith(1, 0, 2.5);
+    expect(firstGain?.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(1, step.volume, 2.502);
+    expect(firstSource?.start).toHaveBeenCalledWith(2.5);
     expect(firstSource?.stop).toHaveBeenCalledWith(expectedStopTime);
 
     firstSource?.onended?.();
@@ -133,21 +126,21 @@ describe("pulse-voice", () => {
     expect(context.createBuffer).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores disabled or muted steps", () => {
+  it("ignores disabled or muted triangle steps", () => {
     const song = createDefaultSongDocument();
     const { context, output } = createMockAudioContext();
-    const voice = new PulseVoice(context, output);
+    const voice = new TriangleVoice(context, output);
 
     voice.configure(
       {
-        ...song.tracks.pulse1,
+        ...song.tracks.triangle,
         muted: true,
       },
       song.transport,
     );
     voice.scheduleStep(0, 0.5);
 
-    voice.configure(song.tracks.pulse1, song.transport);
+    voice.configure(song.tracks.triangle, song.transport);
     voice.scheduleStep(1, 0.75);
 
     expect(context.createBufferSource).not.toHaveBeenCalled();

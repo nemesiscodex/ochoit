@@ -17,7 +17,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Build a reusable waveform canvas component
 - [x] Build five sequencer rows with one row per voice
 - [x] Implement pulse voice 2
-- [ ] Implement triangle voice
+- [x] Implement triangle voice
 - [ ] Implement noise voice
 - [ ] Implement PCM sample voice
 - [ ] Add note entry UI for pulse and triangle voices

@@ -1,52 +1,46 @@
 import type { TransportConfig } from "@/features/audio/transport-worklet-shared";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import type { PulseTrack } from "@/features/song/song-document";
+import type { TriangleTrack } from "@/features/song/song-document";
 
-const pulseCycleFrameCount = 2048;
+const triangleCycleFrameCount = 2048;
 const noteAttackSeconds = 0.002;
-const noteReleaseSeconds = 0.016;
+const noteReleaseSeconds = 0.02;
 const sourceStopPaddingSeconds = 0.01;
 const silentGainFloor = 0.0001;
 
-type PulseDuty = PulseTrack["steps"][number]["duty"];
-
-const dutyThresholdByFrameCount = new Map<string, number>();
-
-export function createPulseCycle(duty: PulseDuty, frameCount = pulseCycleFrameCount) {
+export function createTriangleCycle(frameCount = triangleCycleFrameCount) {
   const waveform = new Float32Array(frameCount);
-  const threshold = getDutyThreshold(duty, frameCount);
 
   for (let index = 0; index < frameCount; index += 1) {
-    waveform[index] = index < threshold ? 1 : -1;
+    const phase = index / frameCount;
+
+    if (phase < 0.25) {
+      waveform[index] = phase * 4;
+      continue;
+    }
+
+    if (phase < 0.75) {
+      waveform[index] = 2 - phase * 4;
+      continue;
+    }
+
+    waveform[index] = phase * 4 - 4;
   }
 
   return waveform;
 }
 
-function getDutyThreshold(duty: PulseDuty, frameCount: number) {
-  const cacheKey = `${duty}:${frameCount}`;
-  const cachedThreshold = dutyThresholdByFrameCount.get(cacheKey);
-
-  if (cachedThreshold !== undefined) {
-    return cachedThreshold;
-  }
-
-  const threshold = Math.max(1, Math.round(frameCount * duty));
-  dutyThresholdByFrameCount.set(cacheKey, threshold);
-  return threshold;
-}
-
-export class PulseVoice {
-  private track: PulseTrack | null = null;
+export class TriangleVoice {
+  private track: TriangleTrack | null = null;
   private stepDuration = 0.125;
-  private readonly waveBufferByDuty = new Map<PulseDuty, AudioBuffer>();
+  private waveBuffer: AudioBuffer | null = null;
 
   constructor(
     private readonly context: AudioContext,
     private readonly output: AudioNode,
   ) {}
 
-  configure(track: PulseTrack, transport: TransportConfig) {
+  configure(track: TriangleTrack, transport: TransportConfig) {
     this.track = track;
     this.stepDuration = 60 / transport.bpm / transport.stepsPerBeat;
   }
@@ -64,7 +58,7 @@ export class PulseVoice {
 
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
-    const buffer = this.getWaveBuffer(step.duty);
+    const buffer = this.getWaveBuffer();
     const noteDuration = Math.max(this.stepDuration - noteAttackSeconds, noteAttackSeconds);
     const noteEndTime = time + noteDuration;
     const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
@@ -92,17 +86,15 @@ export class PulseVoice {
     source.stop(noteEndTime + sourceStopPaddingSeconds);
   }
 
-  private getWaveBuffer(duty: PulseDuty) {
-    const cachedBuffer = this.waveBufferByDuty.get(duty);
-
-    if (cachedBuffer !== undefined) {
-      return cachedBuffer;
+  private getWaveBuffer() {
+    if (this.waveBuffer !== null) {
+      return this.waveBuffer;
     }
 
-    const buffer = this.context.createBuffer(1, pulseCycleFrameCount, this.context.sampleRate);
+    const buffer = this.context.createBuffer(1, triangleCycleFrameCount, this.context.sampleRate);
     const channel = buffer.getChannelData(0);
-    channel.set(createPulseCycle(duty, pulseCycleFrameCount));
-    this.waveBufferByDuty.set(duty, buffer);
+    channel.set(createTriangleCycle(triangleCycleFrameCount));
+    this.waveBuffer = buffer;
     return buffer;
   }
 }

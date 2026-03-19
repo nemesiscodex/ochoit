@@ -81,4 +81,14 @@ describe("workstation-shell", () => {
     expect(screen.getByRole("heading", { name: "PCM" })).toBeTruthy();
     expect(screen.getByText("Pattern Ruler")).toBeTruthy();
   });
+
+  it("describes the live audio engine status with the triangle voice included", () => {
+    render(React.createElement(WorkstationShell));
+
+    expect(
+      screen.getByText(
+        /Pulse voices 1 and 2, the triangle voice, transport playback, and per-voice waveform monitoring are live/i,
+      ),
+    ).toBeTruthy();
+  });
 });
