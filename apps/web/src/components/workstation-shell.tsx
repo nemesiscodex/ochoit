@@ -59,6 +59,31 @@ type ArrangementEditorState = {
   error: string | null;
 };
 
+function formatEngineModeLabel(engineMode: SongDocument["meta"]["engineMode"]) {
+  return engineMode === "inspired" ? "Inspired" : "Authentic";
+}
+
+function getPcmModeSummary(engineMode: SongDocument["meta"]["engineMode"]) {
+  if (engineMode === "inspired") {
+    return "PCM uses one-shot sample triggers with selectable playback rate. Musical note mapping is intentionally off for this mode.";
+  }
+
+  return "Authentic mode is reserved for stricter fixed-rate DPCM-style playback and is not part of the current editor flow.";
+}
+
+function getSampleArrangementHelperCopy(
+  engineMode: SongDocument["meta"]["engineMode"],
+  loopLength: number,
+  sampleReference: string,
+) {
+  const behaviorSummary =
+    engineMode === "inspired"
+      ? "Inspired mode keeps PCM trigger-based: choose a sample plus playback rate, without musical note mapping."
+      : "Authentic mode is planned for fixed-rate DPCM-style hits rather than note-mapped playback.";
+
+  return `${behaviorSummary} One trigger per line in the format 8: ${sampleReference}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x. Steps above ${loopLength} are ignored when you apply.`;
+}
+
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
@@ -416,6 +441,7 @@ export function WorkstationShell() {
 
       {arrangementEditor !== null ? (
         <TrackArrangementEditor
+          engineMode={song.meta.engineMode}
           trackId={arrangementEditor.trackId}
           loopLength={song.transport.loopLength}
           draft={arrangementEditor.draft}
@@ -936,11 +962,20 @@ function SongMeta({
       <div className="grid gap-2 font-[var(--oc-mono)] text-[10px]">
         <MetaRow label="Name" value={song.meta.name} />
         <MetaRow label="Author" value={song.meta.author} />
-        <MetaRow label="Mode" value={song.meta.engineMode} />
+        <MetaRow label="Mode" value={formatEngineModeLabel(song.meta.engineMode)} />
         <MetaRow label="Tempo" value={`${song.transport.bpm} bpm`} />
         <MetaRow label="Loop" value={`${song.transport.loopLength} steps`} />
         <MetaRow label="Voices" value={`${trackCount}`} />
         <MetaRow label="Audio" value={engineState} />
+      </div>
+      <div
+        aria-label="PCM mode summary"
+        className="mt-3 rounded-md border border-white/[0.06] bg-black/20 px-3 py-2 font-[var(--oc-mono)]"
+      >
+        <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">
+          {formatEngineModeLabel(song.meta.engineMode)} PCM
+        </div>
+        <p className="mt-1 text-[10px] leading-5 text-white/55">{getPcmModeSummary(song.meta.engineMode)}</p>
       </div>
     </div>
   );
@@ -956,6 +991,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 function TrackArrangementEditor({
+  engineMode,
   trackId,
   loopLength,
   draft,
@@ -965,6 +1001,7 @@ function TrackArrangementEditor({
   onClose,
   onApply,
 }: {
+  engineMode: SongDocument["meta"]["engineMode"];
   trackId: MelodicTrackId | TriggerTrackId;
   loopLength: number;
   draft: string;
@@ -980,7 +1017,7 @@ function TrackArrangementEditor({
     trackId === "noise"
       ? `One trigger per line in the format 1: short P3 or 1: long P12. Preset aliases (${noiseTriggerPresets.map((preset) => preset.id).join(", ")}) are also accepted on paste. Steps above ${loopLength} are ignored when you apply.`
       : trackId === "sample"
-        ? `One trigger per line in the format 8: ${samples[0]?.id ?? "mic-001"}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x. Steps above ${loopLength} are ignored when you apply.`
+        ? getSampleArrangementHelperCopy(engineMode, loopLength, samples[0]?.id ?? "mic-001")
         : trackId === "pulse1" || trackId === "pulse2"
           ? `One pulse note per line in the format 1: E4 @25% or 1-4: E4 @12.5% for sustained notes. The duty suffix is optional and defaults to 50%. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`
           : `One note per line in the format 1: E4 or 1-4: E4 for sustained notes. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`;

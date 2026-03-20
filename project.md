@@ -83,8 +83,19 @@ Expected voice behavior:
 - Pulse rows: note, volume, duty cycle
 - Triangle row: note, volume
 - Noise row: trigger, noise rate or mode, volume
-- PCM row in `Inspired mode`: trigger recorded sample, preview sample, trim sample, and optionally map playback to musical notes
+- PCM row in `Inspired mode`: trigger recorded sample, preview sample, trim sample, and shape pitch by playback rate rather than musical note entry
 - PCM row in `Authentic mode`: trigger short sampled hits using fixed-rate DPCM-style behavior instead of note-mapped playback
+
+### Inspired Mode PCM Decision
+
+For the current product direction, `Inspired mode` PCM is explicitly trigger-first rather than note-first.
+
+- each PCM step stores a sample reference plus playback rate
+- playback rate acts as the musical convenience control for pitch shifting
+- PCM stays a one-shot lane for rhythmic stabs, vocals, and hits
+- direct note mapping is out of scope for this mode in the current editor
+
+This keeps the sample lane easy to understand beside the pulse and triangle note lanes, while still allowing expressive pitch-shifted playback without introducing a second melodic editing system.
 
 ### 3. Visualization Layer
 

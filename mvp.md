@@ -101,7 +101,17 @@ Voice-specific controls:
 - preview the captured waveform
 - trim start and end points
 - assign the trimmed buffer to the PCM voice
-- keep PCM playback rate-based in the first pass, while leaving room for later note-mapped behavior in `Inspired mode`
+- keep PCM playback rate-based in the first pass and explicitly avoid note-mapped PCM entry in `Inspired mode`
+
+### Inspired Mode PCM Decision
+
+The MVP locks `Inspired mode` PCM to a simple rule set:
+
+- the PCM lane is trigger-based, not note-based
+- each active step chooses a sample and playback rate
+- playback rate is the only pitch-shaping control in this mode
+- the lane is intended for one-shots, chopped vocals, and percussive accents
+- note-mapped sample performance is deferred to a later design pass, if it is added at all
 
 ### Persistence
 
@@ -139,7 +149,7 @@ type StepEvent = {
 - Noise and PCM rows can store and play step triggers.
 - The user can record, trim, and reuse a short PCM sample.
 - The user can save a song locally and reload it successfully after refresh.
-- The product direction keeps `Inspired mode` and future `Authentic mode` behavior distinct in the design docs and data model.
+- The product direction keeps `Inspired mode` and future `Authentic mode` behavior distinct in the design docs and data model, with `Inspired mode` PCM defined as trigger-plus-rate rather than note-mapped playback.
 
 ## Build Order
 

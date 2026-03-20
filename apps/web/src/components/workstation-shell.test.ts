@@ -118,6 +118,14 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Pattern Ruler")).toBeTruthy();
   });
 
+  it("surfaces the current inspired PCM behavior in the song info panel", () => {
+    render(React.createElement(WorkstationShell));
+
+    expect(screen.getByText("Inspired PCM")).toBeTruthy();
+    expect(screen.getByText(/PCM uses one-shot sample triggers with selectable playback rate\./i)).toBeTruthy();
+    expect(screen.getByText(/Musical note mapping is intentionally off for this mode\./i)).toBeTruthy();
+  });
+
   it("opens the voice text editor with the current arrangement", () => {
     render(React.createElement(WorkstationShell));
 
@@ -309,6 +317,16 @@ describe("workstation-shell", () => {
 
     expect(screen.getByText(/format 1: short P3 or 1: long P12/i)).toBeTruthy();
     expect(screen.getByText(/preset aliases/i)).toBeTruthy();
+  });
+
+  it("describes the PCM text format as trigger-plus-rate without note mapping", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
+
+    expect(screen.getByText(/Inspired mode keeps PCM trigger-based/i)).toBeTruthy();
+    expect(screen.getByText(/without musical note mapping/i)).toBeTruthy();
+    expect(screen.getByText(/format 8: mic-001@1x/i)).toBeTruthy();
   });
 
   it("renders the sample deck sidebar", () => {
