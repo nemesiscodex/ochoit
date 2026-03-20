@@ -1,33 +1,28 @@
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Volume2, VolumeX } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
 import { useTrackWaveform } from "@/features/audio/use-track-waveform";
 import {
-  type NoiseTrack,
-  type PulseTrack,
-  type SampleTrack,
   type SongDocument,
   type Track,
   type TrackId,
-  type TriangleTrack,
   getOrderedTracks,
+  trackOrder,
 } from "@/features/song/song-document";
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
 import {
-  getMelodicStepState,
-  getMelodicTrackMaxLength,
   getDefaultSampleTrigger,
+  getMelodicStepState,
   getNoiseTriggerPresetForStep,
-  formatNoiseConfigLabel,
   type MelodicStepUpdates,
   type MelodicTrackId,
-  type NoteValue,
-  type TriggerTrackId,
   type NoiseStepUpdates,
   type SampleStepUpdates,
+  type TriggerTrackId,
 } from "@/features/song/song-pattern";
 
 import {
@@ -38,8 +33,7 @@ import {
   waveformGlowColorByTrackId,
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
-import { NotePicker } from "@/components/note-picker";
-import { NoiseConfigPicker, NoiseTriggerPicker, PulseDutyPicker, SampleTriggerPicker } from "@/components/trigger-picker";
+import { StepDetailPanel, type StepSelection } from "@/components/step-detail-panel";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
@@ -69,29 +63,108 @@ export function SequencerMatrix({
   onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
 }) {
+  const [selectedStep, setSelectedStep] = useState<StepSelection | null>(null);
   const tracks = getOrderedTracks(song);
+
+  const handleDeselectStep = () => {
+    setSelectedStep(null);
+  };
+
+  useEffect(() => {
+    if (selectedStep === null) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      switch (event.key) {
+        case "Escape":
+          setSelectedStep(null);
+          event.preventDefault();
+          break;
+        case "ArrowLeft":
+          setSelectedStep((prev) => {
+            if (prev === null) return null;
+            return { ...prev, stepIndex: Math.max(0, prev.stepIndex - 1) };
+          });
+          event.preventDefault();
+          break;
+        case "ArrowRight":
+          setSelectedStep((prev) => {
+            if (prev === null) return null;
+            return {
+              ...prev,
+              stepIndex: Math.min(song.transport.loopLength - 1, prev.stepIndex + 1),
+            };
+          });
+          event.preventDefault();
+          break;
+        case "ArrowUp": {
+          const currentIndex = trackOrder.indexOf(selectedStep.trackId);
+          if (currentIndex > 0) {
+            setSelectedStep({ trackId: trackOrder[currentIndex - 1], stepIndex: selectedStep.stepIndex });
+          }
+          event.preventDefault();
+          break;
+        }
+        case "ArrowDown": {
+          const currentIndex = trackOrder.indexOf(selectedStep.trackId);
+          if (currentIndex < trackOrder.length - 1) {
+            setSelectedStep({ trackId: trackOrder[currentIndex + 1], stepIndex: selectedStep.stepIndex });
+          }
+          event.preventDefault();
+          break;
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedStep, song.transport.loopLength]);
 
   return (
     <div className="flex flex-col gap-2">
       <StepRuler loopLength={song.transport.loopLength} nextStep={nextStep} playbackState={playbackState} />
-      {tracks.map((track) => (
-        <SequencerRow
-          key={track.id}
-          defaultSampleId={defaultSampleId}
-          engine={engine}
-          nextStep={nextStep}
-          onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
-          onOpenTriggerTrackEditor={onOpenTriggerTrackEditor}
-          onToggleTrackMute={onToggleTrackMute}
-          onUpdateTrackVolume={onUpdateTrackVolume}
-          onUpdateMelodicStep={onUpdateMelodicStep}
-          onUpdateNoiseStep={onUpdateNoiseStep}
-          onUpdateSampleStep={onUpdateSampleStep}
-          playbackState={playbackState}
-          samples={song.samples}
-          track={track}
-        />
-      ))}
+      {tracks.map((track) => {
+        const selectedStepIndex = selectedStep?.trackId === track.id ? selectedStep.stepIndex : null;
+
+        return (
+          <SequencerRow
+            key={track.id}
+            defaultSampleId={defaultSampleId}
+            engine={engine}
+            nextStep={nextStep}
+            onDeselectStep={handleDeselectStep}
+            onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
+            onOpenTriggerTrackEditor={onOpenTriggerTrackEditor}
+            onSelectStep={(stepIndex) => {
+              setSelectedStep({ trackId: track.id, stepIndex });
+            }}
+            onToggleTrackMute={onToggleTrackMute}
+            onUpdateTrackVolume={onUpdateTrackVolume}
+            onUpdateMelodicStep={onUpdateMelodicStep}
+            onUpdateNoiseStep={onUpdateNoiseStep}
+            onUpdateSampleStep={onUpdateSampleStep}
+            playbackState={playbackState}
+            samples={song.samples}
+            selectedStepIndex={selectedStepIndex}
+            song={song}
+            track={track}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -146,8 +219,10 @@ function SequencerRow({
   defaultSampleId,
   engine,
   nextStep,
+  onDeselectStep,
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
+  onSelectStep,
   onToggleTrackMute,
   onUpdateTrackVolume,
   onUpdateMelodicStep,
@@ -155,13 +230,17 @@ function SequencerRow({
   onUpdateSampleStep,
   playbackState,
   samples,
+  selectedStepIndex,
+  song,
   track,
 }: {
   defaultSampleId: string | null;
   engine: AudioEngine | null;
   nextStep: number;
+  onDeselectStep: () => void;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
+  onSelectStep: (stepIndex: number) => void;
   onToggleTrackMute: (trackId: TrackId) => void;
   onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
@@ -169,8 +248,59 @@ function SequencerRow({
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
   playbackState: "stopped" | "playing";
   samples: SongDocument["samples"];
+  selectedStepIndex: number | null;
+  song: SongDocument;
   track: Track;
 }) {
+  const defaultSampleTrigger = getDefaultSampleTrigger(samples, defaultSampleId);
+
+  const handleStepClick = (stepIndex: number) => {
+    // For hold steps, redirect to the origin note
+    if (track.kind === "pulse" || track.kind === "triangle") {
+      const melodicState = getMelodicStepState(track, stepIndex);
+
+      if (melodicState.kind === "hold") {
+        if (selectedStepIndex === melodicState.startIndex) {
+          onDeselectStep();
+        } else {
+          onSelectStep(melodicState.startIndex);
+        }
+
+        return;
+      }
+    }
+
+    // Toggle selection
+    if (selectedStepIndex === stepIndex) {
+      onDeselectStep();
+      return;
+    }
+
+    // Enable step if disabled, then select
+    if (!track.steps[stepIndex].enabled) {
+      switch (track.kind) {
+        case "pulse":
+        case "triangle":
+          onUpdateMelodicStep(track.id, stepIndex, { enabled: true });
+          break;
+        case "noise":
+          onUpdateNoiseStep(stepIndex, { enabled: true });
+          break;
+        case "sample": {
+          const sampleStep = track.steps[stepIndex];
+          onUpdateSampleStep(stepIndex, {
+            enabled: true,
+            sampleId: sampleStep.sampleId ?? defaultSampleTrigger.sampleId,
+            playbackRate: sampleStep.playbackRate ?? defaultSampleTrigger.playbackRate,
+          });
+          break;
+        }
+      }
+    }
+
+    onSelectStep(stepIndex);
+  };
+
   return (
     <div
       className="oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]"
@@ -252,47 +382,37 @@ function SequencerRow({
         ) : null}
       </div>
 
-      {/* Step grid */}
+      {/* Step grid + detail panel */}
       <div className="p-2">
-        {track.kind === "pulse" || track.kind === "triangle" ? (
-          <MelodicStepGrid
-            accentClassName={accentByTrackId[track.id]}
-            accentColor={waveformLineColorByTrackId[track.id]}
-            engine={engine}
-            nextStep={nextStep}
-            onUpdateMelodicStep={onUpdateMelodicStep}
-            playbackState={playbackState}
-            track={track}
-          />
-        ) : track.kind === "noise" ? (
-          <NoiseStepGrid
-            accentClassName={accentByTrackId[track.id]}
-            accentColor={waveformLineColorByTrackId[track.id]}
-            engine={engine}
-            nextStep={nextStep}
-            onUpdateNoiseStep={onUpdateNoiseStep}
-            playbackState={playbackState}
-            track={track}
-          />
-        ) : track.kind === "sample" ? (
-          <SampleStepGrid
-            accentClassName={accentByTrackId[track.id]}
-            accentColor={waveformLineColorByTrackId[track.id]}
+        <CompactStepGrid
+          accentClassName={accentByTrackId[track.id]}
+          accentColor={waveformLineColorByTrackId[track.id]}
+          nextStep={nextStep}
+          onStepClick={handleStepClick}
+          playbackState={playbackState}
+          samples={samples}
+          selectedStepIndex={selectedStepIndex}
+          track={track}
+        />
+        {selectedStepIndex !== null ? (
+          <StepDetailPanel
             defaultSampleId={defaultSampleId}
             engine={engine}
-            nextStep={nextStep}
+            onDeselect={onDeselectStep}
+            onUpdateMelodicStep={onUpdateMelodicStep}
+            onUpdateNoiseStep={onUpdateNoiseStep}
             onUpdateSampleStep={onUpdateSampleStep}
-            playbackState={playbackState}
             samples={samples}
-            track={track}
+            selection={{ trackId: track.id, stepIndex: selectedStepIndex }}
+            song={song}
           />
-        ) : (
-          <div />
-        )}
+        ) : null}
       </div>
     </div>
   );
 }
+
+/* ─────────── Track Volume Control ─────────── */
 
 function TrackVolumeControl({
   track,
@@ -367,377 +487,212 @@ function VoiceWaveformPanel({
   );
 }
 
-/* ─────────── Melodic Step Grid ─────────── */
+/* ─────────── Compact Step Grid ─────────── */
 
-function MelodicStepGrid({
-  accentClassName,
-  accentColor,
-  engine,
-  nextStep,
-  onUpdateMelodicStep,
-  playbackState,
-  track,
-}: {
-  accentClassName: string;
-  accentColor: string;
-  engine: AudioEngine | null;
-  nextStep: number;
-  onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
-  playbackState: "stopped" | "playing";
-  track: PulseTrack | TriangleTrack;
-}) {
-  return (
-    <div className="grid grid-cols-4 gap-1 md:grid-cols-8 xl:grid-cols-16">
-      {track.steps.map((step, index) => {
-        const isQuarterBoundary = index % 4 === 0;
-        const isActive = playbackState === "playing" && nextStep === index;
-        const melodicStepState = getMelodicStepState(track, index);
-        const isHeldStep = melodicStepState.kind === "hold";
-        const maxLength = melodicStepState.kind === "start" ? getMelodicTrackMaxLength(track, index) : 1;
-        const pulseStep = track.kind === "pulse" ? track.steps[index] : null;
+type CompactCellData = {
+  enabled: boolean;
+  isHold: boolean;
+  holdNote: string | null;
+  label: string;
+  volume: number;
+  isPartOfSelectedNote: boolean;
+};
 
-        return (
-          <div
-            key={`${track.id}-step-${index}`}
-            aria-current={isActive ? "step" : undefined}
-            aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
-            className={cn(
-              "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
-              melodicStepState.kind === "start"
-                ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
-                : isHeldStep
-                  ? "border-white/[0.08] bg-white/[0.05] text-white/50"
-                : isQuarterBoundary
-                  ? "border-white/[0.08] bg-white/[0.04] text-white/30"
-                  : "border-white/[0.05] bg-white/[0.02] text-white/20",
-              isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
-            )}
-          >
-            {melodicStepState.kind === "hold" ? (
-              <>
-                <div className="mb-1 flex items-center justify-between text-[8px] text-white/35">
-                  <span>{index + 1}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Release ${labelByTrackId[track.id]} before step ${index + 1}`}
-                    className="h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/45 hover:bg-white/[0.08] hover:text-white"
-                    onClick={() => {
-                      onUpdateMelodicStep(track.id, melodicStepState.startIndex, {
-                        length: melodicStepState.offset,
-                      });
-                    }}
-                  >
-                    Cut
-                  </Button>
-                </div>
-                <div className="flex h-6 items-center justify-center rounded-sm border border-white/[0.06] bg-black/20 px-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                  Hold {melodicStepState.note}
-                </div>
-                <div className="mt-1 text-center text-[7px] uppercase tracking-[0.14em] text-white/28">
-                  {melodicStepState.offset + 1}/{melodicStepState.length}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
-                  <span>{index + 1}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
-                    aria-pressed={step.enabled}
-                    className={cn(
-                      "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
-                      step.enabled && "text-white/60",
-                    )}
-                    onClick={() => {
-                      onUpdateMelodicStep(track.id, index, { enabled: !step.enabled });
-                    }}
-                  >
-                    {step.enabled ? "On" : "Off"}
-                  </Button>
-                </div>
+function getCompactCellData(
+  track: Track,
+  stepIndex: number,
+  samples: SongDocument["samples"],
+  selectedStepIndex: number | null,
+): CompactCellData {
+  switch (track.kind) {
+    case "pulse":
+    case "triangle": {
+      const step = track.steps[stepIndex];
+      const melodicState = getMelodicStepState(track, stepIndex);
 
-                <NotePicker
-                  selectedNote={step.note}
-                  disabled={!step.enabled}
-                  accentColor={accentColor}
-                  ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} note`}
-                  onSelectNote={(note) => {
-                    onUpdateMelodicStep(track.id, index, { note });
-                  }}
-                  onHoverNote={(note) => {
-                    engine?.previewNote(track.id, note);
-                  }}
-                />
+      if (melodicState.kind === "hold") {
+        return {
+          enabled: false,
+          isHold: true,
+          holdNote: melodicState.note,
+          label: melodicState.note,
+          volume: step.volume,
+          isPartOfSelectedNote: selectedStepIndex === melodicState.startIndex,
+        };
+      }
 
-                {pulseStep !== null ? (
-                  <div className="mt-1">
-                    <PulseDutyPicker
-                      ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} duty cycle`}
-                      accentColor={accentColor}
-                      disabled={!step.enabled}
-                      selectedDuty={pulseStep.duty}
-                      onHoverDuty={(duty) => {
-                        engine?.previewNote(track.id, step.note as NoteValue, 120, duty);
-                      }}
-                      onSelectDuty={(duty) => {
-                        onUpdateMelodicStep(track.id, index, { duty });
-                      }}
-                    />
-                  </div>
-                ) : null}
+      return {
+        enabled: step.enabled,
+        isHold: false,
+        holdNote: null,
+        label: step.enabled ? step.note : "\u00b7",
+        volume: step.volume,
+        isPartOfSelectedNote: false,
+      };
+    }
+    case "noise": {
+      const step = track.steps[stepIndex];
+      const preset = getNoiseTriggerPresetForStep(step);
 
-                <div className="mt-1 flex items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Shorten ${labelByTrackId[track.id]} step ${index + 1} duration`}
-                    disabled={!step.enabled || step.length <= 1}
-                    className="h-4 min-w-0 rounded-sm px-1 text-[8px] font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
-                    onClick={() => {
-                      onUpdateMelodicStep(track.id, index, {
-                        length: Math.max(1, step.length - 1),
-                      });
-                    }}
-                  >
-                    -
-                  </Button>
-                  <div
-                    aria-label={`${labelByTrackId[track.id]} step ${index + 1} duration`}
-                    className="flex-1 rounded-sm border border-white/[0.05] bg-black/20 px-1 py-0.5 text-center text-[7px] font-semibold uppercase tracking-[0.14em] text-white/50"
-                  >
-                    {step.enabled ? `${step.length} st` : "--"}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Extend ${labelByTrackId[track.id]} step ${index + 1} duration`}
-                    disabled={!step.enabled || step.length >= maxLength}
-                    className="h-4 min-w-0 rounded-sm px-1 text-[8px] font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
-                    onClick={() => {
-                      onUpdateMelodicStep(track.id, index, {
-                        length: Math.min(maxLength, step.length + 1),
-                      });
-                    }}
-                  >
-                    +
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
+      return {
+        enabled: step.enabled,
+        isHold: false,
+        holdNote: null,
+        label: step.enabled ? (preset?.shortLabel ?? step.mode[0]) : "\u00b7",
+        volume: step.volume,
+        isPartOfSelectedNote: false,
+      };
+    }
+    case "sample": {
+      const step = track.steps[stepIndex];
+      const sample = step.sampleId === null ? null : samples.find((s) => s.id === step.sampleId) ?? null;
+
+      return {
+        enabled: step.enabled,
+        isHold: false,
+        holdNote: null,
+        label: step.enabled ? (sample !== null ? sample.name : "pcm") : "\u00b7",
+        volume: step.volume,
+        isPartOfSelectedNote: false,
+      };
+    }
+  }
 }
 
-/* ─────────── Noise Step Grid ─────────── */
-
-function NoiseStepGrid({
+function CompactStepGrid({
   accentClassName,
   accentColor,
-  engine,
   nextStep,
-  onUpdateNoiseStep,
-  playbackState,
-  track,
-}: {
-  accentClassName: string;
-  accentColor: string;
-  engine: AudioEngine | null;
-  nextStep: number;
-  onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
-  playbackState: "stopped" | "playing";
-  track: NoiseTrack;
-}) {
-  return (
-    <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
-      {track.steps.map((step, index) => {
-        const isQuarterBoundary = index % 4 === 0;
-        const isActive = playbackState === "playing" && nextStep === index;
-
-        return (
-          <div
-            key={`${track.id}-step-${index}`}
-            aria-current={isActive ? "step" : undefined}
-            aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
-            className={cn(
-              "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
-              step.enabled
-                ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
-                : isQuarterBoundary
-                  ? "border-white/[0.08] bg-white/[0.04] text-white/30"
-                  : "border-white/[0.05] bg-white/[0.02] text-white/20",
-              isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
-            )}
-          >
-            <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
-              <span>{index + 1}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
-                aria-pressed={step.enabled}
-                className={cn(
-                  "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
-                  step.enabled && "text-white/60",
-                )}
-                onClick={() => {
-                  onUpdateNoiseStep(index, { enabled: !step.enabled });
-                }}
-              >
-                {step.enabled ? "On" : "Off"}
-              </Button>
-            </div>
-
-            <NoiseTriggerPicker
-              selectedPresetId={getNoiseTriggerPresetForStep(step)?.id ?? null}
-              disabled={!step.enabled}
-              accentColor={accentColor}
-              ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} trigger`}
-              onHoverPreset={(presetId) => {
-                engine?.previewNoiseTrigger(presetId);
-              }}
-              onSelectPreset={(presetId) => {
-                onUpdateNoiseStep(index, {
-                  enabled: true,
-                  presetId,
-                });
-              }}
-            />
-            <div className="mt-1">
-              <NoiseConfigPicker
-                selectedMode={step.mode}
-                selectedPeriodIndex={step.periodIndex}
-                disabled={!step.enabled}
-                accentColor={accentColor}
-                ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} noise settings`}
-                onHoverConfig={(config) => {
-                  engine?.previewNoiseConfig(config.mode, config.periodIndex);
-                }}
-                onSelectConfig={(config) => {
-                  onUpdateNoiseStep(index, {
-                    enabled: true,
-                    mode: config.mode,
-                    periodIndex: config.periodIndex,
-                  });
-                }}
-              />
-            </div>
-            <div className="mt-1 text-center font-[var(--oc-mono)] text-[7px] uppercase tracking-[0.14em] text-white/28">
-              {formatNoiseConfigLabel(step.mode, step.periodIndex)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ─────────── Sample Step Grid ─────────── */
-
-function SampleStepGrid({
-  accentClassName,
-  accentColor,
-  defaultSampleId,
-  engine,
-  nextStep,
-  onUpdateSampleStep,
+  onStepClick,
   playbackState,
   samples,
+  selectedStepIndex,
   track,
 }: {
   accentClassName: string;
   accentColor: string;
-  defaultSampleId: string | null;
-  engine: AudioEngine | null;
   nextStep: number;
-  onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
+  onStepClick: (stepIndex: number) => void;
   playbackState: "stopped" | "playing";
   samples: SongDocument["samples"];
-  track: SampleTrack;
+  selectedStepIndex: number | null;
+  track: Track;
 }) {
-  const defaultSampleTrigger = getDefaultSampleTrigger(samples, defaultSampleId);
-
   return (
-    <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
-      {track.steps.map((step, index) => {
-        const isQuarterBoundary = index % 4 === 0;
+    <div className="grid grid-cols-8 gap-1 md:grid-cols-16" role="row">
+      {track.steps.map((_, index) => {
         const isActive = playbackState === "playing" && nextStep === index;
+        const isSelected = selectedStepIndex === index;
+        const cellData = getCompactCellData(track, index, samples, selectedStepIndex);
 
         return (
-          <div
+          <CompactStepCell
             key={`${track.id}-step-${index}`}
-            aria-current={isActive ? "step" : undefined}
-            aria-label={`${labelByTrackId[track.id]} step ${index + 1}`}
-            className={cn(
-              "oc-step-cell rounded-sm border px-1 py-1.5 font-[var(--oc-mono)] text-[10px] transition-all",
-              step.enabled
-                ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
-                : isQuarterBoundary
-                  ? "border-white/[0.08] bg-white/[0.04] text-white/30"
-                  : "border-white/[0.05] bg-white/[0.02] text-white/20",
-              isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
-            )}
-          >
-            <div className="mb-1 flex items-center justify-between text-[8px] text-white/30">
-              <span>{index + 1}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`${step.enabled ? "Disable" : "Enable"} ${labelByTrackId[track.id]} step ${index + 1}`}
-                aria-pressed={step.enabled}
-                className={cn(
-                  "h-4 rounded-sm px-1 text-[7px] font-semibold uppercase tracking-[0.14em] text-white/35 hover:bg-white/[0.08] hover:text-white",
-                  step.enabled && "text-white/60",
-                )}
-                onClick={() => {
-                  if (step.enabled) {
-                    onUpdateSampleStep(index, { enabled: false });
-                    return;
-                  }
-
-                  onUpdateSampleStep(index, {
-                    enabled: true,
-                    sampleId: step.sampleId ?? defaultSampleTrigger.sampleId,
-                    playbackRate: step.playbackRate ?? defaultSampleTrigger.playbackRate,
-                  });
-                }}
-              >
-                {step.enabled ? "On" : "Off"}
-              </Button>
-            </div>
-
-            <SampleTriggerPicker
-              selectedSampleId={step.sampleId}
-              playbackRate={step.playbackRate}
-              samples={samples}
-              disabled={!step.enabled}
-              accentColor={accentColor}
-              ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} trigger`}
-              onHoverTrigger={(trigger) => {
-                engine?.previewSampleTrigger(trigger.sampleId, trigger.playbackRate);
-              }}
-              onSelectTrigger={(trigger) => {
-                onUpdateSampleStep(index, {
-                  enabled: true,
-                  sampleId: trigger.sampleId,
-                  playbackRate: trigger.playbackRate,
-                });
-              }}
-            />
-          </div>
+            accentClassName={accentClassName}
+            accentColor={accentColor}
+            ariaLabel={`${labelByTrackId[track.id]} step ${index + 1}`}
+            enabled={cellData.enabled}
+            holdNote={cellData.holdNote}
+            index={index}
+            isActive={isActive}
+            isHold={cellData.isHold}
+            isPartOfSelectedNote={cellData.isPartOfSelectedNote}
+            isSelected={isSelected}
+            label={cellData.label}
+            volume={cellData.volume}
+            onClick={() => {
+              onStepClick(index);
+            }}
+          />
         );
       })}
     </div>
+  );
+}
+
+/* ─────────── Compact Step Cell ─────────── */
+
+function CompactStepCell({
+  accentClassName,
+  accentColor,
+  ariaLabel,
+  enabled,
+  holdNote,
+  index,
+  isActive,
+  isHold,
+  isPartOfSelectedNote,
+  isSelected,
+  label,
+  volume,
+  onClick,
+}: {
+  accentClassName: string;
+  accentColor: string;
+  ariaLabel: string;
+  enabled: boolean;
+  holdNote: string | null;
+  index: number;
+  isActive: boolean;
+  isHold: boolean;
+  isPartOfSelectedNote: boolean;
+  isSelected: boolean;
+  label: string;
+  volume: number;
+  onClick: () => void;
+}) {
+  const isQuarterBoundary = index % 4 === 0;
+
+  return (
+    <button
+      type="button"
+      aria-current={isActive ? "step" : undefined}
+      aria-label={ariaLabel}
+      aria-selected={isSelected || undefined}
+      className={cn(
+        "oc-step-cell relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-sm border font-[var(--oc-mono)] text-[10px] transition-all",
+        isHold
+          ? isPartOfSelectedNote
+            ? "border-white/[0.1] bg-white/[0.06]"
+            : "border-white/[0.06] bg-white/[0.03]"
+          : enabled
+            ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
+            : isQuarterBoundary
+              ? "border-white/[0.08] bg-white/[0.04] text-white/30"
+              : "border-white/[0.05] bg-white/[0.02] text-white/20",
+        isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
+        isSelected && "ring-2 ring-offset-0",
+      )}
+      style={isSelected ? { ["--tw-ring-color" as string]: accentColor } : undefined}
+      onClick={onClick}
+    >
+      <span className="text-[8px] leading-none text-white/30">{index + 1}</span>
+      <span
+        className={cn(
+          "max-w-full truncate px-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.06em]",
+          isHold ? "text-white/35" : enabled ? "text-inherit" : "text-white/20",
+        )}
+      >
+        {isHold ? (holdNote ?? "\u2014") : label}
+      </span>
+
+      {/* Velocity bar */}
+      {enabled && !isHold ? (
+        <div className="h-[3px] w-3/4 overflow-hidden rounded-full bg-white/[0.08]">
+          <div
+            className="h-full rounded-full transition-[width] duration-150"
+            style={{ width: `${volume * 100}%`, backgroundColor: accentColor }}
+          />
+        </div>
+      ) : null}
+
+      {/* Hold continuation bar */}
+      {isHold ? (
+        <div
+          className="absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2"
+          style={{ backgroundColor: `${accentColor}35` }}
+        />
+      ) : null}
+    </button>
   );
 }

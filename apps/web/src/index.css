@@ -217,6 +217,41 @@ body {
   background: linear-gradient(90deg, var(--oc-track-accent), rgba(255, 255, 255, 0.14));
 }
 
+/* ── Step detail panel ── */
+
+.oc-detail-panel {
+  animation: oc-detail-panel-enter 0.15s ease-out;
+}
+
+@keyframes oc-detail-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Reduced motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-playhead-active {
+    animation: none;
+  }
+
+  .oc-detail-panel,
+  .oc-note-picker-panel {
+    animation: none;
+  }
+
+  .oc-step-cell,
+  .oc-note-cell {
+    transition: none;
+  }
+}
+
 /* tailwind grid-cols-16 utility */
 @utility grid-cols-16 {
   grid-template-columns: repeat(16, minmax(0, 1fr));

@@ -151,17 +151,24 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
 
     expect(screen.queryByLabelText("Pulse I arrangement text")).toBeNull();
-    expect(screen.getByRole("button", { name: "Enable Pulse I step 2" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Disable Pulse I step 3" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Enable Pulse I step 9" })).toBeTruthy();
 
-    const pulseStepOneNote = screen.getByLabelText("Pulse I step 1 note");
-    const pulseStepThreeNote = screen.getByLabelText("Pulse I step 3 note");
+    // Verify the arrangement via re-opening the text editor (round-trip)
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
-    expect(pulseStepOneNote.textContent).toBe("E4");
-    expect(pulseStepThreeNote.textContent).toBe("G4");
-    expect(screen.getByLabelText("Pulse I step 1 duty cycle").textContent).toBe("25%");
-    expect(screen.getByLabelText("Pulse I step 3 duty cycle").textContent).toBe("50%");
+    const verifyTextarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(verifyTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    expect(verifyTextarea.value).toBe("1: E4 @25%\n3: G4 @50%\n5: A4 @75%");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Spot check: select step 1 to verify note + duty
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+
+    expect(screen.getByLabelText("Pulse I step 1 note").textContent).toBe("E4");
   });
 
   it("applies ranged melodic arrangements and renders held steps", () => {
@@ -183,8 +190,20 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
 
     expect(screen.queryByLabelText("Pulse I arrangement text")).toBeNull();
+
+    // Select step 1 to verify duration
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("3 st");
-    expect(screen.getAllByText("Hold E4")).toHaveLength(2);
+
+    // Hold cells should show the note name
+    expect(screen.getByLabelText("Pulse I step 2").textContent).toContain("E4");
+    expect(screen.getByLabelText("Pulse I step 3").textContent).toContain("E4");
+
+    // Deselect, then select step 5
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"));
+
     expect(screen.getByLabelText("Pulse I step 5 duration").textContent).toBe("2 st");
   });
 
@@ -232,13 +251,28 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
 
     expect(screen.queryByLabelText("Noise trigger text")).toBeNull();
-    expect(screen.getByRole("button", { name: "Enable Noise step 1" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Disable Noise step 2" })).toBeTruthy();
-    expect(screen.getByLabelText("Noise step 2 trigger").textContent).toBe("hat");
-    expect(screen.getByLabelText("Noise step 4 trigger").textContent).toBe("crsh");
-    expect(screen.getByLabelText("Noise step 2 noise settings").textContent).toBe("short P1");
-    expect(screen.getByLabelText("Noise step 4 noise settings").textContent).toBe("long P12");
 
+    // Verify via text editor round-trip
+    fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
+
+    const verifyNoiseTextarea = screen.getByLabelText("Noise trigger text");
+
+    if (!(verifyNoiseTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Noise trigger text to be a textarea.");
+    }
+
+    expect(verifyNoiseTextarea.value).toBe("2: short P1\n4: long P12");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Select noise step 2 to verify config
+    fireEvent.click(screen.getByLabelText("Noise step 2"));
+
+    expect(screen.getByLabelText("Noise step 2 noise settings").textContent).toBe("short P1");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    // Apply PCM arrangement
     fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
 
     const pcmTextarea = screen.getByLabelText("PCM trigger text");
@@ -255,9 +289,17 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
 
     expect(screen.queryByLabelText("PCM trigger text")).toBeNull();
-    expect(screen.getByRole("button", { name: "Disable PCM step 2" })).toBeTruthy();
-    expect(screen.getByLabelText("PCM step 2 trigger").textContent).toBe("vox-hit 0.75x");
-    expect(screen.getByLabelText("PCM step 6 trigger").textContent).toBe("vox-hit 1.5x");
+
+    // Verify via text editor round-trip
+    fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
+
+    const verifyPcmTextarea = screen.getByLabelText("PCM trigger text");
+
+    if (!(verifyPcmTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected PCM trigger text to be a textarea.");
+    }
+
+    expect(verifyPcmTextarea.value).toBe("2: mic-001@0.75\n6: mic-001@1.5");
   });
 
   it("describes the noise text format with explicit mode and period values", () => {
@@ -330,125 +372,122 @@ describe("workstation-shell", () => {
     expect(screen.getByText("23%")).toBeTruthy();
   });
 
-  it("updates pulse duty from the sequencer controls", () => {
+  it("updates pulse duty from the step detail panel", () => {
     render(React.createElement(WorkstationShell));
 
-    const pulseDuty = screen.getByLabelText("Pulse I step 1 duty cycle");
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
 
-    if (!(pulseDuty instanceof HTMLButtonElement)) {
-      throw new Error("Expected Pulse I step 1 duty cycle to be a button.");
-    }
+    const panel = screen.getByLabelText("Pulse I step 1 editor");
+    const dutyGroup = within(panel).getByRole("group", { name: "Pulse I step 1 duty cycle" });
 
-    expect(pulseDuty.textContent).toBe("12.5%");
+    expect(within(dutyGroup).getByRole("button", { name: "Set duty 12.5%" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
 
-    fireEvent.click(pulseDuty);
-    fireEvent.click(screen.getByRole("button", { name: "Select pulse duty 75%" }));
+    fireEvent.click(within(dutyGroup).getByRole("button", { name: "Set duty 75%" }));
 
-    expect(screen.getByLabelText("Pulse I step 1 duty cycle").textContent).toBe("75%");
+    expect(within(dutyGroup).getByRole("button", { name: "Set duty 75%" }).getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("updates melodic steps from the note-entry controls", () => {
+  it("updates melodic steps from the detail panel controls", () => {
     render(React.createElement(WorkstationShell));
 
-    // Enable Pulse I step 2
-    fireEvent.click(screen.getByRole("button", { name: "Enable Pulse I step 2" }));
+    // Click disabled step 2 to enable + select
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
 
-    // Open the note picker for Pulse I step 2
-    const pulseStepTwoNote = screen.getByLabelText("Pulse I step 2 note");
+    const panel = screen.getByLabelText("Pulse I step 2 editor");
 
-    if (!(pulseStepTwoNote instanceof HTMLButtonElement)) {
-      throw new Error("Expected Pulse I step 2 note to be a button.");
-    }
+    expect(within(panel).getByLabelText("Pulse I step 2 note")).toBeTruthy();
 
-    expect(pulseStepTwoNote.disabled).toBe(false);
-
-    // Open the picker and select D5
-    fireEvent.click(pulseStepTwoNote);
+    // Change the note
+    fireEvent.click(within(panel).getByLabelText("Pulse I step 2 note"));
     fireEvent.click(screen.getByRole("button", { name: "Select note D5" }));
 
-    // The trigger button should now show D5
-    expect(pulseStepTwoNote.textContent).toBe("D5");
+    expect(within(panel).getByLabelText("Pulse I step 2 note").textContent).toBe("D5");
 
-    // Disable Pulse I step 1
+    // Disable step 1 via detail panel
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+
     fireEvent.click(screen.getByRole("button", { name: "Disable Pulse I step 1" }));
 
-    const pulseStepOneNote = screen.getByLabelText("Pulse I step 1 note");
+    const step1NotePicker = screen.getByLabelText("Pulse I step 1 note");
 
-    if (!(pulseStepOneNote instanceof HTMLButtonElement)) {
+    if (!(step1NotePicker instanceof HTMLButtonElement)) {
       throw new Error("Expected Pulse I step 1 note to be a button.");
     }
 
-    expect(pulseStepOneNote.disabled).toBe(true);
+    expect(step1NotePicker.disabled).toBe(true);
   });
 
-  it("extends and shortens melodic step durations from the grid controls", () => {
+  it("extends and shortens melodic step durations from the detail panel", () => {
     render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
 
     fireEvent.click(screen.getByRole("button", { name: "Extend Pulse I step 1 duration" }));
 
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("2 st");
-    expect(screen.getByText("Hold C5")).toBeTruthy();
+    expect(screen.getByLabelText("Pulse I step 2").textContent).toContain("C5");
 
     fireEvent.click(screen.getByRole("button", { name: "Shorten Pulse I step 1 duration" }));
 
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("1 st");
-    expect(screen.queryByText("Hold C5")).toBeNull();
+    expect(screen.getByLabelText("Pulse I step 2").textContent).toContain("\u00b7");
   });
 
-  it("updates the noise trigger controls from the picker", () => {
+  it("updates the noise trigger controls from the detail panel", () => {
     render(React.createElement(WorkstationShell));
 
-    fireEvent.click(screen.getByRole("button", { name: "Enable Noise step 2" }));
+    // Click disabled step 2 to enable + select
+    fireEvent.click(screen.getByLabelText("Noise step 2"));
 
-    const triggerButton = screen.getByLabelText("Noise step 2 trigger");
+    const panel = screen.getByLabelText("Noise step 2 editor");
 
-    if (!(triggerButton instanceof HTMLButtonElement)) {
-      throw new Error("Expected Noise step 2 trigger to be a button.");
-    }
+    fireEvent.click(within(panel).getByRole("button", { name: "Select noise trigger Crash" }));
 
-    expect(triggerButton.disabled).toBe(false);
-
-    fireEvent.click(triggerButton);
-    fireEvent.click(screen.getByRole("button", { name: "Select noise trigger Crash" }));
-
-    expect(triggerButton.textContent).toBe("crsh");
+    // The preset should now be crash
+    expect(
+      within(panel).getByRole("button", { name: "Select noise trigger Crash" }).getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
-  it("updates the noise rate and mode controls from the picker", () => {
+  it("updates the noise rate and mode controls from the detail panel", () => {
     render(React.createElement(WorkstationShell));
 
-    const noiseSettings = screen.getByLabelText("Noise step 1 noise settings");
+    fireEvent.click(screen.getByLabelText("Noise step 1"));
 
-    if (!(noiseSettings instanceof HTMLButtonElement)) {
-      throw new Error("Expected Noise step 1 noise settings to be a button.");
-    }
+    const panel = screen.getByLabelText("Noise step 1 editor");
 
-    expect(noiseSettings.textContent).toBe("short P3");
+    expect(within(panel).getByLabelText("Noise step 1 noise settings").textContent).toBe("short P3");
 
-    fireEvent.click(noiseSettings);
-    fireEvent.click(screen.getByRole("button", { name: "Select noise config long P12" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Set noise mode long" }));
 
-    expect(screen.getByLabelText("Noise step 1 noise settings").textContent).toBe("long P12");
-    expect(screen.getAllByText("long P12").length).toBeGreaterThan(0);
+    fireEvent.change(within(panel).getByLabelText("Noise step 1 noise period"), {
+      target: { value: "12" },
+    });
+
+    expect(within(panel).getByLabelText("Noise step 1 noise settings").textContent).toBe("long P12");
   });
 
-  it("updates the PCM trigger controls from the picker", () => {
+  it("updates the PCM trigger controls from the detail panel", () => {
     render(React.createElement(WorkstationShell));
 
-    fireEvent.click(screen.getByRole("button", { name: "Enable PCM step 2" }));
+    // Click disabled step 2 to enable + select
+    fireEvent.click(screen.getByLabelText("PCM step 2"));
 
-    const triggerButton = screen.getByLabelText("PCM step 2 trigger");
+    const panel = screen.getByLabelText("PCM step 2 editor");
 
-    if (!(triggerButton instanceof HTMLButtonElement)) {
-      throw new Error("Expected PCM step 2 trigger to be a button.");
-    }
+    // Default sample should be assigned
+    expect(
+      within(panel).getByRole("button", { name: "Assign vox-hit" }).getAttribute("aria-pressed"),
+    ).toBe("true");
 
-    expect(triggerButton.disabled).toBe(false);
+    // Change playback rate
+    fireEvent.click(within(panel).getByRole("button", { name: "Set rate 1.5x" }));
 
-    fireEvent.click(triggerButton);
-    fireEvent.click(screen.getByRole("button", { name: "Assign vox-hit at 1.5x" }));
-
-    expect(triggerButton.textContent).toBe("vox-hit 1.5x");
+    expect(
+      within(panel).getByRole("button", { name: "Set rate 1.5x" }).getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("stores a completed microphone take in the sample deck and routes it to the PCM lane", () => {
@@ -501,11 +540,25 @@ describe("workstation-shell", () => {
 
     expect(screen.getAllByText("mic-002").length).toBeGreaterThan(0);
     expect(screen.getByText("0-4 · 4 / 4 fr")).toBeTruthy();
-    expect(screen.getByLabelText("PCM step 8 trigger").textContent).toBe("mic-002 1x");
 
-    fireEvent.click(screen.getByRole("button", { name: "Enable PCM step 2" }));
+    // Verify PCM lane updated: re-open text editor to check
+    fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
 
-    expect(screen.getByLabelText("PCM step 2 trigger").textContent).toBe("mic-002 1x");
+    const pcmTextarea = screen.getByLabelText("PCM trigger text");
+
+    if (!(pcmTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected PCM trigger text to be a textarea.");
+    }
+
+    expect(pcmTextarea.value).toBe("8: mic-002@1\n16: mic-002@1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Click disabled PCM step 2 to enable + select
+    fireEvent.click(screen.getByLabelText("PCM step 2"));
+
+    // The compact cell should show the assigned sample
+    expect(screen.getByLabelText("PCM step 2").textContent).toContain("mic-002");
   });
 
   it("lets you load another sample from the deck list and delete clips", () => {
@@ -540,7 +593,20 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete sample mic-002" }));
 
     expect(screen.queryByRole("button", { name: "Load sample mic-002" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Enable PCM step 8" })).toBeTruthy();
+
+    // Verify via PCM text editor that steps referencing deleted sample were cleared
+    fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
+
+    const pcmTextarea = screen.getByLabelText("PCM trigger text");
+
+    if (!(pcmTextarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected PCM trigger text to be a textarea.");
+    }
+
+    expect(pcmTextarea.value).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
     expect(screen.getByRole("button", { name: "Load sample vox-hit" })).toBeTruthy();
   });
 

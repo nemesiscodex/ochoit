@@ -43,6 +43,7 @@ export type MelodicStepUpdates = {
   note?: NoteValue;
   length?: number;
   duty?: PulseDutyValue;
+  volume?: number;
 };
 
 export type NoiseTriggerPresetId =
@@ -68,12 +69,14 @@ export type NoiseStepUpdates = {
   presetId?: NoiseTriggerPresetId;
   mode?: NoiseTrack["steps"][number]["mode"];
   periodIndex?: NoiseTrack["steps"][number]["periodIndex"];
+  volume?: number;
 };
 
 export type SampleStepUpdates = {
   enabled?: boolean;
   sampleId?: string | null;
   playbackRate?: number;
+  volume?: number;
 };
 
 export type MelodicArrangementEntry = {
@@ -315,6 +318,7 @@ export function updateNoiseTrackStep(song: SongDocument, stepIndex: number, upda
             enabled: updates.enabled ?? step.enabled,
             mode: updates.mode ?? preset?.mode ?? step.mode,
             periodIndex: updates.periodIndex ?? preset?.periodIndex ?? step.periodIndex,
+            volume: updates.volume ?? step.volume,
           };
         }),
       },
@@ -343,6 +347,7 @@ export function updateSampleTrackStep(song: SongDocument, stepIndex: number, upd
             enabled: updates.enabled ?? step.enabled,
             sampleId: updates.sampleId === undefined ? step.sampleId : updates.sampleId,
             playbackRate: updates.playbackRate ?? step.playbackRate,
+            volume: updates.volume ?? step.volume,
           };
         }),
       },
@@ -737,7 +742,11 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
     }
 
     const nextEntries = entries.filter((entry) => entry.stepIndex !== stepIndex);
-    return applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries));
+    return applyStepVolumeUpdate(
+      stepIndex,
+      updates.volume,
+      applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries)),
+    );
   }
 
   if (existingEntryIndex !== -1) {
@@ -756,7 +765,11 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
       };
     });
 
-    return applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries));
+    return applyStepVolumeUpdate(
+      stepIndex,
+      updates.volume,
+      applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries)),
+    );
   }
 
   if (updates.enabled !== true) {
@@ -786,7 +799,11 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
         : clampMelodicStepLength(updates.length, stepIndex, track.steps.length),
   });
 
-  return applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries));
+  return applyStepVolumeUpdate(
+    stepIndex,
+    updates.volume,
+    applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries)),
+  );
 }
 
 function buildMelodicTrack<TTrack extends MelodicTrack>(
@@ -864,6 +881,23 @@ function applyPulseDutyUpdate<TTrack extends MelodicTrack>(
         duty,
       };
     }),
+  };
+}
+
+function applyStepVolumeUpdate<TTrack extends MelodicTrack>(
+  stepIndex: number,
+  volume: number | undefined,
+  track: TTrack,
+): TTrack {
+  if (volume === undefined) {
+    return track;
+  }
+
+  return {
+    ...track,
+    steps: track.steps.map((entry, index) =>
+      index === stepIndex ? { ...entry, volume } : entry,
+    ),
   };
 }
 
