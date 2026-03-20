@@ -37,6 +37,7 @@ import {
   serializeMelodicTrackArrangement,
   updateMelodicTrackStep,
 } from "@/features/song/song-pattern";
+import { getTrimmedFrameCount, getTrimmedSamplePcm, updateSampleTrim } from "@/features/song/song-samples";
 import {
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
@@ -85,6 +86,10 @@ export function WorkstationShell() {
     (deckSampleId === null ? null : song.samples.find((sample) => sample.id === deckSampleId) ?? null) ??
     song.samples.at(-1) ??
     null;
+  const deckSampleDurationMs =
+    deckSample === null || deckSample.sampleRate <= 0
+      ? 0
+      : Math.round((getTrimmedFrameCount(deckSample) / deckSample.sampleRate) * 1000);
 
   const previewDeckSample = async () => {
     if (deckSample === null) {
@@ -93,7 +98,7 @@ export function WorkstationShell() {
 
     const readyEngine = engine ?? (await initializeAudio());
 
-    readyEngine?.previewSampleTrigger(deckSample.id);
+    readyEngine?.previewSampleTrigger(deckSample.id, 1, Math.max(1, deckSampleDurationMs));
   };
 
   const toggleTrackMute = (trackId: TrackId) => {
@@ -114,6 +119,14 @@ export function WorkstationShell() {
 
   const updateSampleStep = (stepIndex: number, updates: SampleStepUpdates) => {
     setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
+  };
+
+  const updateDeckSampleTrim = (updates: { startFrame?: number; endFrame?: number }) => {
+    if (deckSample === null) {
+      return;
+    }
+
+    setSong((currentSong) => updateSampleTrim(currentSong, deckSample.id, updates));
   };
 
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
@@ -357,6 +370,12 @@ export function WorkstationShell() {
               onPreviewSample={previewDeckSample}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
+              onUpdateTrimEnd={(endFrame) => {
+                updateDeckSampleTrim({ endFrame });
+              }}
+              onUpdateTrimStart={(startFrame) => {
+                updateDeckSampleTrim({ startFrame });
+              }}
             />
             <SongMeta song={song} engineState={engineState} trackCount={tracks.length} />
           </aside>
@@ -572,6 +591,8 @@ function SampleDeck({
   onPreviewSample,
   onStartRecording,
   onStopRecording,
+  onUpdateTrimEnd,
+  onUpdateTrimStart,
 }: {
   sample: SongDocument["samples"][number] | null;
   recorderErrorMessage: string | null;
@@ -581,12 +602,16 @@ function SampleDeck({
   onPreviewSample: () => Promise<void>;
   onStartRecording: () => Promise<void>;
   onStopRecording: () => void;
+  onUpdateTrimEnd: (endFrame: number) => void;
+  onUpdateTrimStart: (startFrame: number) => void;
 }) {
   const isRecording = recorderStatus === "recording";
   const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
-  const waveform = sample === null ? createWaveformFromPcm([]) : createWaveformFromPcm(sample.pcm);
+  const trimmedPcm = sample === null ? [] : getTrimmedSamplePcm(sample);
+  const waveform = createWaveformFromPcm(trimmedPcm);
+  const trimmedFrameCount = sample === null ? 0 : getTrimmedFrameCount(sample);
   const sampleDurationMs =
-    sample === null || sample.sampleRate <= 0 ? 0 : Math.round((sample.trim.endFrame - sample.trim.startFrame) / sample.sampleRate * 1000);
+    sample === null || sample.sampleRate <= 0 ? 0 : Math.round((trimmedFrameCount / sample.sampleRate) * 1000);
   const statusLabel =
     recorderStatus === "recording"
       ? `Recording ${formatSampleDurationLabel(recordingDurationMs)}`
@@ -657,7 +682,7 @@ function SampleDeck({
 
       <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
         <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
-          <span>Latest Take</span>
+          <span>Trim</span>
           <span>{sample?.name ?? "No Sample"}</span>
         </div>
         <div className="oc-waveform-wrap rounded-sm">
@@ -670,11 +695,81 @@ function SampleDeck({
             lineColor={waveformLineColorByTrackId.sample}
           />
         </div>
+        <div className="mt-3 grid gap-3">
+          <SampleTrimControl
+            disabled={sample === null || isRecording}
+            label="Start"
+            labelId="sample-trim-start"
+            max={sample?.frameCount ?? 0}
+            onChange={onUpdateTrimStart}
+            value={sample?.trim.startFrame ?? 0}
+          />
+          <SampleTrimControl
+            disabled={sample === null || isRecording}
+            label="End"
+            labelId="sample-trim-end"
+            max={sample?.frameCount ?? 0}
+            onChange={onUpdateTrimEnd}
+            value={sample?.trim.endFrame ?? 0}
+          />
+        </div>
         <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">
-          <span>{sample === null ? "No clip loaded" : `${sample.frameCount} fr`}</span>
+          <span>{sample === null ? "No clip loaded" : `${trimmedFrameCount} / ${sample.frameCount} fr`}</span>
           <span>{sample === null ? "0.00s" : formatSampleDurationLabel(sampleDurationMs)}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SampleTrimControl({
+  disabled,
+  label,
+  labelId,
+  max,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  label: string;
+  labelId: string;
+  max: number;
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
+        <label htmlFor={labelId}>{label}</label>
+        <span>{value} fr</span>
+      </div>
+      <input
+        id={labelId}
+        aria-label={`Sample trim ${label.toLowerCase()}`}
+        type="range"
+        min={0}
+        max={max}
+        step={1}
+        value={Math.min(value, max)}
+        disabled={disabled}
+        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-sample)] disabled:cursor-not-allowed disabled:opacity-40"
+        onChange={(event) => {
+          onChange(Number(event.currentTarget.value));
+        }}
+      />
+      <Input
+        aria-label={`Sample trim ${label.toLowerCase()} frame`}
+        type="number"
+        min={0}
+        max={max}
+        step={1}
+        value={Math.min(value, max)}
+        disabled={disabled}
+        className="h-7 border-white/[0.08] bg-black/30 px-2 font-[var(--oc-mono)] text-[10px] text-white"
+        onChange={(event) => {
+          onChange(Number(event.currentTarget.value));
+        }}
+      />
     </div>
   );
 }

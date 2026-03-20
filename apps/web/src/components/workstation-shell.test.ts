@@ -276,6 +276,34 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Song Info")).toBeTruthy();
   });
 
+  it("updates the current sample trim controls in the song state", () => {
+    render(React.createElement(WorkstationShell));
+
+    const startFrameInput = screen.getByLabelText("Sample trim start frame");
+    const endFrameInput = screen.getByLabelText("Sample trim end frame");
+
+    if (!(startFrameInput instanceof HTMLInputElement) || !(endFrameInput instanceof HTMLInputElement)) {
+      throw new Error("Expected sample trim frame inputs.");
+    }
+
+    fireEvent.change(startFrameInput, { target: { value: "2" } });
+    fireEvent.change(endFrameInput, { target: { value: "8" } });
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(startFrameInput.value).toBe("2");
+    expect(endFrameInput.value).toBe("8");
+    expect(latestSong.samples[0]?.trim).toEqual({
+      startFrame: 2,
+      endFrame: 8,
+    });
+    expect(screen.getByText("6 / 12 fr")).toBeTruthy();
+  });
+
   it("toggles the mute state for a specific voice", () => {
     render(React.createElement(WorkstationShell));
 
@@ -494,10 +522,32 @@ describe("workstation-shell", () => {
       throw new Error("Expected sample deck sidebar.");
     }
 
+    const recording: RecordedSampleDraft = {
+      asset: {
+        id: "mic-002",
+        name: "mic-002",
+        source: "mic",
+        sampleRate: 11_025,
+        frameCount: 22_050,
+        channels: 1,
+        trim: {
+          startFrame: 5_512,
+          endFrame: 11_025,
+        },
+        pcm: Array.from({ length: 22_050 }, (_, index) => (index % 2 === 0 ? 0.5 : -0.5)),
+      },
+      durationMs: 2_000,
+      waveform: new Uint8Array([128, 160, 96, 128]),
+    };
+
+    act(() => {
+      latestRecorderOptions?.onRecordingComplete(recording);
+    });
+
     fireEvent.click(within(sidebar).getByRole("button", { name: "Preview" }));
 
     expect(initializeAudio).toHaveBeenCalledTimes(1);
     await Promise.resolve();
-    expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001");
+    expect(previewSampleTrigger).toHaveBeenCalledWith("mic-002", 1, 500);
   });
 });
