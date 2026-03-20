@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkstationShell } from "@/components/workstation-shell";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, type SongDocument } from "@/features/song/song-document";
 import { buildSongShareUrl, serializeSongShareText } from "@/features/song/song-share";
 import * as useAudioEngineModule from "@/features/audio/use-audio-engine";
 import * as sampleRecorderModule from "@/features/audio/sample-recorder";
@@ -61,12 +61,16 @@ function createUseSampleRecorderResult(
   };
 }
 
-function createWorkstationShellElement() {
-  return React.createElement(WorkstationShell);
+function createWorkstationShellElement(initialSong: SongDocument = createDefaultSongDocument()) {
+  return React.createElement(WorkstationShell, { initialSong });
 }
 
-function renderWorkstationShell() {
-  return render(createWorkstationShellElement());
+function renderWorkstationShell(initialSong: SongDocument = createDefaultSongDocument()) {
+  return render(createWorkstationShellElement(initialSong));
+}
+
+function renderEmptyWorkstationShell() {
+  return render(React.createElement(WorkstationShell));
 }
 
 describe("workstation-shell", () => {
@@ -74,6 +78,7 @@ describe("workstation-shell", () => {
   const mockUseSampleRecorder = vi.mocked(sampleRecorderModule.useSampleRecorder);
   let latestRecorderOptions: Parameters<typeof sampleRecorderModule.useSampleRecorder>[0] | null = null;
   let clipboardWriteText: ReturnType<typeof vi.fn<(value: string) => Promise<void>>>;
+  let confirmDialog: ReturnType<typeof vi.fn<(message?: string) => boolean>>;
 
   beforeEach(() => {
     mockUseAudioEngine.mockReset();
@@ -92,6 +97,8 @@ describe("workstation-shell", () => {
         writeText: clipboardWriteText,
       },
     });
+    confirmDialog = vi.fn(() => true);
+    window.confirm = confirmDialog;
     window.history.replaceState({}, "", "/");
   });
 
@@ -172,6 +179,23 @@ describe("workstation-shell", () => {
     expect(screen.getByText(/every clip gets a base note/i)).toBeTruthy();
   });
 
+  it("starts without any preconfigured notes or recordings when no initial song is provided", () => {
+    renderEmptyWorkstationShell();
+
+    expect(screen.getByDisplayValue("Untitled Song")).toBeTruthy();
+    expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    expect(textarea.value).toBe("");
+  });
+
   it("loads a shared song from the url on mount", async () => {
     const sharedSong = createDefaultSongDocument();
     sharedSong.meta.name = "Link Tune";
@@ -182,7 +206,7 @@ describe("workstation-shell", () => {
     renderWorkstationShell();
 
     await waitFor(() => {
-      expect(screen.getByText("Link Tune")).toBeTruthy();
+      expect(screen.getByDisplayValue("Link Tune")).toBeTruthy();
       expect(screen.getByText("172 bpm")).toBeTruthy();
       expect(screen.getByText("Loaded shared song from the current link.")).toBeTruthy();
     });
@@ -252,11 +276,68 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply DSL" }));
 
     await waitFor(() => {
-      expect(screen.getByText("DSL Tune")).toBeTruthy();
+      expect(screen.getByDisplayValue("DSL Tune")).toBeTruthy();
       expect(screen.getByText("180 bpm")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
       expect(screen.getByText("Loaded song from share DSL.")).toBeTruthy();
     });
+  });
+
+  it("updates the song name from the song info panel", () => {
+    renderWorkstationShell();
+
+    const nameInput = screen.getByLabelText("Song Name");
+
+    if (!(nameInput instanceof HTMLInputElement)) {
+      throw new Error("Expected Song Name to be an input.");
+    }
+
+    fireEvent.change(nameInput, { target: { value: "Boss Theme" } });
+
+    expect(nameInput.value).toBe("Boss Theme");
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.meta.name).toBe("Boss Theme");
+  });
+
+  it("clears the current song, recordings, and share link after confirmation", async () => {
+    const sharedSong = createDefaultSongDocument();
+
+    window.history.replaceState({}, "", buildSongShareUrl(window.location.href, sharedSong));
+
+    renderWorkstationShell();
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain("song=");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear song" }));
+
+    expect(confirmDialog).toHaveBeenCalledWith(
+      "Are you sure? This will clear all notes, recordings, and the current song link.",
+    );
+
+    await waitFor(() => {
+      expect(window.location.hash).toBe("");
+    });
+
+    expect(screen.getByText("Cleared the current song and removed the shared link.")).toBeTruthy();
+    expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    expect(textarea.value).toBe("");
   });
 
   it("opens the voice text editor with the current arrangement", () => {

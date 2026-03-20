@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createDefaultSongDocument,
+  createEmptySongDocument,
   parseSongDocument,
   SONG_DOCUMENT_KIND,
   SONG_DOCUMENT_VERSION,
@@ -29,5 +30,17 @@ describe("song-document", () => {
     expect(activeSampleSteps.every((step) => parsedSong.samples.some((sample) => sample.id === step.sampleId))).toBe(
       true,
     );
+  });
+
+  it("creates a valid empty song document for starting from scratch", () => {
+    const song = createEmptySongDocument();
+
+    expect(song.kind).toBe(SONG_DOCUMENT_KIND);
+    expect(song.version).toBe(SONG_DOCUMENT_VERSION);
+    expect(trackOrder.map((trackId) => song.tracks[trackId].steps.length)).toEqual([16, 16, 16, 16, 16]);
+    expect(trackOrder.every((trackId) => song.tracks[trackId].steps.every((step) => step.enabled === false))).toBe(
+      true,
+    );
+    expect(song.samples).toEqual([]);
   });
 });

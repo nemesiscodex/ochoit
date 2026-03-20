@@ -15,7 +15,12 @@ import {
   type SampleRecorderStatus,
 } from "@/features/audio/sample-recorder";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
-import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type TrackId } from "@/features/song/song-document";
+import {
+  createEmptySongDocument,
+  getOrderedTracks,
+  type SongDocument,
+  type TrackId,
+} from "@/features/song/song-document";
 import {
   type EngineMode,
   formatEngineModeLabel,
@@ -84,8 +89,12 @@ type ShareStatus = {
   message: string;
 };
 
-export function WorkstationShell() {
-  const [song, setSong] = useState(() => createDefaultSongDocument());
+type WorkstationShellProps = {
+  initialSong?: SongDocument;
+};
+
+export function WorkstationShell({ initialSong }: WorkstationShellProps) {
+  const [song, setSong] = useState(() => initialSong ?? createEmptySongDocument());
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
   const [shareDslEditor, setShareDslEditor] = useState<ShareDslEditorState | null>(null);
@@ -169,6 +178,17 @@ export function WorkstationShell() {
       meta: {
         ...currentSong.meta,
         engineMode,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
+
+  const updateSongName = (name: string) => {
+    setSong((currentSong) => ({
+      ...currentSong,
+      meta: {
+        ...currentSong.meta,
+        name: name.slice(0, 80),
         updatedAt: new Date().toISOString(),
       },
     }));
@@ -263,6 +283,42 @@ export function WorkstationShell() {
     setShareStatus({
       tone: "neutral",
       message: "Loaded shared song from the current link.",
+    });
+  };
+
+  const clearSongShareFromCurrentUrl = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.hash = "";
+    window.history.replaceState(window.history.state, "", url.toString());
+  };
+
+  const resetSong = () => {
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        "Are you sure? This will clear all notes, recordings, and the current song link.",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    stopTransport();
+    clearSongShareFromCurrentUrl();
+
+    startTransition(() => {
+      setSong(createEmptySongDocument());
+      setDeckSampleId(null);
+      setArrangementEditor(null);
+      setShareDslEditor(null);
+    });
+    setShareStatus({
+      tone: "neutral",
+      message: "Cleared the current song and removed the shared link.",
     });
   };
 
@@ -546,6 +602,16 @@ export function WorkstationShell() {
                 showAudioGate={showAudioGate}
               />
               <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-md border-[var(--oc-noise)]/20 bg-[var(--oc-noise)]/[0.05] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-[var(--oc-noise)]/75 hover:bg-[var(--oc-noise)]/12 hover:text-[var(--oc-noise)]"
+                aria-label="Clear song"
+                onClick={resetSong}
+              >
+                <Trash2 className="mr-1.5 size-3.5" />
+                Clear
+              </Button>
+              <Button
                 variant="outline"
                 className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
                 aria-label="Edit share DSL"
@@ -642,6 +708,7 @@ export function WorkstationShell() {
             <SongMeta
               engineState={engineState}
               onUpdateEngineMode={updateEngineMode}
+              onUpdateSongName={updateSongName}
               song={song}
               trackCount={tracks.length}
             />
@@ -1293,11 +1360,13 @@ function SongMeta({
   song,
   engineState,
   onUpdateEngineMode,
+  onUpdateSongName,
   trackCount,
 }: {
   song: SongDocument;
   engineState: AudioBootstrapState;
   onUpdateEngineMode: (engineMode: EngineMode) => void;
+  onUpdateSongName: (name: string) => void;
   trackCount: number;
 }) {
   return (
@@ -1305,8 +1374,25 @@ function SongMeta({
       <h2 className="mb-3 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">
         Song Info
       </h2>
+      <div className="mb-3 grid gap-1.5">
+        <label
+          htmlFor="song-name"
+          className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35"
+        >
+          Song Name
+        </label>
+        <Input
+          id="song-name"
+          aria-label="Song Name"
+          maxLength={80}
+          value={song.meta.name}
+          className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
+          onChange={(event) => {
+            onUpdateSongName(event.currentTarget.value);
+          }}
+        />
+      </div>
       <div className="grid gap-2 font-[var(--oc-mono)] text-[10px]">
-        <MetaRow label="Name" value={song.meta.name} />
         <MetaRow label="Author" value={song.meta.author} />
         <MetaRow label="Mode" value={formatEngineModeLabel(song.meta.engineMode)} />
         <MetaRow label="Tempo" value={`${song.transport.bpm} bpm`} />

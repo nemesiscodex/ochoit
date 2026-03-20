@@ -125,7 +125,7 @@ export const songDocumentSchema = z
     kind: z.literal(SONG_DOCUMENT_KIND),
     version: z.literal(SONG_DOCUMENT_VERSION),
     meta: z.object({
-      name: z.string().min(1).max(80),
+      name: z.string().max(80),
       author: z.string().min(1).max(80),
       createdAt: z.string().datetime(),
       updatedAt: z.string().datetime(),
@@ -210,6 +210,8 @@ export type SerializedSampleAsset = z.infer<typeof serializedSampleAssetSchema>;
 
 const baseTimestamp = "2026-03-18T00:00:00.000Z";
 const defaultLoopLength = 16;
+const defaultAuthor = "Julio";
+const defaultEmptySongName = "Untitled Song";
 
 function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z.infer<typeof pulseDutySchema>; length?: number }>) {
   const seededSteps = new Map(pattern.map((entry) => [entry.index, entry]));
@@ -265,13 +267,83 @@ function createSampleSteps(pattern: number[]) {
   }));
 }
 
+export function createEmptySongDocument(): SongDocument {
+  return songDocumentSchema.parse({
+    kind: SONG_DOCUMENT_KIND,
+    version: SONG_DOCUMENT_VERSION,
+    meta: {
+      name: defaultEmptySongName,
+      author: defaultAuthor,
+      createdAt: baseTimestamp,
+      updatedAt: baseTimestamp,
+      engineMode: "inspired",
+    },
+    transport: {
+      bpm: 136,
+      stepsPerBeat: 4,
+      loopLength: defaultLoopLength,
+    },
+    mixer: {
+      masterVolume: 0.88,
+    },
+    tracks: {
+      pulse1: {
+        id: "pulse1",
+        kind: "pulse",
+        label: "Voice 1",
+        muted: false,
+        solo: false,
+        volume: 0.84,
+        steps: createPulseSteps([]),
+      },
+      pulse2: {
+        id: "pulse2",
+        kind: "pulse",
+        label: "Voice 2",
+        muted: false,
+        solo: false,
+        volume: 0.76,
+        steps: createPulseSteps([]),
+      },
+      triangle: {
+        id: "triangle",
+        kind: "triangle",
+        label: "Voice 3",
+        muted: false,
+        solo: false,
+        volume: 0.78,
+        steps: createTriangleSteps([]),
+      },
+      noise: {
+        id: "noise",
+        kind: "noise",
+        label: "Voice 4",
+        muted: false,
+        solo: false,
+        volume: 0.68,
+        steps: createNoiseSteps([]),
+      },
+      sample: {
+        id: "sample",
+        kind: "sample",
+        label: "Voice 5",
+        muted: false,
+        solo: false,
+        volume: 0.74,
+        steps: createSampleSteps([]),
+      },
+    },
+    samples: [],
+  });
+}
+
 export function createDefaultSongDocument(): SongDocument {
   return songDocumentSchema.parse({
     kind: SONG_DOCUMENT_KIND,
     version: SONG_DOCUMENT_VERSION,
     meta: {
       name: "Castle Loop",
-      author: "Julio",
+      author: defaultAuthor,
       createdAt: baseTimestamp,
       updatedAt: baseTimestamp,
       engineMode: "inspired",
