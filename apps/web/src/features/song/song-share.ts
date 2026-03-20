@@ -24,7 +24,7 @@ import {
 
 export const SONG_SHARE_HASH_KEY = "song";
 
-const SHARE_FORMAT_VERSION = 2;
+const SHARE_FORMAT_VERSION = 3;
 const SHARE_PAYLOAD_PREFIX = `v${SHARE_FORMAT_VERSION}.`;
 const shareLineBreak = "\n";
 const sampleLinePrefix = "$";
@@ -87,8 +87,10 @@ export function serializeSongSharePayload(song: SongDocument) {
 }
 
 export function parseSongSharePayload(payload: string) {
-  if (payload.startsWith(SHARE_PAYLOAD_PREFIX)) {
-    const compressedPayload = payload.slice(SHARE_PAYLOAD_PREFIX.length);
+  const compressedPayloadMatch = /^v(\d+)\.(.+)$/u.exec(payload);
+
+  if (compressedPayloadMatch !== null) {
+    const compressedPayload = compressedPayloadMatch[2] ?? "";
     const compressedBytes = decodeBase64UrlToBytes(compressedPayload);
     const compactText = new TextDecoder().decode(inflateRaw(compressedBytes));
 
@@ -145,7 +147,7 @@ export function serializeSongShareText(song: SongDocument) {
     serializeMelodicSection(song.tracks.pulse2, "pulse2"),
     serializeMelodicSection(song.tracks.triangle, "triangle"),
     serializeNoiseSection(song.tracks.noise),
-    serializeSampleSection(song.tracks.sample),
+    serializeSampleSection(song.tracks.sample, song.meta.engineMode),
     ...song.samples.map((sample) => serializeSampleAsset(sample)),
   ];
 
@@ -279,11 +281,15 @@ function serializeNoiseSection(track: NoiseTrack) {
   return [header, ...arrangementLines].join(shareLineBreak);
 }
 
-function serializeSampleSection(track: SampleTrack) {
+function serializeSampleSection(track: SampleTrack, engineMode: SongDocument["meta"]["engineMode"]) {
   const header = serializeTrackSectionHeader("sample", track.volume, track.muted);
   const arrangementLines = track.steps.flatMap((step, index) => {
     if (!step.enabled || step.sampleId === null) {
       return [];
+    }
+
+    if (engineMode === "inspired") {
+      return `${index + 1}:${step.sampleId}>${step.note}${formatStepVolumeSuffix(step.volume, track.volume)}`;
     }
 
     const rateSuffix = approximatelyEqual(step.playbackRate, 1) ? "" : `@${formatCompactNumber(step.playbackRate)}`;
@@ -303,7 +309,7 @@ function serializeSampleAsset(sample: SerializedSampleAsset) {
 
   return `${sampleLinePrefix}${encodeURIComponent(sample.id)}|${encodeURIComponent(sample.name)}|${
     sample.source === "mic" ? "m" : "i"
-  }|${sample.sampleRate}|${sample.trim.startFrame}|${sample.trim.endFrame}|${encodeBase64Url(pcmBytes)}`;
+  }|${encodeURIComponent(sample.baseNote)}|${encodeURIComponent(sample.detectedBaseNote ?? "")}|${sample.sampleRate}|${sample.trim.startFrame}|${sample.trim.endFrame}|${encodeBase64Url(pcmBytes)}`;
 }
 
 function createDefaultTrackSections(defaultSong: SongDocument): Record<ShareTrackId, ShareTrackSection> {
@@ -340,7 +346,7 @@ function parseHeader(line: string): ParsedShareHeader {
   const headerEntries = parseSemicolonEntries(line.slice(1));
   const version = getRequiredEntry(headerEntries, "v");
 
-  if (version !== SHARE_FORMAT_VERSION.toString()) {
+  if (version !== "2" && version !== SHARE_FORMAT_VERSION.toString()) {
     throw new Error("Unsupported share format version.");
   }
 
@@ -506,6 +512,7 @@ function buildSharedSampleTrack(
         enabled: entry !== undefined,
         volume: entry === undefined ? section.volume : (stepVolumeByStepIndex.get(index) ?? section.volume),
         sampleId: entry?.sampleId ?? null,
+        note: entry?.note ?? "C4",
         playbackRate: entry?.playbackRate ?? 1,
       };
     }),
@@ -515,17 +522,32 @@ function buildSharedSampleTrack(
 function parseSampleAsset(line: string): SerializedSampleAsset {
   const fields = line.slice(sampleLinePrefix.length).split("|");
 
-  if (fields.length !== 7) {
+  if (fields.length !== 7 && fields.length !== 9) {
     throw new Error("Invalid sample entry.");
   }
 
-  const [rawId, rawName, rawSource, rawSampleRate, rawTrimStart, rawTrimEnd, rawPcm] = fields;
+  const hasPitchMetadata = fields.length === 9;
+  const [
+    rawId,
+    rawName,
+    rawSource,
+    rawBaseNote,
+    rawDetectedBaseNote,
+    rawSampleRate,
+    rawTrimStart,
+    rawTrimEnd,
+    rawPcm,
+  ] = hasPitchMetadata
+    ? fields
+    : [fields[0], fields[1], fields[2], "C4", "", fields[3], fields[4], fields[5], fields[6]];
   const pcm = dequantizeSamplePcm(decodeBase64UrlToBytes(rawPcm ?? ""));
 
   return {
     id: decodeURIComponent(rawId ?? ""),
     name: decodeURIComponent(rawName ?? ""),
     source: rawSource === "i" ? "import" : "mic",
+    baseNote: decodeURIComponent(rawBaseNote ?? "C4"),
+    detectedBaseNote: (decodeURIComponent(rawDetectedBaseNote ?? "") || null) as SerializedSampleAsset["detectedBaseNote"],
     sampleRate: parseIntegerValue(rawSampleRate ?? "", "sampleRate"),
     frameCount: pcm.length,
     channels: 1,

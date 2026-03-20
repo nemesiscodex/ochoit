@@ -12,6 +12,7 @@ describe("song-share", () => {
   it("serializes and parses a song payload with compact track data and embedded samples", () => {
     const song = createDefaultSongDocument();
     song.meta.name = "Share Tune";
+    song.meta.engineMode = "authentic";
     song.transport.bpm = 172;
     song.tracks.pulse1.muted = true;
     song.tracks.pulse2.volume = 0.63;
@@ -33,7 +34,7 @@ describe("song-share", () => {
     const payload = serializeSongSharePayload(song);
     const parsedSong = parseSongSharePayload(payload);
 
-    expect(payload.startsWith("v2.")).toBe(true);
+    expect(payload.startsWith("v3.")).toBe(true);
     expect(parsedSong.meta.name).toBe(song.meta.name);
     expect(parsedSong.transport.bpm).toBe(song.transport.bpm);
     expect(parsedSong.tracks.pulse1.muted).toBe(true);

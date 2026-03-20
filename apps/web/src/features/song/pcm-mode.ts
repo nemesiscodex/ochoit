@@ -11,22 +11,22 @@ type PcmModeDefinition = {
 
 const pcmModeDefinitions: Record<EngineMode, PcmModeDefinition> = {
   inspired: {
-    panelLabel: "Inspired PCM",
+    panelLabel: "Inspired Sampler",
     summary:
-      "PCM uses one-shot sample triggers with selectable playback rate. Musical note mapping is intentionally off for this mode.",
+      "Inspired mode turns the PCM lane into a chromatic sampler: every clip gets a base note and each step can transpose it with the note picker.",
     arrangementSummary:
-      "Inspired mode keeps PCM trigger-based: choose a sample plus playback rate, without musical note mapping.",
+      "Inspired mode is note-based: choose a sample, set its base note, then place target notes on the PCM lane.",
     arrangementInstructions:
-      "One trigger per line in the format 8: {sampleReference}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x.",
+      'One trigger per line in the format 8: {sampleReference}>C5. Use a sample id or sample name plus a target note from C0 to B8. If you omit the ">note" suffix, the sample uses its saved base note.',
   },
   authentic: {
     panelLabel: "Authentic DPCM",
     summary:
-      "Authentic mode plans a stricter DPCM lane with fixed NES rate presets, converted one-bit sample playback, and no arbitrary playback-rate pitch shifting.",
+      "Authentic mode keeps the PCM lane closer to the original one-shot workflow: choose a clip and trigger it at a playback rate.",
     arrangementSummary:
-      "Authentic mode is planned as a hardware-oriented DPCM lane: fixed NES rate presets, one-shot hits, and no free-rate pitch control.",
+      "Authentic mode stays trigger-based: choose a sample and optional playback rate, without per-step note mapping.",
     arrangementInstructions:
-      "The current text editor still reflects the inspired placeholder format 8: {sampleReference}@1x until dedicated authentic editing ships.",
+      "One trigger per line in the format 8: {sampleReference}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x.",
   },
 };
 

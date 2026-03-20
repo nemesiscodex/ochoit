@@ -157,7 +157,7 @@ export class AudioEngine {
     this.pulseVoice2.configure(song.tracks.pulse2, song.transport);
     this.triangleVoice.configure(song.tracks.triangle, song.transport);
     this.noiseVoice.configure(song.tracks.noise, song.transport);
-    this.sampleVoice.configure(song.tracks.sample, song.samples);
+    this.sampleVoice.configure(song.tracks.sample, song.samples, song.meta.engineMode);
     this.transport.configure(song.transport);
   }
 
@@ -269,6 +269,19 @@ export class AudioEngine {
     }
 
     this.sampleVoice.previewSample(sampleId, playbackRate, durationMs, 0.82);
+  }
+
+  previewSampleNote(sampleId: string, baseNote: NoteValue, targetNote: NoteValue, durationMs = 250) {
+    if (this.context.state !== "running") {
+      return;
+    }
+
+    this.sampleVoice.previewSample(
+      sampleId,
+      getFrequencyForNote(targetNote) / getFrequencyForNote(baseNote),
+      durationMs,
+      0.82,
+    );
   }
 
   async close() {

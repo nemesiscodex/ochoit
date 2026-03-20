@@ -75,6 +75,7 @@ export type NoiseStepUpdates = {
 export type SampleStepUpdates = {
   enabled?: boolean;
   sampleId?: string | null;
+  note?: NoteValue;
   playbackRate?: number;
   volume?: number;
 };
@@ -112,6 +113,7 @@ export type NoiseArrangementEntry = {
 export type SampleArrangementEntry = {
   stepIndex: number;
   sampleId: string;
+  note: NoteValue;
   playbackRate: number;
 };
 
@@ -346,6 +348,7 @@ export function updateSampleTrackStep(song: SongDocument, stepIndex: number, upd
             ...step,
             enabled: updates.enabled ?? step.enabled,
             sampleId: updates.sampleId === undefined ? step.sampleId : updates.sampleId,
+            note: updates.note ?? step.note,
             playbackRate: updates.playbackRate ?? step.playbackRate,
             volume: updates.volume ?? step.volume,
           };
@@ -421,14 +424,19 @@ export function serializeNoiseTrackArrangement(track: NoiseTrack) {
     .join("\n");
 }
 
-export function serializeSampleTrackArrangement(track: SampleTrack) {
+export function serializeSampleTrackArrangement(
+  track: SampleTrack,
+  engineMode: SongDocument["meta"]["engineMode"],
+) {
   return track.steps
     .flatMap((step, index) => {
       if (!step.enabled || step.sampleId === null) {
         return [];
       }
 
-      return `${index + 1}: ${step.sampleId}@${formatSamplePlaybackRate(step.playbackRate)}`;
+      return engineMode === "inspired"
+        ? `${index + 1}: ${step.sampleId}>${step.note}`
+        : `${index + 1}: ${step.sampleId}@${formatSamplePlaybackRate(step.playbackRate)}`;
     })
     .join("\n");
 }
@@ -561,6 +569,7 @@ export function parseSampleTrackArrangement(
       stepIndex: parsedLine.stepNumber - 1,
       sampleId: sample.id,
       playbackRate: parsedTrigger.playbackRate,
+      note: parsedTrigger.note ?? (sample.baseNote as NoteValue),
     });
   }
 
@@ -651,6 +660,7 @@ export function replaceSampleTrackArrangement(
             ...step,
             enabled: entry !== undefined,
             sampleId: entry?.sampleId ?? step.sampleId,
+            note: entry?.note ?? step.note,
             playbackRate: entry?.playbackRate ?? step.playbackRate,
           };
         }),
@@ -678,6 +688,7 @@ export function getNoiseStepLabel(step: NoiseTrack["steps"][number]) {
 export function getSampleStepLabel(
   step: SampleTrack["steps"][number],
   samples: readonly SerializedSampleAsset[],
+  engineMode: SongDocument["meta"]["engineMode"],
 ) {
   if (!step.enabled) {
     return "·";
@@ -689,13 +700,13 @@ export function getSampleStepLabel(
     return "none";
   }
 
-  return `${sample.name} ${formatPlaybackRateLabel(step.playbackRate)}`;
+  return engineMode === "inspired" ? `${sample.name} ${step.note}` : `${sample.name} ${formatPlaybackRateLabel(step.playbackRate)}`;
 }
 
 export function getDefaultSampleTrigger(
   samples: readonly SerializedSampleAsset[],
   preferredSampleId?: string | null,
-): Pick<SampleTrack["steps"][number], "sampleId" | "playbackRate"> {
+): Pick<SampleTrack["steps"][number], "sampleId" | "note" | "playbackRate"> {
   const preferredSample =
     preferredSampleId === undefined || preferredSampleId === null
       ? null
@@ -703,6 +714,7 @@ export function getDefaultSampleTrigger(
 
   return {
     sampleId: preferredSample?.id ?? samples.at(-1)?.id ?? null,
+    note: (preferredSample?.baseNote ?? "C4") as NoteValue,
     playbackRate: defaultSamplePlaybackRate,
   };
 }
@@ -1079,19 +1091,28 @@ function parseArrangementLine(line: string, lineIndex: number): ParsedArrangemen
 
 function parseSampleTriggerDescriptor(
   value: string,
-): { ok: true; sampleReference: string; playbackRate: number } | { ok: false; error: string } {
+): { ok: true; sampleReference: string; note: NoteValue | null; playbackRate: number } | { ok: false; error: string } {
   const trimmedValue = value.trim();
 
   if (trimmedValue.length === 0) {
     return {
       ok: false,
-      error: 'must include a sample reference like "mic-001@1x".',
+      error: 'must include a sample reference like "mic-001@1x" or "mic-001>C5".',
     };
   }
 
-  const rateSeparatorIndex = trimmedValue.lastIndexOf("@");
   let sampleReference = trimmedValue;
+  let note: NoteValue | null = null;
   let playbackRate = defaultSamplePlaybackRate;
+  const rateSeparatorIndex = trimmedValue.lastIndexOf("@");
+  const noteSeparatorIndex = trimmedValue.lastIndexOf(">");
+
+  if (rateSeparatorIndex > 0 && noteSeparatorIndex > 0) {
+    return {
+      ok: false,
+      error: 'must use either a "@" playback-rate suffix or a ">" note suffix, not both.',
+    };
+  }
 
   if (rateSeparatorIndex > 0) {
     const nextSampleReference = trimmedValue.slice(0, rateSeparatorIndex).trim();
@@ -1125,11 +1146,34 @@ function parseSampleTriggerDescriptor(
 
     sampleReference = nextSampleReference;
     playbackRate = parsedPlaybackRate;
+  } else if (noteSeparatorIndex > 0) {
+    const nextSampleReference = trimmedValue.slice(0, noteSeparatorIndex).trim();
+    const noteToken = trimmedValue.slice(noteSeparatorIndex + 1).trim();
+
+    if (nextSampleReference.length === 0) {
+      return {
+        ok: false,
+        error: 'must include a sample reference before the ">" symbol.',
+      };
+    }
+
+    const parsedNote = normalizeArrangementNote(noteToken);
+
+    if (parsedNote === null) {
+      return {
+        ok: false,
+        error: 'has an invalid target note. Use notes from C0 to B8 with optional sharps, for example "C5" or "A#2".',
+      };
+    }
+
+    sampleReference = nextSampleReference;
+    note = parsedNote;
   }
 
   return {
     ok: true,
     sampleReference,
+    note,
     playbackRate,
   };
 }

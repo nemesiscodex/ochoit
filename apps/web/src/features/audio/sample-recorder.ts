@@ -1,5 +1,6 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
+import { suggestSamplePitchNote } from "@/features/audio/sample-pitch";
 import { createFlatWaveform } from "@/features/audio/waveform-data";
 import type { SerializedSampleAsset } from "@/features/song/song-document";
 
@@ -174,12 +175,15 @@ export function createRecordedSampleAsset(
   const frameCount = pcm.length;
   const id = getNextMicSampleId(existingSamples);
   const waveform = createWaveformFromPcm(pcm);
+  const detectedBaseNote = suggestSamplePitchNote(pcm, sampleRate);
 
   return {
     asset: {
       id,
       name: id,
       source: "mic",
+      baseNote: detectedBaseNote ?? "C4",
+      detectedBaseNote,
       sampleRate,
       frameCount,
       channels: 1,

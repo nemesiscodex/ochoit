@@ -140,9 +140,9 @@ describe("workstation-shell", () => {
   it("surfaces the current inspired PCM behavior in the song info panel", () => {
     renderWorkstationShell();
 
-    expect(screen.getByText("Inspired PCM")).toBeTruthy();
-    expect(screen.getByText(/PCM uses one-shot sample triggers with selectable playback rate\./i)).toBeTruthy();
-    expect(screen.getByText(/Musical note mapping is intentionally off for this mode\./i)).toBeTruthy();
+    expect(screen.getByText("Inspired Sampler")).toBeTruthy();
+    expect(screen.getByText(/chromatic sampler/i)).toBeTruthy();
+    expect(screen.getByText(/every clip gets a base note/i)).toBeTruthy();
   });
 
   it("loads a shared song from the url on mount", async () => {
@@ -188,7 +188,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected share DSL text to be a textarea.");
     }
 
-    expect(textarea.value).toContain("!v=2;");
+    expect(textarea.value).toContain("!v=3;");
     expect(textarea.value).toContain("=1;vol=");
 
     await act(async () => {
@@ -196,7 +196,7 @@ describe("workstation-shell", () => {
     });
 
     expect(clipboardWriteText).toHaveBeenCalled();
-    expect(clipboardWriteText.mock.calls.at(-1)?.[0]).toContain("!v=2;");
+    expect(clipboardWriteText.mock.calls.at(-1)?.[0]).toContain("!v=3;");
     expect(screen.getByText("Share DSL copied to clipboard.")).toBeTruthy();
   });
 
@@ -397,7 +397,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(pcmTextarea, {
       target: {
-        value: "2: vox-hit@0.75x\n6: mic-001@1.5\n20: vox-hit",
+        value: "2: vox-hit>D5\n6: mic-001>A#2\n20: vox-hit",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
@@ -413,7 +413,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected PCM trigger text to be a textarea.");
     }
 
-    expect(verifyPcmTextarea.value).toBe("2: mic-001@0.75\n6: mic-001@1.5");
+    expect(verifyPcmTextarea.value).toBe("2: mic-001>D5\n6: mic-001>A#2");
   });
 
   it("describes the noise text format with explicit mode and period values", () => {
@@ -425,15 +425,15 @@ describe("workstation-shell", () => {
     expect(screen.getByText(/preset aliases/i)).toBeTruthy();
   });
 
-  it("describes the PCM text format as trigger-plus-rate without note mapping", () => {
+  it("describes the PCM text format as note-based in inspired mode", () => {
     renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
 
-    expect(screen.getByText(/Inspired mode keeps PCM trigger-based/i)).toBeTruthy();
-    expect(screen.getByText(/without musical note mapping/i)).toBeTruthy();
-    expect(screen.getByText(/format 8: mic-001@1x/i)).toBeTruthy();
-    expect(screen.getByText(/optional playback rate from 0.25x to 4x/i)).toBeTruthy();
+    expect(screen.getByText(/Inspired mode is note-based/i)).toBeTruthy();
+    expect(screen.getByText(/set its base note/i)).toBeTruthy();
+    expect(screen.getByText(/format 8: mic-001>C5/i)).toBeTruthy();
+    expect(screen.getByText(/target note from C0 to B8/i)).toBeTruthy();
   });
 
   it("renders the sample deck sidebar", () => {
@@ -594,7 +594,7 @@ describe("workstation-shell", () => {
     expect(within(panel).getByLabelText("Noise step 1 noise settings").textContent).toBe("long P12");
   });
 
-  it("updates the PCM trigger controls from the detail panel", () => {
+  it("updates the inspired PCM note controls from the detail panel", () => {
     renderWorkstationShell();
 
     // Click disabled step 2 to enable + select
@@ -607,12 +607,10 @@ describe("workstation-shell", () => {
       within(panel).getByRole("button", { name: "Assign vox-hit" }).getAttribute("aria-pressed"),
     ).toBe("true");
 
-    // Change playback rate
-    fireEvent.click(within(panel).getByRole("button", { name: "Set rate 1.5x" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "PCM step 2 note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select note D5" }));
 
-    expect(
-      within(panel).getByRole("button", { name: "Set rate 1.5x" }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(within(panel).getByRole("button", { name: "PCM step 2 note" }).textContent).toBe("D5");
   });
 
   it("stores a completed microphone take in the sample deck and routes it to the PCM lane", () => {
@@ -646,6 +644,8 @@ describe("workstation-shell", () => {
         id: "mic-002",
         name: "mic-002",
         source: "mic",
+        baseNote: "C4",
+        detectedBaseNote: "C4",
         sampleRate: 11_025,
         frameCount: 4,
         channels: 1,
@@ -675,15 +675,15 @@ describe("workstation-shell", () => {
       throw new Error("Expected PCM trigger text to be a textarea.");
     }
 
-    expect(pcmTextarea.value).toBe("8: mic-002@1\n16: mic-002@1");
+    expect(pcmTextarea.value).toBe("8: mic-002>C4\n16: mic-002>C4");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     // Click disabled PCM step 2 to enable + select
     fireEvent.click(screen.getByLabelText("PCM step 2"));
 
-    // The compact cell should show the assigned sample
-    expect(screen.getByLabelText("PCM step 2").textContent).toContain("mic-002");
+    const panel = screen.getByLabelText("PCM step 2 editor");
+    expect(within(panel).getByRole("button", { name: "Assign mic-002" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("lets you load another sample from the deck list and delete clips", () => {
@@ -694,6 +694,8 @@ describe("workstation-shell", () => {
         id: "mic-002",
         name: "mic-002",
         source: "mic",
+        baseNote: "C4",
+        detectedBaseNote: "C4",
         sampleRate: 11_025,
         frameCount: 4,
         channels: 1,
@@ -760,6 +762,8 @@ describe("workstation-shell", () => {
         id: "mic-002",
         name: "mic-002",
         source: "mic",
+        baseNote: "C4",
+        detectedBaseNote: "C4",
         sampleRate: 11_025,
         frameCount: 22_050,
         channels: 1,

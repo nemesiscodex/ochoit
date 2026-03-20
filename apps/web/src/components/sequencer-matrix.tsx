@@ -21,6 +21,7 @@ import {
   type MelodicStepUpdates,
   type MelodicTrackId,
   type NoiseStepUpdates,
+  type NoteValue,
   type SampleStepUpdates,
   type TriggerTrackId,
 } from "@/features/song/song-pattern";
@@ -291,6 +292,7 @@ function SequencerRow({
           onUpdateSampleStep(stepIndex, {
             enabled: true,
             sampleId: sampleStep.sampleId ?? defaultSampleTrigger.sampleId,
+            note: (sampleStep.note as NoteValue) ?? defaultSampleTrigger.note,
             playbackRate: sampleStep.playbackRate ?? defaultSampleTrigger.playbackRate,
           });
           break;
@@ -387,6 +389,7 @@ function SequencerRow({
         <CompactStepGrid
           accentClassName={accentByTrackId[track.id]}
           accentColor={waveformLineColorByTrackId[track.id]}
+          engineMode={song.meta.engineMode}
           nextStep={nextStep}
           onStepClick={handleStepClick}
           playbackState={playbackState}
@@ -500,6 +503,7 @@ type CompactCellData = {
 
 function getCompactCellData(
   track: Track,
+  engineMode: SongDocument["meta"]["engineMode"],
   stepIndex: number,
   samples: SongDocument["samples"],
   selectedStepIndex: number | null,
@@ -551,7 +555,14 @@ function getCompactCellData(
         enabled: step.enabled,
         isHold: false,
         holdNote: null,
-        label: step.enabled ? (sample !== null ? sample.name : "pcm") : "\u00b7",
+        label:
+          !step.enabled
+            ? "\u00b7"
+            : engineMode === "inspired"
+              ? step.note
+              : sample !== null
+                ? sample.name
+                : "pcm",
         volume: step.volume,
         isPartOfSelectedNote: false,
       };
@@ -562,6 +573,7 @@ function getCompactCellData(
 function CompactStepGrid({
   accentClassName,
   accentColor,
+  engineMode,
   nextStep,
   onStepClick,
   playbackState,
@@ -571,6 +583,7 @@ function CompactStepGrid({
 }: {
   accentClassName: string;
   accentColor: string;
+  engineMode: SongDocument["meta"]["engineMode"];
   nextStep: number;
   onStepClick: (stepIndex: number) => void;
   playbackState: "stopped" | "playing";
@@ -583,7 +596,7 @@ function CompactStepGrid({
       {track.steps.map((_, index) => {
         const isActive = playbackState === "playing" && nextStep === index;
         const isSelected = selectedStepIndex === index;
-        const cellData = getCompactCellData(track, index, samples, selectedStepIndex);
+        const cellData = getCompactCellData(track, engineMode, index, samples, selectedStepIndex);
 
         return (
           <CompactStepCell

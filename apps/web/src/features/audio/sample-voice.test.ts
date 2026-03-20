@@ -122,7 +122,7 @@ describe("sample-voice", () => {
       },
     };
 
-    voice.configure(trimmedSong.tracks.sample, trimmedSong.samples);
+    voice.configure(trimmedSong.tracks.sample, trimmedSong.samples, "authentic");
     voice.scheduleStep(7, 3);
     voice.scheduleStep(15, 4);
 
@@ -167,6 +167,7 @@ describe("sample-voice", () => {
         muted: true,
       },
       song.samples,
+      "authentic",
     );
     voice.scheduleStep(7, 0.5);
 
@@ -191,6 +192,7 @@ describe("sample-voice", () => {
         ),
       },
       song.samples,
+      "authentic",
     );
     voice.scheduleStep(7, 1);
     voice.scheduleStep(15, 1.5);
@@ -219,7 +221,7 @@ describe("sample-voice", () => {
           endFrame: sample.frameCount,
         },
       },
-    ]);
+    ], "authentic");
     voice.scheduleStep(7, 2.5);
 
     expect(createdBuffers).toHaveLength(1);

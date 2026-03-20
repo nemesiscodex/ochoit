@@ -5,6 +5,7 @@ import { Mic, Pause, Play, Save, Square, Trash2, Upload, Zap } from "lucide-reac
 import { startTransition, useEffect, useRef, useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
+import { NotePicker } from "@/components/note-picker";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 import {
@@ -16,6 +17,7 @@ import {
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type TrackId } from "@/features/song/song-document";
 import {
+  type EngineMode,
   formatEngineModeLabel,
   getPcmModeLabel,
   getPcmModeSummary,
@@ -159,6 +161,17 @@ export function WorkstationShell() {
     setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
   };
 
+  const updateEngineMode = (engineMode: EngineMode) => {
+    setSong((currentSong) => ({
+      ...currentSong,
+      meta: {
+        ...currentSong.meta,
+        engineMode,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
+
   const moveDeckSampleTrimWindow = (startFrame: number) => {
     if (deckSample === null) {
       return;
@@ -182,6 +195,28 @@ export function WorkstationShell() {
   const deleteDeckSample = (sampleId: string) => {
     setSong((currentSong) => removeSampleAsset(currentSong, sampleId));
     setDeckSampleId((currentSampleId) => (currentSampleId === sampleId ? null : currentSampleId));
+  };
+
+  const updateDeckSampleBaseNote = (baseNote: string) => {
+    if (deckSample === null) {
+      return;
+    }
+
+    setSong((currentSong) => ({
+      ...currentSong,
+      meta: {
+        ...currentSong.meta,
+        updatedAt: new Date().toISOString(),
+      },
+      samples: currentSong.samples.map((sample) =>
+        sample.id === deckSample.id
+          ? {
+              ...sample,
+              baseNote,
+            }
+          : sample,
+      ),
+    }));
   };
 
   const applySharedSongFromCurrentUrl = (emptyMessage: string | null) => {
@@ -251,9 +286,9 @@ export function WorkstationShell() {
     setArrangementEditor({
       trackId,
       draft:
-        trackId === "noise"
+      trackId === "noise"
           ? serializeNoiseTrackArrangement(song.tracks.noise)
-          : serializeSampleTrackArrangement(song.tracks.sample),
+          : serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode),
       error: null,
     });
   };
@@ -575,6 +610,7 @@ export function WorkstationShell() {
           {/* Sample Deck Sidebar */}
           <aside className="flex flex-col gap-3">
             <SampleDeck
+              engineMode={song.meta.engineMode}
               samples={song.samples}
               sample={deckSample}
               selectedSampleId={deckSample?.id ?? null}
@@ -586,11 +622,17 @@ export function WorkstationShell() {
               onPreviewSample={previewDeckSample}
               onMoveTrimWindow={moveDeckSampleTrimWindow}
               onResizeTrimWindow={resizeDeckSampleTrimWindow}
+              onSetSampleBaseNote={updateDeckSampleBaseNote}
               onSelectSample={selectDeckSample}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
             />
-            <SongMeta song={song} engineState={engineState} trackCount={tracks.length} />
+            <SongMeta
+              engineState={engineState}
+              onUpdateEngineMode={updateEngineMode}
+              song={song}
+              trackCount={tracks.length}
+            />
           </aside>
         </section>
       </div>
@@ -807,6 +849,7 @@ function StatusChip({ label, value }: { label: string; value: string }) {
 /* ─────────── Sample Deck ─────────── */
 
 function SampleDeck({
+  engineMode,
   samples,
   sample,
   selectedSampleId,
@@ -818,10 +861,12 @@ function SampleDeck({
   onPreviewSample,
   onMoveTrimWindow,
   onResizeTrimWindow,
+  onSetSampleBaseNote,
   onSelectSample,
   onStartRecording,
   onStopRecording,
 }: {
+  engineMode: SongDocument["meta"]["engineMode"];
   samples: SongDocument["samples"];
   sample: SongDocument["samples"][number] | null;
   selectedSampleId: string | null;
@@ -833,6 +878,7 @@ function SampleDeck({
   onPreviewSample: () => Promise<void>;
   onMoveTrimWindow: (startFrame: number) => void;
   onResizeTrimWindow: (frameCount: number) => void;
+  onSetSampleBaseNote: (baseNote: string) => void;
   onSelectSample: (sampleId: string) => void;
   onStartRecording: () => Promise<void>;
   onStopRecording: () => void;
@@ -946,6 +992,52 @@ function SampleDeck({
             onChange={onResizeTrimWindow}
             value={trimmedFrameCount}
           />
+        </div>
+        <div className="mt-3 grid gap-2 rounded-md border border-white/[0.06] bg-black/20 p-2.5">
+          <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
+            <span>Pitch Map</span>
+            <span>{engineMode === "inspired" ? "Chromatic" : "Trigger"}</span>
+          </div>
+          {sample === null ? (
+            <div className="font-[var(--oc-mono)] text-[10px] text-white/32">Load a sample to assign its base note.</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-[7rem]">
+                  <NotePicker
+                    accentColor={waveformLineColorByTrackId.sample}
+                    ariaLabel="Sample base note"
+                    disabled={isRecording}
+                    selectedNote={sample.baseNote}
+                    onSelectNote={(note) => {
+                      onSetSampleBaseNote(note);
+                    }}
+                  />
+                </div>
+                <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/36">
+                  Base note
+                </span>
+                {sample.detectedBaseNote !== null ? (
+                  <button
+                    type="button"
+                    className="rounded-sm border border-[var(--oc-sample)]/20 bg-[var(--oc-sample)]/10 px-2 py-1 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--oc-sample)] transition hover:bg-[var(--oc-sample)]/18"
+                    onClick={() => {
+                      onSetSampleBaseNote(sample.detectedBaseNote ?? sample.baseNote);
+                    }}
+                  >
+                    Suggested {sample.detectedBaseNote}
+                  </button>
+                ) : (
+                  <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/28">
+                    No stable note detected
+                  </span>
+                )}
+              </div>
+              <p className="font-[var(--oc-mono)] text-[10px] leading-5 text-white/40">
+                Inspired mode transposes from this base note. Authentic mode still plays the clip as a one-shot trigger.
+              </p>
+            </>
+          )}
         </div>
         <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">
           <span>
@@ -1128,10 +1220,12 @@ async function copyTextToClipboard(value: string) {
 function SongMeta({
   song,
   engineState,
+  onUpdateEngineMode,
   trackCount,
 }: {
   song: SongDocument;
   engineState: AudioBootstrapState;
+  onUpdateEngineMode: (engineMode: EngineMode) => void;
   trackCount: number;
 }) {
   return (
@@ -1147,6 +1241,31 @@ function SongMeta({
         <MetaRow label="Loop" value={`${song.transport.loopLength} steps`} />
         <MetaRow label="Voices" value={`${trackCount}`} />
         <MetaRow label="Audio" value={engineState} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {(["authentic", "inspired"] as const).map((engineMode) => {
+          const isSelected = song.meta.engineMode === engineMode;
+
+          return (
+            <Button
+              key={engineMode}
+              type="button"
+              variant="outline"
+              aria-pressed={isSelected}
+              className={cn(
+                "h-8 rounded-md border font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.16em] transition-all",
+                isSelected
+                  ? "border-[var(--oc-accent)]/45 bg-[var(--oc-accent)]/12 text-white"
+                  : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.08] hover:text-white",
+              )}
+              onClick={() => {
+                onUpdateEngineMode(engineMode);
+              }}
+            >
+              {formatEngineModeLabel(engineMode)}
+            </Button>
+          );
+        })}
       </div>
       <div
         aria-label="PCM mode summary"

@@ -49,6 +49,7 @@ describe("song-transport", () => {
       enabled: false,
       volume: song.tracks.sample.volume,
       sampleId: null,
+      note: "C4",
       playbackRate: 1,
     });
   });

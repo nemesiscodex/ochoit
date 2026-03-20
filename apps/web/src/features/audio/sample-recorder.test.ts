@@ -55,6 +55,8 @@ describe("sample-recorder", () => {
     expect(recording.asset.id).toBe("mic-002");
     expect(recording.asset.name).toBe("mic-002");
     expect(recording.asset.channels).toBe(1);
+    expect(recording.asset.baseNote).toBe("C4");
+    expect(recording.asset.detectedBaseNote).toBeNull();
     expect(recording.asset.sampleRate).toBe(SAMPLE_RECORDING_TARGET_RATE);
     expect(recording.asset.frameCount).toBe(2);
     expect(recording.asset.trim).toEqual({

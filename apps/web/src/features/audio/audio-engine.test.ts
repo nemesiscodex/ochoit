@@ -23,7 +23,7 @@ const audioEngineMocks = vi.hoisted(() => {
   const noiseScheduleStep = vi.fn<(step: number, time: number) => void>();
   const noisePreviewStep = vi.fn<(step: unknown, durationMs?: number) => void>();
   const sampleVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
-  const sampleConfigure = vi.fn<(track: unknown, samples: unknown) => void>();
+  const sampleConfigure = vi.fn<(track: unknown, samples: unknown, engineMode: unknown) => void>();
   const sampleScheduleStep = vi.fn<(step: number, time: number) => void>();
   const samplePreview = vi.fn<(sampleId: string, playbackRate?: number, durationMs?: number, volume?: number) => void>();
   const createTransport = vi.fn(async () => transport);
@@ -83,8 +83,8 @@ const audioEngineMocks = vi.hoisted(() => {
       sampleVoiceConstructor(context, output);
     }
 
-    configure(track: unknown, samples: unknown) {
-      sampleConfigure(track, samples);
+    configure(track: unknown, samples: unknown, engineMode: unknown) {
+      sampleConfigure(track, samples, engineMode);
     }
 
     scheduleStep(step: number, time: number) {
@@ -353,7 +353,11 @@ describe("audio-engine", () => {
       mutedTriangleSong.tracks.noise,
       mutedTriangleSong.transport,
     );
-    expect(audioEngineMocks.sampleConfigure).toHaveBeenCalledWith(mutedTriangleSong.tracks.sample, mutedTriangleSong.samples);
+    expect(audioEngineMocks.sampleConfigure).toHaveBeenCalledWith(
+      mutedTriangleSong.tracks.sample,
+      mutedTriangleSong.samples,
+      mutedTriangleSong.meta.engineMode,
+    );
 
     const subscribeListener = audioEngineMocks.transport.subscribe.mock.calls[0]?.[0];
     subscribeListener?.({

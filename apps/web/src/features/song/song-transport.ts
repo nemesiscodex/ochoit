@@ -194,6 +194,7 @@ function resizeSampleTrack(track: SongDocument["tracks"]["sample"], loopLength: 
         enabled: false,
         volume: track.volume,
         sampleId: null,
+        note: "C4",
         playbackRate: 1,
       };
     }),

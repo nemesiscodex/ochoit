@@ -49,6 +49,7 @@ const sampleStepSchema = z.object({
   enabled: z.boolean(),
   volume: levelSchema,
   sampleId: z.string().min(1).nullable(),
+  note: noteSchema.default("C4"),
   playbackRate: z.number().min(0.25).max(4),
 });
 
@@ -89,6 +90,8 @@ const serializedSampleAssetSchema = z
     id: z.string().min(1),
     name: z.string().min(1),
     source: z.enum(["mic", "import"]),
+    baseNote: noteSchema.default("C4"),
+    detectedBaseNote: noteSchema.nullable().default(null),
     sampleRate: z.number().int().positive(),
     frameCount: z.number().int().nonnegative(),
     channels: z.literal(1),
@@ -257,6 +260,7 @@ function createSampleSteps(pattern: number[]) {
     enabled: seededSteps.has(index),
     volume: 0.8,
     sampleId: seededSteps.has(index) ? "mic-001" : null,
+    note: "C4",
     playbackRate: 1,
   }));
 }
@@ -347,6 +351,8 @@ export function createDefaultSongDocument(): SongDocument {
         id: "mic-001",
         name: "vox-hit",
         source: "mic",
+        baseNote: "C4",
+        detectedBaseNote: null,
         sampleRate: 11025,
         frameCount: 12,
         channels: 1,

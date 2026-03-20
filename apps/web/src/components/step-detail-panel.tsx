@@ -4,6 +4,8 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { AudioEngine } from "@/features/audio/audio-engine";
+import { getFrequencyForNote } from "@/features/audio/note-frequency";
+import type { EngineMode } from "@/features/song/pcm-mode";
 import type {
   NoiseTrack,
   PulseTrack,
@@ -102,6 +104,7 @@ export function StepDetailPanel({
       <SampleStepDetail
         accentColor={accentColor}
         defaultSampleId={defaultSampleId}
+        engineMode={song.meta.engineMode}
         engine={engine}
         onDeselect={onDeselect}
         onUpdate={(updates) => onUpdateSampleStep(selection.stepIndex, updates)}
@@ -419,6 +422,7 @@ function NoiseStepDetail({
 function SampleStepDetail({
   accentColor,
   defaultSampleId,
+  engineMode,
   engine,
   onDeselect,
   onUpdate,
@@ -429,6 +433,7 @@ function SampleStepDetail({
 }: {
   accentColor: string;
   defaultSampleId: string | null;
+  engineMode: EngineMode;
   engine: AudioEngine | null;
   onDeselect: () => void;
   onUpdate: (updates: SampleStepUpdates) => void;
@@ -439,6 +444,15 @@ function SampleStepDetail({
 }) {
   const step = track.steps[stepIndex];
   const selectedSample = step.sampleId === null ? null : samples.find((s) => s.id === step.sampleId) ?? null;
+  const previewSampleAtNote = (sampleId: string, baseNote: NoteValue, targetNote: NoteValue) => {
+    const playbackRate = getFrequencyForNote(targetNote) / getFrequencyForNote(baseNote);
+
+    engine?.previewSampleNote?.(sampleId, baseNote, targetNote);
+
+    if (typeof engine?.previewSampleNote !== "function") {
+      engine?.previewSampleTrigger(sampleId, playbackRate);
+    }
+  };
 
   const handleToggleEnabled = () => {
     if (step.enabled) {
@@ -451,6 +465,7 @@ function SampleStepDetail({
     onUpdate({
       enabled: true,
       sampleId: step.sampleId ?? defaultTrigger.sampleId,
+      note: (step.note as NoteValue) ?? defaultTrigger.note,
       playbackRate: step.playbackRate ?? defaultTrigger.playbackRate,
     });
   };
@@ -495,6 +510,11 @@ function SampleStepDetail({
                         : undefined
                     }
                     onMouseEnter={() => {
+                      if (engineMode === "inspired") {
+                        previewSampleAtNote(sample.id, sample.baseNote as NoteValue, step.note as NoteValue);
+                        return;
+                      }
+
                       engine?.previewSampleTrigger(sample.id, step.playbackRate);
                     }}
                     onClick={() => {
@@ -508,45 +528,66 @@ function SampleStepDetail({
             </div>
           </DetailField>
 
-          <DetailField label="Rate">
-            <div className="flex gap-1" role="group" aria-label={`${trackLabel} step ${stepIndex + 1} playback rate`}>
-              {samplePlaybackRateOptions.map((rate) => {
-                const isSelected = step.playbackRate === rate;
+          {engineMode === "inspired" ? (
+            <DetailField label="Note">
+              <NotePicker
+                accentColor={accentColor}
+                ariaLabel={`${trackLabel} step ${stepIndex + 1} note`}
+                disabled={!step.enabled || selectedSample === null}
+                selectedNote={step.note}
+                onHoverNote={(note) => {
+                  if (selectedSample === null) {
+                    return;
+                  }
 
-                return (
-                  <button
-                    key={rate}
-                    type="button"
-                    aria-label={`Set rate ${formatPlaybackRateLabel(rate)}`}
-                    aria-pressed={isSelected}
-                    disabled={!step.enabled}
-                    className={cn(
-                      "rounded-md border px-2 py-1 font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.1em] transition-all",
-                      isSelected
-                        ? "text-white"
-                        : "border-white/[0.06] bg-white/[0.02] text-white/50 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
-                      !step.enabled && "cursor-not-allowed opacity-30",
-                    )}
-                    style={
-                      isSelected
-                        ? { backgroundColor: `${accentColor}20`, borderColor: accentColor }
-                        : undefined
-                    }
-                    onMouseEnter={() => {
-                      if (step.sampleId !== null) {
-                        engine?.previewSampleTrigger(step.sampleId, rate);
+                  previewSampleAtNote(selectedSample.id, selectedSample.baseNote as NoteValue, note);
+                }}
+                onSelectNote={(note) => {
+                  onUpdate({ note });
+                }}
+              />
+            </DetailField>
+          ) : (
+            <DetailField label="Rate">
+              <div className="flex gap-1" role="group" aria-label={`${trackLabel} step ${stepIndex + 1} playback rate`}>
+                {samplePlaybackRateOptions.map((rate) => {
+                  const isSelected = step.playbackRate === rate;
+
+                  return (
+                    <button
+                      key={rate}
+                      type="button"
+                      aria-label={`Set rate ${formatPlaybackRateLabel(rate)}`}
+                      aria-pressed={isSelected}
+                      disabled={!step.enabled}
+                      className={cn(
+                        "rounded-md border px-2 py-1 font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.1em] transition-all",
+                        isSelected
+                          ? "text-white"
+                          : "border-white/[0.06] bg-white/[0.02] text-white/50 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+                        !step.enabled && "cursor-not-allowed opacity-30",
+                      )}
+                      style={
+                        isSelected
+                          ? { backgroundColor: `${accentColor}20`, borderColor: accentColor }
+                          : undefined
                       }
-                    }}
-                    onClick={() => {
-                      onUpdate({ playbackRate: rate });
-                    }}
-                  >
-                    {formatPlaybackRateLabel(rate)}
-                  </button>
-                );
-              })}
-            </div>
-          </DetailField>
+                      onMouseEnter={() => {
+                        if (step.sampleId !== null) {
+                          engine?.previewSampleTrigger(step.sampleId, rate);
+                        }
+                      }}
+                      onClick={() => {
+                        onUpdate({ playbackRate: rate });
+                      }}
+                    >
+                      {formatPlaybackRateLabel(rate)}
+                    </button>
+                  );
+                })}
+              </div>
+            </DetailField>
+          )}
 
           <DetailField label="Step Vol">
             <StepVolumeSlider
@@ -562,7 +603,9 @@ function SampleStepDetail({
 
           {selectedSample !== null ? (
             <div className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/30">
-              {selectedSample.name} {formatPlaybackRateLabel(step.playbackRate)}
+              {engineMode === "inspired"
+                ? `${selectedSample.name} ${selectedSample.baseNote} → ${step.note}`
+                : `${selectedSample.name} ${formatPlaybackRateLabel(step.playbackRate)}`}
             </div>
           ) : null}
         </div>

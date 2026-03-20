@@ -146,7 +146,9 @@ describe("song-pattern", () => {
     expect(serializeNoiseTrackArrangement(song.tracks.noise)).toBe(
       "1: short P3\n3: long P8\n5: short P3\n7: long P8\n9: short P3\n11: long P8\n13: short P3\n15: long P8",
     );
-    expect(serializeSampleTrackArrangement(song.tracks.sample)).toBe("8: mic-001@1\n16: mic-001@1");
+    expect(serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode)).toBe(
+      "8: mic-001>C4\n16: mic-001>C4",
+    );
   });
 
   it("parses ranged melodic arrangements, normalizes note casing, and ignores steps past the loop length", () => {
@@ -181,8 +183,8 @@ describe("song-pattern", () => {
     expect(result).toEqual({
       ok: true,
       entries: [
-        { stepIndex: 0, sampleId: "mic-001", playbackRate: 0.75 },
-        { stepIndex: 2, sampleId: "mic-001", playbackRate: 1.5 },
+        { stepIndex: 0, sampleId: "mic-001", note: "C4", playbackRate: 0.75 },
+        { stepIndex: 2, sampleId: "mic-001", note: "C4", playbackRate: 1.5 },
       ],
     });
   });
@@ -317,7 +319,7 @@ describe("song-pattern", () => {
       { stepIndex: 4, mode: "long", periodIndex: 12 },
     ]);
     const updatedSampleSong = replaceSampleTrackArrangement(song, [
-      { stepIndex: 1, sampleId: "mic-001", playbackRate: 0.75 },
+      { stepIndex: 1, sampleId: "mic-001", note: "D4", playbackRate: 0.75 },
     ]);
 
     expect(updatedNoiseSong.tracks.noise.steps[0]).toMatchObject({
@@ -335,6 +337,7 @@ describe("song-pattern", () => {
     expect(updatedSampleSong.tracks.sample.steps[1]).toMatchObject({
       enabled: true,
       sampleId: "mic-001",
+      note: "D4",
       playbackRate: 0.75,
     });
     expect(updatedSampleSong.tracks.sample.steps[7].enabled).toBe(false);
@@ -342,8 +345,8 @@ describe("song-pattern", () => {
 
   it("replaces enabled PCM step references for the active deck sample only", () => {
     const song = replaceSampleTrackArrangement(createDefaultSongDocument(), [
-      { stepIndex: 1, sampleId: "mic-001", playbackRate: 0.75 },
-      { stepIndex: 5, sampleId: "vox-hit-alt", playbackRate: 1.5 },
+      { stepIndex: 1, sampleId: "mic-001", note: "C4", playbackRate: 0.75 },
+      { stepIndex: 5, sampleId: "vox-hit-alt", note: "G4", playbackRate: 1.5 },
     ]);
     const songWithAltSample = {
       ...song,
@@ -362,11 +365,13 @@ describe("song-pattern", () => {
     expect(updatedSong.tracks.sample.steps[1]).toMatchObject({
       enabled: true,
       sampleId: "mic-002",
+      note: "C4",
       playbackRate: 0.75,
     });
     expect(updatedSong.tracks.sample.steps[5]).toMatchObject({
       enabled: true,
       sampleId: "vox-hit-alt",
+      note: "G4",
       playbackRate: 1.5,
     });
   });

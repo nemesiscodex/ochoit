@@ -1,4 +1,5 @@
-import type { SampleTrack, SerializedSampleAsset } from "@/features/song/song-document";
+import { getFrequencyForNote } from "@/features/audio/note-frequency";
+import type { SampleTrack, SerializedSampleAsset, SongDocument } from "@/features/song/song-document";
 
 const noteAttackSeconds = 0.001;
 const noteReleaseSeconds = 0.012;
@@ -23,6 +24,7 @@ function getSampleCacheKey(sample: SerializedSampleAsset) {
 export class SampleVoice {
   private track: SampleTrack | null = null;
   private sampleById = new Map<string, SerializedSampleAsset>();
+  private engineMode: SongDocument["meta"]["engineMode"] = "inspired";
   private readonly bufferByCacheKey = new Map<string, AudioBuffer>();
 
   constructor(
@@ -30,9 +32,14 @@ export class SampleVoice {
     private readonly output: AudioNode,
   ) {}
 
-  configure(track: SampleTrack, samples: SerializedSampleAsset[]) {
+  configure(
+    track: SampleTrack,
+    samples: SerializedSampleAsset[],
+    engineMode: SongDocument["meta"]["engineMode"],
+  ) {
     this.track = track;
     this.sampleById = new Map(samples.map((sample) => [sample.id, sample]));
+    this.engineMode = engineMode;
     this.bufferByCacheKey.clear();
   }
 
@@ -54,7 +61,7 @@ export class SampleVoice {
     }
 
     this.playSample(sample, {
-      playbackRate: step.playbackRate,
+      playbackRate: this.getPlaybackRate(step, sample),
       time,
       volume: step.volume,
     });
@@ -137,5 +144,13 @@ export class SampleVoice {
 
     source.start(options.time);
     source.stop(sampleEndTime + sourceStopPaddingSeconds);
+  }
+
+  private getPlaybackRate(step: SampleTrack["steps"][number], sample: SerializedSampleAsset) {
+    if (this.engineMode === "authentic") {
+      return step.playbackRate;
+    }
+
+    return getFrequencyForNote(step.note) / getFrequencyForNote(sample.baseNote);
   }
 }
