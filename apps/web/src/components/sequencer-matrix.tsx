@@ -4,6 +4,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { AudioEngine } from "@/features/audio/audio-engine";
+import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
 import { useTrackWaveform } from "@/features/audio/use-track-waveform";
 import {
@@ -303,6 +304,70 @@ function SequencerRow({
     onSelectStep(stepIndex);
   };
 
+  const handleStepHover = (stepIndex: number) => {
+    if (engine === null) {
+      return;
+    }
+
+    switch (track.kind) {
+      case "pulse":
+      case "triangle": {
+        const melodicState = getMelodicStepState(track, stepIndex);
+
+        if (melodicState.kind === "rest") {
+          return;
+        }
+
+        if (track.kind === "pulse") {
+          const sourceStep = track.steps[melodicState.kind === "hold" ? melodicState.startIndex : stepIndex];
+
+          engine.previewNote(track.id, melodicState.note, 120, sourceStep?.duty ?? 0.5);
+          return;
+        }
+
+        engine.previewNote(track.id, melodicState.note);
+        return;
+      }
+      case "noise": {
+        const step = track.steps[stepIndex];
+
+        if (!step.enabled) {
+          return;
+        }
+
+        engine.previewNoiseConfig(step.mode, step.periodIndex);
+        return;
+      }
+      case "sample": {
+        const step = track.steps[stepIndex];
+
+        if (!step.enabled || step.sampleId === null) {
+          return;
+        }
+
+        if (song.meta.engineMode === "authentic") {
+          engine.previewSampleTrigger(step.sampleId, step.playbackRate);
+          return;
+        }
+
+        const sample = samples.find((entry) => entry.id === step.sampleId);
+
+        if (sample === undefined) {
+          return;
+        }
+
+        engine.previewSampleNote?.(sample.id, sample.baseNote as NoteValue, step.note as NoteValue);
+
+        if (typeof engine.previewSampleNote !== "function") {
+          engine.previewSampleTrigger(
+            sample.id,
+            getFrequencyForNote(step.note as NoteValue) / getFrequencyForNote(sample.baseNote),
+          );
+        }
+      }
+    }
+  };
+
   return (
     <div
       className="oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]"
@@ -391,6 +456,7 @@ function SequencerRow({
           accentColor={waveformLineColorByTrackId[track.id]}
           engineMode={song.meta.engineMode}
           nextStep={nextStep}
+          onStepHover={handleStepHover}
           onStepClick={handleStepClick}
           playbackState={playbackState}
           samples={samples}
@@ -575,6 +641,7 @@ function CompactStepGrid({
   accentColor,
   engineMode,
   nextStep,
+  onStepHover,
   onStepClick,
   playbackState,
   samples,
@@ -585,6 +652,7 @@ function CompactStepGrid({
   accentColor: string;
   engineMode: SongDocument["meta"]["engineMode"];
   nextStep: number;
+  onStepHover: (stepIndex: number) => void;
   onStepClick: (stepIndex: number) => void;
   playbackState: "stopped" | "playing";
   samples: SongDocument["samples"];
@@ -613,6 +681,9 @@ function CompactStepGrid({
             isSelected={isSelected}
             label={cellData.label}
             volume={cellData.volume}
+            onHover={() => {
+              onStepHover(index);
+            }}
             onClick={() => {
               onStepClick(index);
             }}
@@ -638,6 +709,7 @@ function CompactStepCell({
   isSelected,
   label,
   volume,
+  onHover,
   onClick,
 }: {
   accentClassName: string;
@@ -652,6 +724,7 @@ function CompactStepCell({
   isSelected: boolean;
   label: string;
   volume: number;
+  onHover: () => void;
   onClick: () => void;
 }) {
   const isQuarterBoundary = index % 4 === 0;
@@ -677,6 +750,7 @@ function CompactStepCell({
         isSelected && "ring-2 ring-offset-0",
       )}
       style={isSelected ? { ["--tw-ring-color" as string]: accentColor } : undefined}
+      onMouseEnter={onHover}
       onClick={onClick}
     >
       <span className="text-[8px] leading-none text-white/30">{index + 1}</span>

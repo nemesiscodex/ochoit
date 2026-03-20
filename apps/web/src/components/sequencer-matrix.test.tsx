@@ -223,6 +223,63 @@ describe("sequencer-matrix", () => {
     expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001", 1);
   });
 
+  it("previews enabled sequencer steps on hover and ignores empty cells", () => {
+    const previewNote = vi.fn();
+    const previewNoiseConfig = vi.fn();
+    const previewSampleNote = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = {
+      ...song.tracks.pulse1.steps[0],
+      enabled: true,
+      length: 3,
+      duty: 0.125,
+      note: "C5",
+    };
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      previewNote,
+      previewNoiseConfig,
+      previewSampleNote,
+      previewSampleTrigger: vi.fn(),
+    } as unknown as AudioEngine;
+
+    renderMatrix({ engine, song });
+
+    fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.mouseEnter(screen.getByLabelText("Noise step 1"));
+    fireEvent.mouseEnter(screen.getByLabelText("PCM step 8"));
+    fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 4"));
+
+    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", 120, 0.125);
+    expect(previewNoiseConfig).toHaveBeenCalledWith("short", 3);
+    expect(previewSampleNote).toHaveBeenCalledWith("mic-001", "C4", "C4");
+    expect(previewNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses playback-rate preview for authentic PCM hover previews", () => {
+    const previewSampleTrigger = vi.fn();
+    const song = createDefaultSongDocument();
+    song.meta.engineMode = "authentic";
+    song.tracks.sample.steps[7] = {
+      ...song.tracks.sample.steps[7],
+      enabled: true,
+      playbackRate: 1.5,
+      sampleId: "mic-001",
+    };
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      previewNote: vi.fn(),
+      previewNoiseConfig: vi.fn(),
+      previewSampleTrigger,
+    } as unknown as AudioEngine;
+
+    renderMatrix({ engine, song });
+
+    fireEvent.mouseEnter(screen.getByLabelText("PCM step 8"));
+
+    expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001", 1.5);
+  });
+
   it("enables a disabled step on click and selects it", () => {
     const onUpdateMelodicStep = vi.fn();
 
