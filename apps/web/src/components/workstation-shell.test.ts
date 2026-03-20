@@ -1,10 +1,12 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkstationShell } from "@/components/workstation-shell";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
+import { createDefaultSongDocument } from "@/features/song/song-document";
+import { buildSongShareUrl, serializeSongShareText } from "@/features/song/song-share";
 import * as useAudioEngineModule from "@/features/audio/use-audio-engine";
 import * as sampleRecorderModule from "@/features/audio/sample-recorder";
 
@@ -58,10 +60,19 @@ function createUseSampleRecorderResult(
   };
 }
 
+function createWorkstationShellElement() {
+  return React.createElement(WorkstationShell);
+}
+
+function renderWorkstationShell() {
+  return render(createWorkstationShellElement());
+}
+
 describe("workstation-shell", () => {
   const mockUseAudioEngine = vi.mocked(useAudioEngineModule.useAudioEngine);
   const mockUseSampleRecorder = vi.mocked(sampleRecorderModule.useSampleRecorder);
   let latestRecorderOptions: Parameters<typeof sampleRecorderModule.useSampleRecorder>[0] | null = null;
+  let clipboardWriteText: ReturnType<typeof vi.fn<(value: string) => Promise<void>>>;
 
   beforeEach(() => {
     mockUseAudioEngine.mockReset();
@@ -73,10 +84,18 @@ describe("workstation-shell", () => {
 
       return createUseSampleRecorderResult();
     });
+    clipboardWriteText = vi.fn(async () => undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: clipboardWriteText,
+      },
+    });
+    window.history.replaceState({}, "", "/");
   });
 
   it("updates the bpm and loop length fields in the transport bar", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const bpmInput = screen.getByLabelText("BPM");
     const loopLengthInput = screen.getByLabelText("Loop Length");
@@ -92,7 +111,7 @@ describe("workstation-shell", () => {
     const stoppedResult = createUseAudioEngineResult("stopped");
     mockUseAudioEngine.mockReturnValue(stoppedResult);
 
-    const { rerender } = render(React.createElement(WorkstationShell));
+    const { rerender } = renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: /play/i }));
 
@@ -100,7 +119,7 @@ describe("workstation-shell", () => {
 
     const playingResult = createUseAudioEngineResult("playing");
     mockUseAudioEngine.mockReturnValue(playingResult);
-    rerender(React.createElement(WorkstationShell));
+    rerender(createWorkstationShellElement());
 
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
 
@@ -108,7 +127,7 @@ describe("workstation-shell", () => {
   });
 
   it("renders the full five-row sequencer matrix", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     expect(screen.getByRole("heading", { name: "Pulse I" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Pulse II" })).toBeTruthy();
@@ -119,15 +138,102 @@ describe("workstation-shell", () => {
   });
 
   it("surfaces the current inspired PCM behavior in the song info panel", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     expect(screen.getByText("Inspired PCM")).toBeTruthy();
     expect(screen.getByText(/PCM uses one-shot sample triggers with selectable playback rate\./i)).toBeTruthy();
     expect(screen.getByText(/Musical note mapping is intentionally off for this mode\./i)).toBeTruthy();
   });
 
+  it("loads a shared song from the url on mount", async () => {
+    const sharedSong = createDefaultSongDocument();
+    sharedSong.meta.name = "Link Tune";
+    sharedSong.transport.bpm = 172;
+
+    window.history.replaceState({}, "", buildSongShareUrl(window.location.href, sharedSong));
+
+    renderWorkstationShell();
+
+    await waitFor(() => {
+      expect(screen.getByText("Link Tune")).toBeTruthy();
+      expect(screen.getByText("172 bpm")).toBeTruthy();
+      expect(screen.getByText("Loaded shared song from the current link.")).toBeTruthy();
+    });
+  });
+
+  it("copies a share link and updates the current url", async () => {
+    renderWorkstationShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy share link" }));
+    });
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain("song=");
+    });
+
+    expect(clipboardWriteText).toHaveBeenCalledTimes(1);
+    expect(clipboardWriteText.mock.calls[0]?.[0]).toContain("#song=");
+    expect(screen.getByText("Share link copied to clipboard.")).toBeTruthy();
+  });
+
+  it("opens the share dsl editor and copies the current dsl text", async () => {
+    renderWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit share DSL" }));
+
+    const textarea = screen.getByLabelText("Share DSL text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected share DSL text to be a textarea.");
+    }
+
+    expect(textarea.value).toContain("!v=2;");
+    expect(textarea.value).toContain("=1;vol=");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy DSL" }));
+    });
+
+    expect(clipboardWriteText).toHaveBeenCalled();
+    expect(clipboardWriteText.mock.calls.at(-1)?.[0]).toContain("!v=2;");
+    expect(screen.getByText("Share DSL copied to clipboard.")).toBeTruthy();
+  });
+
+  it("applies pasted share dsl text to replace the current song", async () => {
+    const sharedSong = createDefaultSongDocument();
+    sharedSong.meta.name = "DSL Tune";
+    sharedSong.transport.bpm = 180;
+    sharedSong.tracks.pulse1.muted = true;
+
+    renderWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit share DSL" }));
+
+    const textarea = screen.getByLabelText("Share DSL text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected share DSL text to be a textarea.");
+    }
+
+    fireEvent.change(textarea, {
+      target: {
+        value: serializeSongShareText(sharedSong),
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply DSL" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("DSL Tune")).toBeTruthy();
+      expect(screen.getByText("180 bpm")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
+      expect(screen.getByText("Loaded song from share DSL.")).toBeTruthy();
+    });
+  });
+
   it("opens the voice text editor with the current arrangement", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
@@ -141,7 +247,7 @@ describe("workstation-shell", () => {
   });
 
   it("applies a pasted voice arrangement and ignores steps beyond the loop length", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
@@ -180,7 +286,7 @@ describe("workstation-shell", () => {
   });
 
   it("applies ranged melodic arrangements and renders held steps", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
@@ -216,7 +322,7 @@ describe("workstation-shell", () => {
   });
 
   it("describes the pulse text format with optional duty values", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
@@ -225,7 +331,7 @@ describe("workstation-shell", () => {
   });
 
   it("opens the noise trigger text editor with the current arrangement", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
 
@@ -241,7 +347,7 @@ describe("workstation-shell", () => {
   });
 
   it("applies pasted noise and PCM trigger text arrangements", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
 
@@ -311,7 +417,7 @@ describe("workstation-shell", () => {
   });
 
   it("describes the noise text format with explicit mode and period values", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
 
@@ -320,7 +426,7 @@ describe("workstation-shell", () => {
   });
 
   it("describes the PCM text format as trigger-plus-rate without note mapping", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
 
@@ -331,7 +437,7 @@ describe("workstation-shell", () => {
   });
 
   it("renders the sample deck sidebar", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     expect(screen.getByText("Sample Deck")).toBeTruthy();
     expect(screen.getByText("Song Info")).toBeTruthy();
@@ -339,7 +445,7 @@ describe("workstation-shell", () => {
   });
 
   it("moves the trim window while preserving the selected length", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const lengthFrameInput = screen.getByLabelText("Sample trim length frame");
     const windowFrameInput = screen.getByLabelText("Sample trim window frame");
@@ -367,7 +473,7 @@ describe("workstation-shell", () => {
   });
 
   it("toggles the mute state for a specific voice", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const muteButton = screen.getByRole("button", { name: "Mute Pulse I" });
 
@@ -377,7 +483,7 @@ describe("workstation-shell", () => {
   });
 
   it("updates per-voice volume from the row controls", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const pulseVolume = screen.getByLabelText("Pulse I volume");
 
@@ -392,7 +498,7 @@ describe("workstation-shell", () => {
   });
 
   it("updates pulse duty from the step detail panel", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
 
@@ -409,7 +515,7 @@ describe("workstation-shell", () => {
   });
 
   it("updates melodic steps from the detail panel controls", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     // Click disabled step 2 to enable + select
     fireEvent.click(screen.getByLabelText("Pulse I step 2"));
@@ -439,7 +545,7 @@ describe("workstation-shell", () => {
   });
 
   it("extends and shortens melodic step durations from the detail panel", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
 
@@ -455,7 +561,7 @@ describe("workstation-shell", () => {
   });
 
   it("updates the noise trigger controls from the detail panel", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     // Click disabled step 2 to enable + select
     fireEvent.click(screen.getByLabelText("Noise step 2"));
@@ -471,7 +577,7 @@ describe("workstation-shell", () => {
   });
 
   it("updates the noise rate and mode controls from the detail panel", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     fireEvent.click(screen.getByLabelText("Noise step 1"));
 
@@ -489,7 +595,7 @@ describe("workstation-shell", () => {
   });
 
   it("updates the PCM trigger controls from the detail panel", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     // Click disabled step 2 to enable + select
     fireEvent.click(screen.getByLabelText("PCM step 2"));
@@ -523,7 +629,7 @@ describe("workstation-shell", () => {
       });
     });
 
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const sidebar = screen.getByText("Sample Deck").closest("aside");
 
@@ -581,7 +687,7 @@ describe("workstation-shell", () => {
   });
 
   it("lets you load another sample from the deck list and delete clips", () => {
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const recording: RecordedSampleDraft = {
       asset: {
@@ -641,7 +747,7 @@ describe("workstation-shell", () => {
       initializeAudio,
     });
 
-    render(React.createElement(WorkstationShell));
+    renderWorkstationShell();
 
     const sidebar = screen.getByText("Sample Deck").closest("aside");
 

@@ -40,7 +40,7 @@ The intended user flow is:
 3. Press play and hear a looping 8-bit pattern.
 4. Watch each voice waveform animate in real time.
 5. Record a short PCM sample and place it on the sample lane.
-6. Save the song locally and continue iterating.
+6. Copy a shareable link and reopen the same song state from the URL.
 
 ## Main Systems
 
@@ -150,7 +150,7 @@ Recommended baseline architecture:
 - TypeScript for audio and UI models
 - Canvas for waveform rendering
 - Web Audio API plus AudioWorklet for synthesis and scheduling
-- localStorage first, with IndexedDB as a later upgrade if sample persistence needs more room
+- URL-hash sharing first, with heavier local persistence only if larger song libraries or longer sample archives need it later
 
 ## Non-Goals For The First Version
 
@@ -171,5 +171,5 @@ The project is on track when a user can:
 - hear distinct pulse, triangle, noise, and sample behavior
 - watch each voice waveform while the loop is playing
 - record and trim a short PCM sound
-- save and reload a song locally
+- copy a shareable song link and reload that song from the URL
 - understand whether the current song is using `Inspired` or `Authentic` playback rules

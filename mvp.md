@@ -29,7 +29,7 @@ The first playable version should ship in `Inspired mode` by default. `Authentic
 - live waveform rendering for all five rows
 - short microphone recording for the sample voice
 - basic trim controls for the recorded sample
-- local save/load of song state
+- shareable URL-hash save/load of song state
 - explicit `engineMode` behavior in the song model, even if the UI stays focused on `Inspired mode` for the first pass
 
 ### Excluded
@@ -50,7 +50,7 @@ The first playable version should ship in `Inspired mode` by default. `Authentic
 - As a user, I can record a short PCM sound with my microphone and trigger it from the sample row.
 - As a user, I can understand that the first version uses an `Inspired mode` sample workflow rather than strict NES-authentic PCM rules.
 - As a user, I can see a waveform for each voice while the sequence is playing.
-- As a user, I can save my current song locally and load it later.
+- As a user, I can copy a link for my current song and reopen it later from the URL.
 
 ## MVP UX
 
@@ -125,9 +125,9 @@ The follow-up `Authentic mode` should diverge from the MVP sample workflow in a 
 
 ### Persistence
 
-- save the song document to localStorage
-- reload the most recent saved project
-- keep the initial storage format simple and versioned
+- serialize the song document into a shareable URL hash
+- load the current song from the URL when a shared link is opened
+- keep the initial link format simple and versioned through the song document schema
 
 ## Suggested Data Shape
 
@@ -158,7 +158,7 @@ type StepEvent = {
 - Pulse and triangle rows can store and play fixed notes.
 - Noise and PCM rows can store and play step triggers.
 - The user can record, trim, and reuse a short PCM sample.
-- The user can save a song locally and reload it successfully after refresh.
+- The user can copy a song link and reload the same song successfully from the URL.
 - The product direction keeps `Inspired mode` and future `Authentic mode` behavior distinct in the design docs and data model, with `Inspired mode` PCM defined as trigger-plus-rate rather than note-mapped playback.
 - The product direction now defines `Authentic mode` as fixed-rate DPCM-style playback with converted sample assets and no arbitrary playback-rate control.
 
@@ -168,4 +168,4 @@ type StepEvent = {
 2. Add the remaining pulse, triangle, and noise voices.
 3. Build the transport and 16-step sequencer grid.
 4. Add the PCM recorder, trimming, and trigger lane.
-5. Add local persistence and general polish.
+5. Add shareable URL persistence and general polish.

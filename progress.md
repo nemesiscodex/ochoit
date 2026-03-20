@@ -30,7 +30,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Connect recorded PCM samples to the sample lane
 - [x] Decide `Inspired mode` PCM behavior, including whether samples can be mapped to musical notes
 - [x] Define `Authentic mode` PCM/DPCM constraints and how they differ from `Inspired mode`
-- [ ] Save and load songs from localStorage
+- [x] Save and load songs from a shareable URL hash
 - [ ] Test playback timing under normal UI interaction
 - [ ] Polish the editor UI for desktop and mobile
 - [ ] Decide when to introduce a more authentic NES emulation mode

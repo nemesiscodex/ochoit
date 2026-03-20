@@ -2,7 +2,7 @@ import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Mic, Pause, Play, Save, Square, Trash2, Upload, Zap } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
@@ -21,6 +21,12 @@ import {
   getPcmModeSummary,
   getSampleArrangementHelperCopy,
 } from "@/features/song/pcm-mode";
+import {
+  buildSongShareUrl,
+  parseSongShareText,
+  readSongShareFromHash,
+  serializeSongShareText,
+} from "@/features/song/song-share";
 import { updateTrackMute, updateTrackVolume } from "@/features/song/song-mixer";
 import {
   type MelodicStepUpdates,
@@ -65,10 +71,22 @@ type ArrangementEditorState = {
   error: string | null;
 };
 
+type ShareDslEditorState = {
+  draft: string;
+  error: string | null;
+};
+
+type ShareStatus = {
+  tone: "neutral" | "error";
+  message: string;
+};
+
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
+  const [shareDslEditor, setShareDslEditor] = useState<ShareDslEditorState | null>(null);
+  const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
   deckSampleIdRef.current = deckSampleId;
@@ -166,7 +184,61 @@ export function WorkstationShell() {
     setDeckSampleId((currentSampleId) => (currentSampleId === sampleId ? null : currentSampleId));
   };
 
+  const applySharedSongFromCurrentUrl = (emptyMessage: string | null) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const result = readSongShareFromHash(window.location.hash);
+
+    if (result.status === "empty") {
+      if (emptyMessage !== null) {
+        setShareStatus({
+          tone: "error",
+          message: emptyMessage,
+        });
+      }
+
+      return;
+    }
+
+    if (result.status === "invalid") {
+      setShareStatus({
+        tone: "error",
+        message: result.error,
+      });
+      return;
+    }
+
+    startTransition(() => {
+      setSong(result.song);
+      setArrangementEditor(null);
+      setDeckSampleId(result.song.samples.at(-1)?.id ?? null);
+    });
+    setShareStatus({
+      tone: "neutral",
+      message: "Loaded shared song from the current link.",
+    });
+  };
+
+  const copyShareLink = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const shareUrl = buildSongShareUrl(window.location.href, song);
+    window.history.replaceState(window.history.state, "", shareUrl);
+
+    const didCopy = await copyTextToClipboard(shareUrl);
+
+    setShareStatus({
+      tone: "neutral",
+      message: didCopy ? "Share link copied to clipboard." : "Share link is now in the address bar.",
+    });
+  };
+
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
+    setShareDslEditor(null);
     setArrangementEditor({
       trackId,
       draft: serializeMelodicTrackArrangement(song.tracks[trackId]),
@@ -175,6 +247,7 @@ export function WorkstationShell() {
   };
 
   const openTriggerTrackEditor = (trackId: TriggerTrackId) => {
+    setShareDslEditor(null);
     setArrangementEditor({
       trackId,
       draft:
@@ -187,6 +260,76 @@ export function WorkstationShell() {
 
   const closeMelodicTrackEditor = () => {
     setArrangementEditor(null);
+  };
+
+  const openShareDslEditor = () => {
+    setArrangementEditor(null);
+    setShareDslEditor({
+      draft: serializeSongShareText(song),
+      error: null,
+    });
+  };
+
+  const closeShareDslEditor = () => {
+    setShareDslEditor(null);
+  };
+
+  const updateShareDslDraft = (draft: string) => {
+    setShareDslEditor((currentEditor) => {
+      if (currentEditor === null) {
+        return null;
+      }
+
+      return {
+        draft,
+        error: null,
+      };
+    });
+  };
+
+  const copyShareDsl = async () => {
+    if (shareDslEditor === null) {
+      return;
+    }
+
+    const didCopy = await copyTextToClipboard(shareDslEditor.draft);
+
+    setShareStatus({
+      tone: "neutral",
+      message: didCopy ? "Share DSL copied to clipboard." : "Share DSL is ready to copy.",
+    });
+  };
+
+  const applyShareDsl = () => {
+    if (shareDslEditor === null) {
+      return;
+    }
+
+    try {
+      const nextSong = parseSongShareText(shareDslEditor.draft);
+
+      startTransition(() => {
+        setSong(nextSong);
+        setArrangementEditor(null);
+        setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
+      });
+      setShareDslEditor(null);
+      setShareStatus({
+        tone: "neutral",
+        message: "Loaded song from share DSL.",
+      });
+    } catch (error) {
+      setShareDslEditor((currentEditor) => {
+        if (currentEditor === null) {
+          return null;
+        }
+
+        return {
+          ...currentEditor,
+          error: error instanceof Error ? error.message : "Could not parse the share DSL.",
+        };
+      });
+    }
   };
 
   const updateArrangementDraft = (draft: string) => {
@@ -288,13 +431,14 @@ export function WorkstationShell() {
   };
 
   useEffect(() => {
-    if (arrangementEditor === null) {
+    if (arrangementEditor === null && shareDslEditor === null) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setArrangementEditor(null);
+        setShareDslEditor(null);
       }
     };
 
@@ -303,7 +447,7 @@ export function WorkstationShell() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [arrangementEditor]);
+  }, [arrangementEditor, shareDslEditor]);
 
   useEffect(() => {
     setDeckSampleId((currentSampleId) => {
@@ -318,6 +462,10 @@ export function WorkstationShell() {
       return song.samples.at(-1)?.id ?? null;
     });
   }, [song.samples]);
+
+  useEffect(() => {
+    applySharedSongFromCurrentUrl(null);
+  }, []);
 
   return (
     <main className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines">
@@ -353,9 +501,20 @@ export function WorkstationShell() {
               />
               <Button
                 variant="outline"
+                className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+                aria-label="Edit share DSL"
+                onClick={openShareDslEditor}
+              >
+                DSL
+              </Button>
+              <Button
+                variant="outline"
                 size="icon"
                 className="size-10 border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.07] hover:text-white"
-                aria-label="Save song"
+                aria-label="Copy share link"
+                onClick={() => {
+                  void copyShareLink();
+                }}
               >
                 <Save className="size-4" />
               </Button>
@@ -363,12 +522,28 @@ export function WorkstationShell() {
                 variant="outline"
                 size="icon"
                 className="size-10 border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.07] hover:text-white"
-                aria-label="Load song"
+                aria-label="Load song from link"
+                onClick={() => {
+                  applySharedSongFromCurrentUrl("No shared song was found in the current link.");
+                }}
               >
                 <Upload className="size-4" />
               </Button>
             </div>
           </div>
+
+          {shareStatus !== null ? (
+            <div
+              className={cn(
+                "rounded-md px-3 py-2 font-[var(--oc-mono)] text-xs",
+                shareStatus.tone === "error"
+                  ? "border border-[var(--oc-noise)]/30 bg-[var(--oc-noise)]/[0.06] text-[var(--oc-noise)]"
+                  : "border border-[var(--oc-play)]/25 bg-[var(--oc-play)]/10 text-[var(--oc-play)]",
+              )}
+            >
+              {shareStatus.message}
+            </div>
+          ) : null}
 
           {errorMessage !== null ? (
             <div className="rounded-md border border-[var(--oc-noise)]/30 bg-[var(--oc-noise)]/[0.06] px-3 py-2 font-[var(--oc-mono)] text-xs text-[var(--oc-noise)]">
@@ -431,6 +606,16 @@ export function WorkstationShell() {
           onChangeDraft={updateArrangementDraft}
           onClose={closeMelodicTrackEditor}
           onApply={applyArrangement}
+        />
+      ) : null}
+      {shareDslEditor !== null ? (
+        <ShareDslEditor
+          draft={shareDslEditor.draft}
+          error={shareDslEditor.error}
+          onApply={applyShareDsl}
+          onChangeDraft={updateShareDslDraft}
+          onClose={closeShareDslEditor}
+          onCopy={copyShareDsl}
         />
       ) : null}
     </main>
@@ -924,6 +1109,20 @@ function formatSampleDurationLabel(durationMs: number) {
   return `${(Math.max(0, durationMs) / 1000).toFixed(2)}s`;
 }
 
+async function copyTextToClipboard(value: string) {
+  if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(value);
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /* ─────────── Song Metadata ─────────── */
 
 function SongMeta({
@@ -967,6 +1166,92 @@ function MetaRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2 border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0">
       <span className="uppercase tracking-[0.18em] text-white/30">{label}</span>
       <span className="font-medium text-white/70">{value}</span>
+    </div>
+  );
+}
+
+function ShareDslEditor({
+  draft,
+  error,
+  onApply,
+  onChangeDraft,
+  onClose,
+  onCopy,
+}: {
+  draft: string;
+  error: string | null;
+  onApply: () => void;
+  onChangeDraft: (draft: string) => void;
+  onClose: () => void;
+  onCopy: () => Promise<void>;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/72 px-4 py-10 backdrop-blur-sm">
+      <div className="w-full max-w-4xl rounded-xl border border-white/[0.08] bg-[var(--oc-surface)] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-[var(--oc-mono)] text-sm font-semibold uppercase tracking-[0.18em] text-white">
+              Share DSL
+            </h2>
+            <p className="mt-2 max-w-3xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/45">
+              Full compact song DSL for share links. Copy it as plain text or paste an edited DSL and apply it to replace the current song.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
+
+        <div className="mt-4 rounded-lg border border-white/[0.06] bg-black/30 p-3">
+          <label
+            htmlFor="share-dsl-textarea"
+            className="mb-2 block font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35"
+          >
+            Share DSL Text
+          </label>
+          <textarea
+            id="share-dsl-textarea"
+            aria-label="Share DSL text"
+            value={draft}
+            spellCheck={false}
+            className="h-[360px] w-full resize-none rounded-md border border-white/[0.08] bg-[#07080e] px-3 py-3 font-[var(--oc-mono)] text-[11px] leading-6 text-white outline-none focus:border-[var(--oc-accent)]/45"
+            onChange={(event) => {
+              onChangeDraft(event.currentTarget.value);
+            }}
+          />
+        </div>
+
+        {error !== null ? (
+          <div className="mt-4 rounded-md border border-[var(--oc-noise)]/30 bg-[var(--oc-noise)]/[0.06] px-3 py-2 font-[var(--oc-mono)] text-xs text-[var(--oc-noise)]">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            onClick={() => {
+              void onCopy();
+            }}
+          >
+            Copy DSL
+          </Button>
+          <Button
+            type="button"
+            className="bg-[var(--oc-accent)] px-4 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-[var(--oc-accent)]/85"
+            onClick={onApply}
+          >
+            Apply DSL
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
