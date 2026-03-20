@@ -37,7 +37,7 @@ import {
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
-import { NoiseTriggerPicker, SampleTriggerPicker } from "@/components/trigger-picker";
+import { NoiseTriggerPicker, PulseDutyPicker, SampleTriggerPicker } from "@/components/trigger-picker";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
@@ -386,6 +386,7 @@ function MelodicStepGrid({
         const melodicStepState = getMelodicStepState(track, index);
         const isHeldStep = melodicStepState.kind === "hold";
         const maxLength = melodicStepState.kind === "start" ? getMelodicTrackMaxLength(track, index) : 1;
+        const pulseStep = track.kind === "pulse" ? track.steps[index] : null;
 
         return (
           <div
@@ -464,6 +465,20 @@ function MelodicStepGrid({
                     engine?.previewNote(track.id, note);
                   }}
                 />
+
+                {pulseStep !== null ? (
+                  <div className="mt-1">
+                    <PulseDutyPicker
+                      ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} duty cycle`}
+                      accentColor={accentColor}
+                      disabled={!step.enabled}
+                      selectedDuty={pulseStep.duty}
+                      onSelectDuty={(duty) => {
+                        onUpdateMelodicStep(track.id, index, { duty });
+                      }}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="mt-1 flex items-center gap-1">
                   <Button

@@ -17,6 +17,7 @@ const defaultMelodicStepLength = 1;
 type NoteName = (typeof noteNames)[number];
 type NoteOctave = (typeof noteOctaves)[number];
 type MelodicTrack = PulseTrack | TriangleTrack;
+export type PulseDutyValue = PulseTrack["steps"][number]["duty"];
 
 type ParsedArrangementLine =
   | {
@@ -41,6 +42,7 @@ export type MelodicStepUpdates = {
   enabled?: boolean;
   note?: NoteValue;
   length?: number;
+  duty?: PulseDutyValue;
 };
 
 export type NoiseTriggerPresetId =
@@ -152,6 +154,7 @@ export const noiseTriggerPresets = [
 ] as const satisfies readonly NoiseTriggerPreset[];
 
 export const samplePlaybackRateOptions = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+export const pulseDutyOptions = [0.125, 0.25, 0.5, 0.75] as const satisfies readonly PulseDutyValue[];
 
 const arrangementLinePattern = /^(\d+)\s*:\s*(.+)$/;
 const melodicArrangementLinePattern = /^(\d+)(?:\s*-\s*(\d+))?\s*:\s*(.+)$/;
@@ -639,6 +642,16 @@ export function formatPlaybackRateLabel(playbackRate: number) {
   return `${formatSamplePlaybackRate(playbackRate)}x`;
 }
 
+export function formatPulseDutyLabel(duty: PulseDutyValue) {
+  const dutyPercent = duty * 100;
+
+  if (Number.isInteger(dutyPercent)) {
+    return `${dutyPercent}%`;
+  }
+
+  return `${dutyPercent.toFixed(1)}%`;
+}
+
 function updateMelodicTrack<TTrack extends MelodicTrack>(
   track: TTrack,
   stepIndex: number,
@@ -653,7 +666,7 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
     }
 
     const nextEntries = entries.filter((entry) => entry.stepIndex !== stepIndex);
-    return buildMelodicTrack(track, nextEntries);
+    return applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries));
   }
 
   if (existingEntryIndex !== -1) {
@@ -672,7 +685,7 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
       };
     });
 
-    return buildMelodicTrack(track, nextEntries);
+    return applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries));
   }
 
   if (updates.enabled !== true) {
@@ -702,7 +715,7 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
         : clampMelodicStepLength(updates.length, stepIndex, track.steps.length),
   });
 
-  return buildMelodicTrack(track, nextEntries);
+  return applyPulseDutyUpdate(track, stepIndex, updates.duty, buildMelodicTrack(track, nextEntries));
 }
 
 function buildMelodicTrack<TTrack extends MelodicTrack>(
@@ -748,6 +761,37 @@ function buildMelodicTrack<TTrack extends MelodicTrack>(
   return {
     ...track,
     steps,
+  };
+}
+
+function applyPulseDutyUpdate<TTrack extends MelodicTrack>(
+  previousTrack: TTrack,
+  stepIndex: number,
+  duty: PulseDutyValue | undefined,
+  nextTrack: TTrack,
+) {
+  if (duty === undefined || previousTrack.kind !== "pulse") {
+    return nextTrack;
+  }
+
+  const step = nextTrack.steps[stepIndex];
+
+  if (step === undefined || !step.enabled) {
+    return nextTrack;
+  }
+
+  return {
+    ...nextTrack,
+    steps: nextTrack.steps.map((entry, index) => {
+      if (index !== stepIndex) {
+        return entry;
+      }
+
+      return {
+        ...entry,
+        duty,
+      };
+    }),
   };
 }
 

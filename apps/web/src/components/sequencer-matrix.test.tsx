@@ -100,6 +100,31 @@ describe("sequencer-matrix", () => {
     expect(onUpdateTrackVolume).toHaveBeenCalledWith("pulse1", 0.23);
   });
 
+  it("calls the melodic step update callback for pulse duty changes", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    render(
+      <SequencerMatrix
+        engine={null}
+        onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
+        onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
+        onUpdateMelodicStep={onUpdateMelodicStep}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1 duty cycle"));
+    fireEvent.click(screen.getByRole("button", { name: "Select pulse duty 75%" }));
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 0, { duty: 0.75 });
+  });
+
   it("calls the melodic step update callback for pulse and triangle note editing", () => {
     const onUpdateMelodicStep = vi.fn();
 

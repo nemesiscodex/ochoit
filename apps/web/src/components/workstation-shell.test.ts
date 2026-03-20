@@ -239,6 +239,23 @@ describe("workstation-shell", () => {
     expect(screen.getByText("23%")).toBeTruthy();
   });
 
+  it("updates pulse duty from the sequencer controls", () => {
+    render(React.createElement(WorkstationShell));
+
+    const pulseDuty = screen.getByLabelText("Pulse I step 1 duty cycle");
+
+    if (!(pulseDuty instanceof HTMLButtonElement)) {
+      throw new Error("Expected Pulse I step 1 duty cycle to be a button.");
+    }
+
+    expect(pulseDuty.textContent).toBe("12.5%");
+
+    fireEvent.click(pulseDuty);
+    fireEvent.click(screen.getByRole("button", { name: "Select pulse duty 75%" }));
+
+    expect(screen.getByLabelText("Pulse I step 1 duty cycle").textContent).toBe("75%");
+  });
+
   it("updates melodic steps from the note-entry controls", () => {
     render(React.createElement(WorkstationShell));
 

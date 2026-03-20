@@ -5,10 +5,13 @@ import { createPortal } from "react-dom";
 import type { SerializedSampleAsset } from "@/features/song/song-document";
 import {
   formatPlaybackRateLabel,
+  formatPulseDutyLabel,
   getNoiseTriggerPresetById,
   noiseTriggerPresets,
+  pulseDutyOptions,
   samplePlaybackRateOptions,
   type NoiseTriggerPresetId,
+  type PulseDutyValue,
 } from "@/features/song/song-pattern";
 
 type PanelPosition = {
@@ -47,6 +50,14 @@ export type SampleTriggerPickerProps = {
   onSelectTrigger: (trigger: { sampleId: string; playbackRate: number }) => void;
 };
 
+export type PulseDutyPickerProps = {
+  ariaLabel: string;
+  accentColor: string;
+  disabled?: boolean;
+  selectedDuty: PulseDutyValue;
+  onSelectDuty: (duty: PulseDutyValue) => void;
+};
+
 const noisePanelDimensions = {
   width: 420,
   height: 292,
@@ -55,6 +66,11 @@ const noisePanelDimensions = {
 const samplePanelDimensions = {
   width: 520,
   height: 356,
+} as const;
+
+const pulseDutyPanelDimensions = {
+  width: 360,
+  height: 168,
 } as const;
 
 export function NoiseTriggerPicker({
@@ -264,6 +280,94 @@ export function SampleTriggerPicker({
                     })}
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </PickerFrame>
+      ) : null}
+    </>
+  );
+}
+
+export function PulseDutyPicker({
+  ariaLabel,
+  accentColor,
+  disabled = false,
+  selectedDuty,
+  onSelectDuty,
+}: PulseDutyPickerProps) {
+  const { closePicker, isOpen, openPicker, panelPosition, triggerRef } = useFloatingPicker(
+    disabled,
+    pulseDutyPanelDimensions.width,
+    pulseDutyPanelDimensions.height,
+  );
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={isOpen}
+        disabled={disabled}
+        className={cn(
+          "flex h-4 w-full items-center justify-center rounded-sm border border-white/[0.08] bg-[var(--oc-bg)] px-1 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.12em] text-white/75 transition-all",
+          "hover:border-white/20 hover:bg-white/[0.04] hover:text-white",
+          "focus-visible:border-white/30 focus-visible:outline-none",
+          disabled && "cursor-not-allowed opacity-30",
+          isOpen && "border-white/25 bg-white/[0.06] text-white",
+        )}
+        onClick={openPicker}
+      >
+        {formatPulseDutyLabel(selectedDuty)}
+      </button>
+
+      {isOpen ? (
+        <PickerFrame
+          accentColor={accentColor}
+          ariaLabel="Pulse duty picker"
+          panelPosition={panelPosition}
+          panelWidth={pulseDutyPanelDimensions.width}
+          title="Pulse Duty"
+          valueLabel={formatPulseDutyLabel(selectedDuty)}
+          onClose={closePicker}
+        >
+          <div className="grid grid-cols-2 gap-2 p-3">
+            {pulseDutyOptions.map((duty) => {
+              const isSelected = duty === selectedDuty;
+
+              return (
+                <button
+                  key={duty}
+                  type="button"
+                  aria-label={`Select pulse duty ${formatPulseDutyLabel(duty)}`}
+                  className={cn(
+                    "rounded-md border px-3 py-3 text-left transition-all",
+                    isSelected
+                      ? "text-white shadow-sm"
+                      : "border-white/[0.06] bg-white/[0.02] text-white/70 hover:border-white/[0.14] hover:bg-white/[0.05]",
+                  )}
+                  style={
+                    isSelected
+                      ? {
+                          backgroundColor: `${accentColor}18`,
+                          borderColor: accentColor,
+                          boxShadow: `0 0 12px ${accentColor}22`,
+                        }
+                      : undefined
+                  }
+                  onClick={() => {
+                    onSelectDuty(duty);
+                    closePicker();
+                  }}
+                >
+                  <div className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.14em]">
+                    {formatPulseDutyLabel(duty)}
+                  </div>
+                  <div className="mt-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/35">
+                    Pulse width
+                  </div>
+                </button>
               );
             })}
           </div>

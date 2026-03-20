@@ -23,7 +23,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Add note entry UI for pulse and triangle voices
 - [x] Add trigger UI for noise and PCM voices
 - [x] Add per-voice mute and volume controls
-- [ ] Add duty cycle controls for pulse voices
+- [x] Add duty cycle controls for pulse voices
 - [ ] Add noise rate or mode controls
 - [ ] Add microphone permission and recording flow
 - [ ] Add sample preview and trim controls

@@ -47,6 +47,21 @@ describe("song-pattern", () => {
     expect(updatedSong.tracks.noise).toEqual(song.tracks.noise);
   });
 
+  it("updates pulse duty without affecting other melodic tracks", () => {
+    const song = createDefaultSongDocument();
+    const updatedSong = updateMelodicTrackStep(song, "pulse1", 0, {
+      duty: 0.75,
+    });
+
+    expect(updatedSong).not.toBe(song);
+    expect(updatedSong.tracks.pulse1.steps[0]).toMatchObject({
+      ...song.tracks.pulse1.steps[0],
+      duty: 0.75,
+    });
+    expect(updatedSong.tracks.pulse2).toEqual(song.tracks.pulse2);
+    expect(updatedSong.tracks.triangle).toEqual(song.tracks.triangle);
+  });
+
   it("starts a new melodic note by truncating the previous held note", () => {
     const song = createDefaultSongDocument();
     const sustainedSong = updateMelodicTrackStep(song, "pulse1", 0, { length: 4 });
