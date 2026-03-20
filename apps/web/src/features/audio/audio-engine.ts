@@ -5,7 +5,7 @@ import { PulseVoice } from "@/features/audio/pulse-voice";
 import { SampleVoice } from "@/features/audio/sample-voice";
 import { TriangleVoice } from "@/features/audio/triangle-voice";
 import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
-import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue } from "@/features/song/song-pattern";
+import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue, type PulseDutyValue } from "@/features/song/song-pattern";
 
 export type AudioEngineState = AudioContextState | "closed";
 
@@ -17,10 +17,6 @@ export type VoiceBus = {
 };
 
 const analyserFftSize = 1024;
-
-function getPreviewOscillatorType(trackId: MelodicTrackId): OscillatorType {
-  return trackId === "triangle" ? "triangle" : "square";
-}
 
 export class AudioEngine {
   readonly context: AudioContext;
@@ -187,8 +183,18 @@ export class AudioEngine {
    * Play a short preview tone at the given note.
    * Used for hover-preview in the note picker grid.
    */
-  previewNote(trackId: MelodicTrackId, note: NoteValue, durationMs = 120) {
+  previewNote(trackId: MelodicTrackId, note: NoteValue, durationMs = 120, duty: PulseDutyValue = 0.5) {
     if (this.context.state !== "running") {
+      return;
+    }
+
+    if (trackId === "pulse1") {
+      this.pulseVoice1.previewNote(note, duty, durationMs);
+      return;
+    }
+
+    if (trackId === "pulse2") {
+      this.pulseVoice2.previewNote(note, duty, durationMs);
       return;
     }
 
@@ -201,7 +207,7 @@ export class AudioEngine {
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
 
-    oscillator.type = getPreviewOscillatorType(trackId);
+    oscillator.type = "triangle";
     oscillator.frequency.setValueAtTime(getFrequencyForNote(note), now);
 
     gain.gain.setValueAtTime(0, now);
@@ -237,6 +243,21 @@ export class AudioEngine {
         volume: 0.78,
         mode: preset.mode,
         periodIndex: preset.periodIndex,
+      },
+      durationMs,
+    );
+  }
+
+  previewNoiseConfig(mode: SongDocument["tracks"]["noise"]["steps"][number]["mode"], periodIndex: number, durationMs = 120) {
+    if (this.context.state !== "running") {
+      return;
+    }
+
+    this.noiseVoice.previewStep(
+      {
+        volume: 0.78,
+        mode,
+        periodIndex,
       },
       durationMs,
     );

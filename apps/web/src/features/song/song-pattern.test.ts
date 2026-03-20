@@ -85,6 +85,11 @@ describe("song-pattern", () => {
   it("updates noise and sample steps immutably", () => {
     const song = createDefaultSongDocument();
     const noiseSong = updateNoiseTrackStep(song, 1, { enabled: true, presetId: "hat" });
+    const customNoiseSong = updateNoiseTrackStep(song, 2, {
+      enabled: true,
+      mode: "long",
+      periodIndex: 12,
+    });
     const sampleSong = updateSampleTrackStep(song, 6, {
       enabled: true,
       sampleId: "mic-001",
@@ -97,6 +102,12 @@ describe("song-pattern", () => {
       periodIndex: 1,
     });
     expect(noiseSong.tracks.sample).toEqual(song.tracks.sample);
+    expect(customNoiseSong.tracks.noise.steps[2]).toMatchObject({
+      enabled: true,
+      mode: "long",
+      periodIndex: 12,
+    });
+    expect(customNoiseSong.tracks.sample).toEqual(song.tracks.sample);
     expect(sampleSong.tracks.sample.steps[6]).toMatchObject({
       enabled: true,
       sampleId: "mic-001",
@@ -132,7 +143,7 @@ describe("song-pattern", () => {
     const song = createDefaultSongDocument();
 
     expect(serializeNoiseTrackArrangement(song.tracks.noise)).toBe(
-      "1: snare\n3: hiss\n5: snare\n7: hiss\n9: snare\n11: hiss\n13: snare\n15: hiss",
+      "1: short P3\n3: long P8\n5: short P3\n7: long P8\n9: short P3\n11: long P8\n13: short P3\n15: long P8",
     );
     expect(serializeSampleTrackArrangement(song.tracks.sample)).toBe("8: mic-001@1\n16: mic-001@1");
   });
@@ -149,14 +160,15 @@ describe("song-pattern", () => {
     });
   });
 
-  it("parses a pasted noise arrangement and ignores steps past the loop length", () => {
-    const result = parseNoiseTrackArrangement("1: hat\n3: crash\n17: snare", 16);
+  it("parses noise text arrangements with explicit configs or preset aliases", () => {
+    const result = parseNoiseTrackArrangement("1: short P1\n3: long P12\n5: hat\n17: snare", 16);
 
     expect(result).toEqual({
       ok: true,
       entries: [
-        { stepIndex: 0, presetId: "hat" },
-        { stepIndex: 2, presetId: "crash" },
+        { stepIndex: 0, mode: "short", periodIndex: 1 },
+        { stepIndex: 2, mode: "long", periodIndex: 12 },
+        { stepIndex: 4, mode: "short", periodIndex: 1 },
       ],
     });
   });
@@ -197,7 +209,12 @@ describe("song-pattern", () => {
     });
     expect(parseNoiseTrackArrangement("1: laser", 16)).toEqual({
       ok: false,
-      error: "Line 1 has an unknown noise trigger. Use one of: tick, hat, snare, burst, shaker, hiss, crash, rumble.",
+      error:
+        'Line 1 has an invalid noise trigger. Use "short P3", "long P12", or a preset id: tick, hat, snare, burst, shaker, hiss, crash, rumble.',
+    });
+    expect(parseNoiseTrackArrangement("1: short P16", 16)).toEqual({
+      ok: false,
+      error: 'Line 1 has an unsupported noise period. Use "P0" through "P15".',
     });
   });
 
@@ -295,8 +312,8 @@ describe("song-pattern", () => {
   it("replaces noise and sample arrangements and clears unspecified steps", () => {
     const song = createDefaultSongDocument();
     const updatedNoiseSong = replaceNoiseTrackArrangement(song, [
-      { stepIndex: 0, presetId: "hat" },
-      { stepIndex: 4, presetId: "crash" },
+      { stepIndex: 0, mode: "short", periodIndex: 1 },
+      { stepIndex: 4, mode: "long", periodIndex: 12 },
     ]);
     const updatedSampleSong = replaceSampleTrackArrangement(song, [
       { stepIndex: 1, sampleId: "mic-001", playbackRate: 0.75 },

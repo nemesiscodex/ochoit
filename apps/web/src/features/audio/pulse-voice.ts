@@ -62,34 +62,12 @@ export class PulseVoice {
       return;
     }
 
-    const source = this.context.createBufferSource();
-    const gain = this.context.createGain();
-    const buffer = this.getWaveBuffer(step.duty);
     const noteDuration = Math.max(this.stepDuration * step.length - noteAttackSeconds, noteAttackSeconds);
-    const noteEndTime = time + noteDuration;
-    const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
-    const playbackRate = (getFrequencyForNote(step.note) * buffer.length) / buffer.sampleRate;
+    this.playNote(step.note, step.duty, step.volume, time, noteDuration);
+  }
 
-    source.buffer = buffer;
-    source.loop = true;
-    source.playbackRate.setValueAtTime(playbackRate, time);
-
-    gain.gain.cancelScheduledValues(time);
-    gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(step.volume, time + noteAttackSeconds);
-    gain.gain.setValueAtTime(step.volume, releaseStartTime);
-    gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
-
-    source.connect(gain);
-    gain.connect(this.output);
-
-    source.onended = () => {
-      source.disconnect();
-      gain.disconnect();
-    };
-
-    source.start(time);
-    source.stop(noteEndTime + sourceStopPaddingSeconds);
+  previewNote(note: string, duty: PulseDuty, durationMs = 120, volume = 0.25) {
+    this.playNote(note, duty, volume, this.context.currentTime, durationMs / 1000);
   }
 
   private getWaveBuffer(duty: PulseDuty) {
@@ -104,5 +82,36 @@ export class PulseVoice {
     channel.set(createPulseCycle(duty, pulseCycleFrameCount));
     this.waveBufferByDuty.set(duty, buffer);
     return buffer;
+  }
+
+  private playNote(note: string, duty: PulseDuty, volume: number, time: number, durationSeconds: number) {
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    const buffer = this.getWaveBuffer(duty);
+    const noteDuration = Math.max(durationSeconds, noteAttackSeconds);
+    const noteEndTime = time + noteDuration;
+    const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
+    const playbackRate = (getFrequencyForNote(note) * buffer.length) / buffer.sampleRate;
+
+    source.buffer = buffer;
+    source.loop = true;
+    source.playbackRate.setValueAtTime(playbackRate, time);
+
+    gain.gain.cancelScheduledValues(time);
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(volume, time + noteAttackSeconds);
+    gain.gain.setValueAtTime(volume, releaseStartTime);
+    gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
+
+    source.connect(gain);
+    gain.connect(this.output);
+
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+
+    source.start(time);
+    source.stop(noteEndTime + sourceStopPaddingSeconds);
   }
 }

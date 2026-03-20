@@ -2,9 +2,10 @@ import { cn } from "@ochoit/ui/lib/utils";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import type { SerializedSampleAsset } from "@/features/song/song-document";
+import type { NoiseTrack, SerializedSampleAsset } from "@/features/song/song-document";
 import {
   formatPlaybackRateLabel,
+  formatNoiseConfigLabel,
   formatPulseDutyLabel,
   getNoiseTriggerPresetById,
   noiseTriggerPresets,
@@ -50,11 +51,22 @@ export type SampleTriggerPickerProps = {
   onSelectTrigger: (trigger: { sampleId: string; playbackRate: number }) => void;
 };
 
+export type NoiseConfigPickerProps = {
+  ariaLabel: string;
+  accentColor: string;
+  disabled?: boolean;
+  selectedMode: NoiseTrack["steps"][number]["mode"];
+  selectedPeriodIndex: NoiseTrack["steps"][number]["periodIndex"];
+  onHoverConfig?: (config: Pick<NoiseTrack["steps"][number], "mode" | "periodIndex">) => void;
+  onSelectConfig: (config: Pick<NoiseTrack["steps"][number], "mode" | "periodIndex">) => void;
+};
+
 export type PulseDutyPickerProps = {
   ariaLabel: string;
   accentColor: string;
   disabled?: boolean;
   selectedDuty: PulseDutyValue;
+  onHoverDuty?: (duty: PulseDutyValue) => void;
   onSelectDuty: (duty: PulseDutyValue) => void;
 };
 
@@ -72,6 +84,14 @@ const pulseDutyPanelDimensions = {
   width: 360,
   height: 168,
 } as const;
+
+const noiseConfigPanelDimensions = {
+  width: 420,
+  height: 312,
+} as const;
+
+const noiseModes = ["long", "short"] as const satisfies readonly NoiseTrack["steps"][number]["mode"][];
+const noisePeriodOptions = Array.from({ length: 16 }, (_, index) => index);
 
 export function NoiseTriggerPicker({
   ariaLabel,
@@ -289,11 +309,119 @@ export function SampleTriggerPicker({
   );
 }
 
+export function NoiseConfigPicker({
+  ariaLabel,
+  accentColor,
+  disabled = false,
+  selectedMode,
+  selectedPeriodIndex,
+  onHoverConfig,
+  onSelectConfig,
+}: NoiseConfigPickerProps) {
+  const { closePicker, isOpen, openPicker, panelPosition, triggerRef } = useFloatingPicker(
+    disabled,
+    noiseConfigPanelDimensions.width,
+    noiseConfigPanelDimensions.height,
+  );
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={isOpen}
+        disabled={disabled}
+        className={cn(
+          "flex h-4 w-full items-center justify-center rounded-sm border border-white/[0.08] bg-[var(--oc-bg)] px-1 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.12em] text-white/75 transition-all",
+          "hover:border-white/20 hover:bg-white/[0.04] hover:text-white",
+          "focus-visible:border-white/30 focus-visible:outline-none",
+          disabled && "cursor-not-allowed opacity-30",
+          isOpen && "border-white/25 bg-white/[0.06] text-white",
+        )}
+        onClick={openPicker}
+      >
+        {formatNoiseConfigLabel(selectedMode, selectedPeriodIndex)}
+      </button>
+
+      {isOpen ? (
+        <PickerFrame
+          accentColor={accentColor}
+          ariaLabel="Noise config picker"
+          panelPosition={panelPosition}
+          panelWidth={noiseConfigPanelDimensions.width}
+          title="Noise Rate / Mode"
+          valueLabel={formatNoiseConfigLabel(selectedMode, selectedPeriodIndex)}
+          onClose={closePicker}
+        >
+          <div className="flex max-h-[240px] flex-col gap-3 overflow-auto p-3">
+            {noiseModes.map((mode) => (
+              <div key={mode}>
+                <div className="mb-2 flex items-center justify-between border-b border-white/[0.06] pb-1">
+                  <span className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-white/32">
+                    {mode} mode
+                  </span>
+                  <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/20">
+                    {mode === "long" ? "top bank" : "bottom bank"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {noisePeriodOptions.map((periodIndex) => {
+                    const isSelected = mode === selectedMode && periodIndex === selectedPeriodIndex;
+
+                    return (
+                      <button
+                        key={`${mode}-${periodIndex}`}
+                        type="button"
+                        aria-label={`Select noise config ${formatNoiseConfigLabel(mode, periodIndex)}`}
+                        className={cn(
+                          "rounded-md border px-2 py-2 text-left transition-all",
+                          isSelected
+                            ? "text-white shadow-sm"
+                            : "border-white/[0.06] bg-white/[0.02] text-white/70 hover:border-white/[0.14] hover:bg-white/[0.05]",
+                        )}
+                        style={
+                          isSelected
+                            ? {
+                                backgroundColor: `${accentColor}18`,
+                                borderColor: accentColor,
+                                boxShadow: `0 0 12px ${accentColor}22`,
+                              }
+                            : undefined
+                        }
+                        onMouseEnter={() => {
+                          onHoverConfig?.({ mode, periodIndex });
+                        }}
+                        onClick={() => {
+                          onSelectConfig({ mode, periodIndex });
+                          closePicker();
+                        }}
+                      >
+                        <div className="font-[var(--oc-mono)] text-[12px] font-bold uppercase tracking-[0.08em] text-white">
+                          P{periodIndex}
+                        </div>
+                        <div className="mt-1 font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/35">
+                          {mode}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </PickerFrame>
+      ) : null}
+    </>
+  );
+}
+
 export function PulseDutyPicker({
   ariaLabel,
   accentColor,
   disabled = false,
   selectedDuty,
+  onHoverDuty,
   onSelectDuty,
 }: PulseDutyPickerProps) {
   const { closePicker, isOpen, openPicker, panelPosition, triggerRef } = useFloatingPicker(
@@ -359,6 +487,9 @@ export function PulseDutyPicker({
                   onClick={() => {
                     onSelectDuty(duty);
                     closePicker();
+                  }}
+                  onMouseEnter={() => {
+                    onHoverDuty?.(duty);
                   }}
                 >
                   <div className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.14em]">

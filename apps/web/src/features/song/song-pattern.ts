@@ -66,6 +66,8 @@ export type NoiseTriggerPreset = {
 export type NoiseStepUpdates = {
   enabled?: boolean;
   presetId?: NoiseTriggerPresetId;
+  mode?: NoiseTrack["steps"][number]["mode"];
+  periodIndex?: NoiseTrack["steps"][number]["periodIndex"];
 };
 
 export type SampleStepUpdates = {
@@ -100,7 +102,8 @@ export type MelodicStepState =
 
 export type NoiseArrangementEntry = {
   stepIndex: number;
-  presetId: NoiseTriggerPresetId;
+  mode: NoiseTrack["steps"][number]["mode"];
+  periodIndex: NoiseTrack["steps"][number]["periodIndex"];
 };
 
 export type SampleArrangementEntry = {
@@ -310,8 +313,8 @@ export function updateNoiseTrackStep(song: SongDocument, stepIndex: number, upda
           return {
             ...step,
             enabled: updates.enabled ?? step.enabled,
-            mode: preset?.mode ?? step.mode,
-            periodIndex: preset?.periodIndex ?? step.periodIndex,
+            mode: updates.mode ?? preset?.mode ?? step.mode,
+            periodIndex: updates.periodIndex ?? preset?.periodIndex ?? step.periodIndex,
           };
         }),
       },
@@ -369,8 +372,7 @@ export function serializeNoiseTrackArrangement(track: NoiseTrack) {
         return [];
       }
 
-      const preset = getNoiseTriggerPresetForStep(step);
-      return `${index + 1}: ${preset?.id ?? "hiss"}`;
+      return `${index + 1}: ${formatNoiseConfigLabel(step.mode, step.periodIndex)}`;
     })
     .join("\n");
 }
@@ -436,7 +438,7 @@ export function parseMelodicTrackArrangement(
 
 export function parseNoiseTrackArrangement(input: string, loopLength: number): ParseNoiseArrangementResult {
   const lines = splitArrangementLines(input);
-  const entriesByStep = new Map<number, NoiseTriggerPresetId>();
+  const entriesByStep = new Map<number, NoiseArrangementEntry>();
 
   for (const [lineIndex, line] of lines.entries()) {
     const parsedLine = parseArrangementLine(line, lineIndex);
@@ -445,12 +447,12 @@ export function parseNoiseTrackArrangement(input: string, loopLength: number): P
       return parsedLine;
     }
 
-    const presetId = normalizeNoiseTriggerPresetId(parsedLine.value);
+    const parsedTrigger = parseNoiseTriggerDescriptor(parsedLine.value);
 
-    if (presetId === null) {
+    if (!parsedTrigger.ok) {
       return {
         ok: false,
-        error: `Line ${lineIndex + 1} has an unknown noise trigger. Use one of: ${noiseTriggerPresets.map((preset) => preset.id).join(", ")}.`,
+        error: `Line ${lineIndex + 1} ${parsedTrigger.error}`,
       };
     }
 
@@ -458,14 +460,18 @@ export function parseNoiseTrackArrangement(input: string, loopLength: number): P
       continue;
     }
 
-    entriesByStep.set(parsedLine.stepNumber - 1, presetId);
+    entriesByStep.set(parsedLine.stepNumber - 1, {
+      stepIndex: parsedLine.stepNumber - 1,
+      mode: parsedTrigger.mode,
+      periodIndex: parsedTrigger.periodIndex,
+    });
   }
 
   return {
     ok: true,
-    entries: Array.from(entriesByStep.entries())
-      .map(([stepIndex, presetId]) => ({ stepIndex, presetId }))
-      .sort((left: NoiseArrangementEntry, right: NoiseArrangementEntry) => left.stepIndex - right.stepIndex),
+    entries: Array.from(entriesByStep.values()).sort(
+      (left: NoiseArrangementEntry, right: NoiseArrangementEntry) => left.stepIndex - right.stepIndex,
+    ),
   };
 }
 
@@ -559,7 +565,7 @@ export function replaceNoiseTrackArrangement(
   song: SongDocument,
   entries: readonly NoiseArrangementEntry[],
 ): SongDocument {
-  const entriesByStep = new Map(entries.map((entry) => [entry.stepIndex, entry.presetId]));
+  const entriesByStep = new Map(entries.map((entry) => [entry.stepIndex, entry]));
 
   return {
     ...song,
@@ -568,14 +574,13 @@ export function replaceNoiseTrackArrangement(
       noise: {
         ...song.tracks.noise,
         steps: song.tracks.noise.steps.map((step, index) => {
-          const presetId = entriesByStep.get(index);
-          const preset = presetId === undefined ? null : getNoiseTriggerPresetById(presetId);
+          const entry = entriesByStep.get(index);
 
           return {
             ...step,
-            enabled: preset !== null,
-            mode: preset?.mode ?? step.mode,
-            periodIndex: preset?.periodIndex ?? step.periodIndex,
+            enabled: entry !== undefined,
+            mode: entry?.mode ?? step.mode,
+            periodIndex: entry?.periodIndex ?? step.periodIndex,
           };
         }),
       },
@@ -654,6 +659,13 @@ export function getDefaultSampleTrigger(
 
 export function formatPlaybackRateLabel(playbackRate: number) {
   return `${formatSamplePlaybackRate(playbackRate)}x`;
+}
+
+export function formatNoiseConfigLabel(
+  mode: NoiseTrack["steps"][number]["mode"],
+  periodIndex: NoiseTrack["steps"][number]["periodIndex"],
+) {
+  return `${mode} P${periodIndex}`;
 }
 
 export function formatPulseDutyLabel(duty: PulseDutyValue) {
@@ -1040,6 +1052,57 @@ function parseSampleTriggerDescriptor(
     ok: true,
     sampleReference,
     playbackRate,
+  };
+}
+
+function parseNoiseTriggerDescriptor(
+  value: string,
+):
+  | {
+      ok: true;
+      mode: NoiseTrack["steps"][number]["mode"];
+      periodIndex: NoiseTrack["steps"][number]["periodIndex"];
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
+  const presetId = normalizeNoiseTriggerPresetId(value);
+
+  if (presetId !== null) {
+    const preset = getNoiseTriggerPresetById(presetId);
+
+    if (preset !== null) {
+      return {
+        ok: true,
+        mode: preset.mode,
+        periodIndex: preset.periodIndex,
+      };
+    }
+  }
+
+  const match = /^(long|short)\s+p(\d{1,2})$/i.exec(value.trim());
+
+  if (match === null) {
+    return {
+      ok: false,
+      error: `has an invalid noise trigger. Use "short P3", "long P12", or a preset id: ${noiseTriggerPresets.map((preset) => preset.id).join(", ")}.`,
+    };
+  }
+
+  const periodIndex = Number(match[2]);
+
+  if (!Number.isInteger(periodIndex) || periodIndex < 0 || periodIndex > 15) {
+    return {
+      ok: false,
+      error: 'has an unsupported noise period. Use "P0" through "P15".',
+    };
+  }
+
+  return {
+    ok: true,
+    mode: match[1].toLowerCase() as NoiseTrack["steps"][number]["mode"],
+    periodIndex,
   };
 }
 

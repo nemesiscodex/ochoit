@@ -21,8 +21,10 @@ import {
   getMelodicTrackMaxLength,
   getDefaultSampleTrigger,
   getNoiseTriggerPresetForStep,
+  formatNoiseConfigLabel,
   type MelodicStepUpdates,
   type MelodicTrackId,
+  type NoteValue,
   type TriggerTrackId,
   type NoiseStepUpdates,
   type SampleStepUpdates,
@@ -37,7 +39,7 @@ import {
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
-import { NoiseTriggerPicker, PulseDutyPicker, SampleTriggerPicker } from "@/components/trigger-picker";
+import { NoiseConfigPicker, NoiseTriggerPicker, PulseDutyPicker, SampleTriggerPicker } from "@/components/trigger-picker";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
@@ -473,6 +475,9 @@ function MelodicStepGrid({
                       accentColor={accentColor}
                       disabled={!step.enabled}
                       selectedDuty={pulseStep.duty}
+                      onHoverDuty={(duty) => {
+                        engine?.previewNote(track.id, step.note as NoteValue, 120, duty);
+                      }}
                       onSelectDuty={(duty) => {
                         onUpdateMelodicStep(track.id, index, { duty });
                       }}
@@ -602,6 +607,28 @@ function NoiseStepGrid({
                 });
               }}
             />
+            <div className="mt-1">
+              <NoiseConfigPicker
+                selectedMode={step.mode}
+                selectedPeriodIndex={step.periodIndex}
+                disabled={!step.enabled}
+                accentColor={accentColor}
+                ariaLabel={`${labelByTrackId[track.id]} step ${index + 1} noise settings`}
+                onHoverConfig={(config) => {
+                  engine?.previewNoiseConfig(config.mode, config.periodIndex);
+                }}
+                onSelectConfig={(config) => {
+                  onUpdateNoiseStep(index, {
+                    enabled: true,
+                    mode: config.mode,
+                    periodIndex: config.periodIndex,
+                  });
+                }}
+              />
+            </div>
+            <div className="mt-1 text-center font-[var(--oc-mono)] text-[7px] uppercase tracking-[0.14em] text-white/28">
+              {formatNoiseConfigLabel(step.mode, step.periodIndex)}
+            </div>
           </div>
         );
       })}

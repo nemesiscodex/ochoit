@@ -608,7 +608,7 @@ function TrackArrangementEditor({
   const accentColor = waveformLineColorByTrackId[trackId];
   const helperCopy =
     trackId === "noise"
-      ? `One trigger per line in the format 1: snare. Available presets: ${noiseTriggerPresets.map((preset) => preset.id).join(", ")}. Steps above ${loopLength} are ignored when you apply.`
+      ? `One trigger per line in the format 1: short P3 or 1: long P12. Preset aliases (${noiseTriggerPresets.map((preset) => preset.id).join(", ")}) are also accepted on paste. Steps above ${loopLength} are ignored when you apply.`
       : trackId === "sample"
         ? `One trigger per line in the format 8: ${samples[0]?.id ?? "mic-001"}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x. Steps above ${loopLength} are ignored when you apply.`
         : trackId === "pulse1" || trackId === "pulse2"

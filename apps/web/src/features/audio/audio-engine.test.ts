@@ -14,6 +14,7 @@ const audioEngineMocks = vi.hoisted(() => {
   const pulseVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
   const pulseConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
   const pulseScheduleStep = vi.fn<(step: number, time: number) => void>();
+  const pulsePreviewNote = vi.fn<(note: string, duty?: number, durationMs?: number, volume?: number) => void>();
   const triangleVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
   const triangleConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
   const triangleScheduleStep = vi.fn<(step: number, time: number) => void>();
@@ -38,6 +39,10 @@ const audioEngineMocks = vi.hoisted(() => {
 
     scheduleStep(step: number, time: number) {
       pulseScheduleStep(step, time);
+    }
+
+    previewNote(note: string, duty?: number, durationMs?: number, volume?: number) {
+      pulsePreviewNote(note, duty, durationMs, volume);
     }
   }
 
@@ -98,6 +103,7 @@ const audioEngineMocks = vi.hoisted(() => {
     pulseVoiceConstructor,
     pulseConfigure,
     pulseScheduleStep,
+    pulsePreviewNote,
     triangleVoiceConstructor,
     triangleConfigure,
     triangleScheduleStep,
@@ -231,6 +237,7 @@ describe("audio-engine", () => {
     audioEngineMocks.pulseVoiceConstructor.mockClear();
     audioEngineMocks.pulseConfigure.mockClear();
     audioEngineMocks.pulseScheduleStep.mockClear();
+    audioEngineMocks.pulsePreviewNote.mockClear();
     audioEngineMocks.triangleVoiceConstructor.mockClear();
     audioEngineMocks.triangleConfigure.mockClear();
     audioEngineMocks.triangleScheduleStep.mockClear();
@@ -379,14 +386,14 @@ describe("audio-engine", () => {
     mockContext.state = "running";
 
     engine.previewNote("triangle", "C4", 180);
-    engine.previewNote("pulse1", "E4");
+    engine.previewNote("pulse1", "E4", 120, 0.25);
 
-    expect(mockContext.createdOscillators).toHaveLength(2);
+    expect(mockContext.createdOscillators).toHaveLength(1);
     expect(mockContext.createdOscillators[0]?.type).toBe("triangle");
-    expect(mockContext.createdOscillators[1]?.type).toBe("square");
     expect(mockContext.createdOscillators[0]?.frequency.setValueAtTime).toHaveBeenCalled();
     expect(mockContext.createdOscillators[0]?.start).toHaveBeenCalledWith(mockContext.currentTime);
     expect(mockContext.createdOscillators[0]?.stop).toHaveBeenCalledWith(mockContext.currentTime + 0.19);
+    expect(audioEngineMocks.pulsePreviewNote).toHaveBeenCalledWith("E4", 0.25, 120, undefined);
   });
 
   it("delegates noise and PCM hover previews to their voice implementations", async () => {
@@ -395,6 +402,7 @@ describe("audio-engine", () => {
     mockContext.state = "running";
 
     engine.previewNoiseTrigger("crash", 140);
+    engine.previewNoiseConfig("short", 2, 90);
     engine.previewSampleTrigger("mic-001", 1.5, 220);
 
     expect(audioEngineMocks.noisePreviewStep).toHaveBeenCalledWith(
@@ -404,6 +412,14 @@ describe("audio-engine", () => {
         periodIndex: 12,
       },
       140,
+    );
+    expect(audioEngineMocks.noisePreviewStep).toHaveBeenCalledWith(
+      {
+        volume: 0.78,
+        mode: "short",
+        periodIndex: 2,
+      },
+      90,
     );
     expect(audioEngineMocks.samplePreview).toHaveBeenCalledWith("mic-001", 1.5, 220, 0.82);
   });

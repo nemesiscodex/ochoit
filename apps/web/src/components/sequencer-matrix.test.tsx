@@ -100,6 +100,35 @@ describe("sequencer-matrix", () => {
     expect(onUpdateTrackVolume).toHaveBeenCalledWith("pulse1", 0.23);
   });
 
+  it("calls the noise step update callback for direct noise config changes", () => {
+    const onUpdateNoiseStep = vi.fn();
+
+    render(
+      <SequencerMatrix
+        engine={null}
+        onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
+        onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
+        onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={onUpdateNoiseStep}
+        onUpdateSampleStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Noise step 1 noise settings"));
+    fireEvent.click(screen.getByRole("button", { name: "Select noise config long P12" }));
+
+    expect(onUpdateNoiseStep).toHaveBeenCalledWith(0, {
+      enabled: true,
+      mode: "long",
+      periodIndex: 12,
+    });
+  });
+
   it("calls the melodic step update callback for pulse duty changes", () => {
     const onUpdateMelodicStep = vi.fn();
 
@@ -219,6 +248,35 @@ describe("sequencer-matrix", () => {
     expect(previewNote).toHaveBeenCalledWith("triangle", "D3");
   });
 
+  it("passes hovered pulse duty options to the audio preview", () => {
+    const previewNote = vi.fn();
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      previewNote,
+    } as unknown as AudioEngine;
+
+    render(
+      <SequencerMatrix
+        engine={engine}
+        onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
+        onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
+        onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1 duty cycle"));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Select pulse duty 75%" }));
+
+    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", 120, 0.75);
+  });
+
   it("opens the text editor for a melodic voice", () => {
     const onOpenMelodicTrackEditor = vi.fn();
 
@@ -243,13 +301,15 @@ describe("sequencer-matrix", () => {
     expect(onOpenMelodicTrackEditor).toHaveBeenCalledWith("pulse1");
   });
 
-  it("passes hovered noise and PCM trigger options to the audio preview", () => {
+  it("passes hovered noise controls and PCM trigger options to the audio preview", () => {
     const previewNoiseTrigger = vi.fn();
+    const previewNoiseConfig = vi.fn();
     const previewSampleTrigger = vi.fn();
     const engine = {
       getWaveform: vi.fn(() => new Uint8Array([128])),
       previewNote: vi.fn(),
       previewNoiseTrigger,
+      previewNoiseConfig,
       previewSampleTrigger,
     } as unknown as AudioEngine;
 
@@ -271,11 +331,14 @@ describe("sequencer-matrix", () => {
 
     fireEvent.click(screen.getByLabelText("Noise step 1 trigger"));
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Select noise trigger Crash" }));
+    fireEvent.click(screen.getByLabelText("Noise step 1 noise settings"));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Select noise config short P2" }));
 
     fireEvent.click(screen.getByLabelText("PCM step 8 trigger"));
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Assign vox-hit at 1.5x" }));
 
     expect(previewNoiseTrigger).toHaveBeenCalledWith("crash");
+    expect(previewNoiseConfig).toHaveBeenCalledWith("short", 2);
     expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001", 1.5);
   });
 });

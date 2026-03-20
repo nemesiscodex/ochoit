@@ -24,7 +24,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Add trigger UI for noise and PCM voices
 - [x] Add per-voice mute and volume controls
 - [x] Add duty cycle controls for pulse voices
-- [ ] Add noise rate or mode controls
+- [x] Add noise rate or mode controls
 - [ ] Add microphone permission and recording flow
 - [ ] Add sample preview and trim controls
 - [ ] Connect recorded PCM samples to the sample lane

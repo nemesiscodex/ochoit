@@ -170,7 +170,9 @@ describe("workstation-shell", () => {
       throw new Error("Expected Noise trigger text to be a textarea.");
     }
 
-    expect(textarea.value).toBe("1: snare\n3: hiss\n5: snare\n7: hiss\n9: snare\n11: hiss\n13: snare\n15: hiss");
+    expect(textarea.value).toBe(
+      "1: short P3\n3: long P8\n5: short P3\n7: long P8\n9: short P3\n11: long P8\n13: short P3\n15: long P8",
+    );
   });
 
   it("applies pasted noise and PCM trigger text arrangements", () => {
@@ -186,7 +188,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(noiseTextarea, {
       target: {
-        value: "2: hat\n4: crash\n18: snare",
+        value: "2: short P1\n4: long P12\n18: short P3",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
@@ -196,6 +198,8 @@ describe("workstation-shell", () => {
     expect(screen.getByRole("button", { name: "Disable Noise step 2" })).toBeTruthy();
     expect(screen.getByLabelText("Noise step 2 trigger").textContent).toBe("hat");
     expect(screen.getByLabelText("Noise step 4 trigger").textContent).toBe("crsh");
+    expect(screen.getByLabelText("Noise step 2 noise settings").textContent).toBe("short P1");
+    expect(screen.getByLabelText("Noise step 4 noise settings").textContent).toBe("long P12");
 
     fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
 
@@ -216,6 +220,15 @@ describe("workstation-shell", () => {
     expect(screen.getByRole("button", { name: "Disable PCM step 2" })).toBeTruthy();
     expect(screen.getByLabelText("PCM step 2 trigger").textContent).toBe("vox-hit 0.75x");
     expect(screen.getByLabelText("PCM step 6 trigger").textContent).toBe("vox-hit 1.5x");
+  });
+
+  it("describes the noise text format with explicit mode and period values", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
+
+    expect(screen.getByText(/format 1: short P3 or 1: long P12/i)).toBeTruthy();
+    expect(screen.getByText(/preset aliases/i)).toBeTruthy();
   });
 
   it("renders the sample deck sidebar", () => {
@@ -332,6 +345,24 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select noise trigger Crash" }));
 
     expect(triggerButton.textContent).toBe("crsh");
+  });
+
+  it("updates the noise rate and mode controls from the picker", () => {
+    render(React.createElement(WorkstationShell));
+
+    const noiseSettings = screen.getByLabelText("Noise step 1 noise settings");
+
+    if (!(noiseSettings instanceof HTMLButtonElement)) {
+      throw new Error("Expected Noise step 1 noise settings to be a button.");
+    }
+
+    expect(noiseSettings.textContent).toBe("short P3");
+
+    fireEvent.click(noiseSettings);
+    fireEvent.click(screen.getByRole("button", { name: "Select noise config long P12" }));
+
+    expect(screen.getByLabelText("Noise step 1 noise settings").textContent).toBe("long P12");
+    expect(screen.getAllByText("long P12").length).toBeGreaterThan(0);
   });
 
   it("updates the PCM trigger controls from the picker", () => {
