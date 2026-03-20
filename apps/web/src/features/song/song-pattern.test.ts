@@ -123,7 +123,9 @@ describe("song-pattern", () => {
     const song = createDefaultSongDocument();
     const sustainedSong = updateMelodicTrackStep(song, "pulse1", 0, { length: 3 });
 
-    expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1)).toBe("1-3: C5\n5: E5\n9: G5\n13: E5");
+    expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1)).toBe(
+      "1-3: C5 @12.5%\n5: E5 @25%\n9: G5 @50%\n13: E5 @25%",
+    );
   });
 
   it("serializes the enabled noise and sample arrangements", () => {
@@ -136,12 +138,12 @@ describe("song-pattern", () => {
   });
 
   it("parses ranged melodic arrangements, normalizes note casing, and ignores steps past the loop length", () => {
-    const result = parseMelodicTrackArrangement("1-3: e4\n5: g4\n17-20: c5", 16);
+    const result = parseMelodicTrackArrangement("1-3: e4 @25%\n5: g4\n17-20: c5 @75%", 16, "pulse1");
 
     expect(result).toEqual({
       ok: true,
       entries: [
-        { stepIndex: 0, note: "E4", length: 3 },
+        { stepIndex: 0, note: "E4", length: 3, duty: 0.25 },
         { stepIndex: 4, note: "G4", length: 1 },
       ],
     });
@@ -173,17 +175,25 @@ describe("song-pattern", () => {
   });
 
   it("rejects invalid arrangement lines", () => {
-    expect(parseMelodicTrackArrangement("1 - E4", 16)).toEqual({
+    expect(parseMelodicTrackArrangement("1 - E4", 16, "pulse1")).toEqual({
       ok: false,
       error: 'Line 1 must match "<step>: <value>" or "<start>-<end>: <value>" like "1-4: E4".',
     });
-    expect(parseMelodicTrackArrangement("3-1: E4", 16)).toEqual({
+    expect(parseMelodicTrackArrangement("3-1: E4", 16, "pulse1")).toEqual({
       ok: false,
       error: "Line 1 must use an end step greater than or equal to the start step.",
     });
-    expect(parseMelodicTrackArrangement("1: H4", 16)).toEqual({
+    expect(parseMelodicTrackArrangement("1: H4", 16, "pulse1")).toEqual({
       ok: false,
       error: "Line 1 has an unsupported note. Use notes from C0 to B8 with optional sharps.",
+    });
+    expect(parseMelodicTrackArrangement("1: E4 @33%", 16, "pulse1")).toEqual({
+      ok: false,
+      error: "Line 1 has an unsupported pulse duty. Use 12.5%, 25%, 50%, or 75%.",
+    });
+    expect(parseMelodicTrackArrangement("1: E4 @25%", 16, "triangle")).toEqual({
+      ok: false,
+      error: "Line 1 includes a pulse duty suffix, but this track only accepts notes.",
     });
     expect(parseNoiseTrackArrangement("1: laser", 16)).toEqual({
       ok: false,
@@ -246,6 +256,21 @@ describe("song-pattern", () => {
     expect(updatedSong.tracks.pulse1.steps[4]?.duty).toBe(DEFAULT_PULSE_DUTY);
     expect(updatedSong.tracks.pulse1.steps[8]?.duty).toBe(DEFAULT_PULSE_DUTY);
     expect(updatedSong.tracks.pulse1.steps[12]?.duty).toBe(DEFAULT_PULSE_DUTY);
+  });
+
+  it("applies pulse duty values from melodic text entries and defaults omitted values to 50%", () => {
+    const song = createDefaultSongDocument();
+    const parsed = parseMelodicTrackArrangement("1: C5 @25%\n5: C5\n9: C5 @75%", 16, "pulse1");
+
+    if (!parsed.ok) {
+      throw new Error(`Expected pulse arrangement to parse, received: ${parsed.error}`);
+    }
+
+    const updatedSong = replaceMelodicTrackArrangement(song, "pulse1", parsed.entries);
+
+    expect(updatedSong.tracks.pulse1.steps[0]?.duty).toBe(0.25);
+    expect(updatedSong.tracks.pulse1.steps[4]?.duty).toBe(DEFAULT_PULSE_DUTY);
+    expect(updatedSong.tracks.pulse1.steps[8]?.duty).toBe(0.75);
   });
 
   it("truncates overlapping melodic arrangement entries to keep tracks monophonic", () => {

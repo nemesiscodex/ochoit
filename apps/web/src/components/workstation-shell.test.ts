@@ -91,7 +91,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected Pulse I arrangement text to be a textarea.");
     }
 
-    expect(textarea.value).toBe("1: C5\n5: E5\n9: G5\n13: E5");
+    expect(textarea.value).toBe("1: C5 @12.5%\n5: E5 @25%\n9: G5 @50%\n13: E5 @25%");
   });
 
   it("applies a pasted voice arrangement and ignores steps beyond the loop length", () => {
@@ -107,7 +107,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(textarea, {
       target: {
-        value: "1: e4\n3: g4\n5: a4\n17: c5",
+        value: "1: e4 @25%\n3: g4\n5: a4 @75%\n17: c5",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
@@ -122,6 +122,8 @@ describe("workstation-shell", () => {
 
     expect(pulseStepOneNote.textContent).toBe("E4");
     expect(pulseStepThreeNote.textContent).toBe("G4");
+    expect(screen.getByLabelText("Pulse I step 1 duty cycle").textContent).toBe("25%");
+    expect(screen.getByLabelText("Pulse I step 3 duty cycle").textContent).toBe("50%");
   });
 
   it("applies ranged melodic arrangements and renders held steps", () => {
@@ -146,6 +148,15 @@ describe("workstation-shell", () => {
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("3 st");
     expect(screen.getAllByText("Hold E4")).toHaveLength(2);
     expect(screen.getByLabelText("Pulse I step 5 duration").textContent).toBe("2 st");
+  });
+
+  it("describes the pulse text format with optional duty values", () => {
+    render(React.createElement(WorkstationShell));
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    expect(screen.getByText(/format 1: E4 @25% or 1-4: E4 @12.5%/i)).toBeTruthy();
+    expect(screen.getByText(/defaults to 50%/i)).toBeTruthy();
   });
 
   it("opens the noise trigger text editor with the current arrangement", () => {

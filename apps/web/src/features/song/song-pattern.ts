@@ -78,6 +78,7 @@ export type MelodicArrangementEntry = {
   stepIndex: number;
   note: NoteValue;
   length: number;
+  duty?: PulseDutyValue;
 };
 
 export type MelodicStepState =
@@ -159,6 +160,7 @@ export const pulseDutyOptions = [0.125, 0.25, 0.5, 0.75] as const satisfies read
 const arrangementLinePattern = /^(\d+)\s*:\s*(.+)$/;
 const melodicArrangementLinePattern = /^(\d+)(?:\s*-\s*(\d+))?\s*:\s*(.+)$/;
 const arrangementNotePattern = /^([A-Ga-g])(#?)([0-8])$/;
+const pulseDutyPattern = /^(12\.5|25|50|75)%?$/;
 const supportedNoteSet = new Set(noteEntryOptions);
 const samplePlaybackRateMin = 0.25;
 const samplePlaybackRateMax = 4;
@@ -198,13 +200,16 @@ export function getMelodicArrangementEntries(track: MelodicTrack): MelodicArrang
       return [];
     }
 
-      return [
-        {
-          stepIndex: index,
-          note: step.note as NoteValue,
-          length: clampMelodicStepLength(step.length, index, track.steps.length),
-        },
-      ];
+    const pulseStep = track.kind === "pulse" ? track.steps[index] : null;
+
+    return [
+      {
+        stepIndex: index,
+        note: step.note as NoteValue,
+        length: clampMelodicStepLength(step.length, index, track.steps.length),
+        ...(pulseStep === null ? {} : { duty: pulseStep.duty }),
+      },
+    ];
   });
 }
 
@@ -345,11 +350,14 @@ export function updateSampleTrackStep(song: SongDocument, stepIndex: number, upd
 export function serializeMelodicTrackArrangement(track: MelodicTrack) {
   return getMelodicArrangementEntries(track)
     .map((entry) => {
+      const dutySuffix =
+        track.kind === "pulse" ? ` @${formatPulseDutyLabel(entry.duty ?? DEFAULT_PULSE_DUTY)}` : "";
+
       if (entry.length === 1) {
-        return `${entry.stepIndex + 1}: ${entry.note}`;
+        return `${entry.stepIndex + 1}: ${entry.note}${dutySuffix}`;
       }
 
-      return `${entry.stepIndex + 1}-${entry.stepIndex + entry.length}: ${entry.note}`;
+      return `${entry.stepIndex + 1}-${entry.stepIndex + entry.length}: ${entry.note}${dutySuffix}`;
     })
     .join("\n");
 }
@@ -379,9 +387,14 @@ export function serializeSampleTrackArrangement(track: SampleTrack) {
     .join("\n");
 }
 
-export function parseMelodicTrackArrangement(input: string, loopLength: number): ParseMelodicArrangementResult {
+export function parseMelodicTrackArrangement(
+  input: string,
+  loopLength: number,
+  trackId: MelodicTrackId,
+): ParseMelodicArrangementResult {
   const lines = splitArrangementLines(input);
   const entriesByStep = new Map<number, MelodicArrangementEntry>();
+  const supportsPulseDuty = trackId === "pulse1" || trackId === "pulse2";
 
   for (const [lineIndex, line] of lines.entries()) {
     const parsedLine = parseMelodicArrangementLine(line, lineIndex);
@@ -390,12 +403,12 @@ export function parseMelodicTrackArrangement(input: string, loopLength: number):
       return parsedLine;
     }
 
-    const note = normalizeArrangementNote(parsedLine.value);
+    const parsedValue = parseMelodicArrangementValue(parsedLine.value, supportsPulseDuty);
 
-    if (note === null) {
+    if (!parsedValue.ok) {
       return {
         ok: false,
-        error: `Line ${lineIndex + 1} has an unsupported note. Use notes from C0 to B8 with optional sharps.`,
+        error: `Line ${lineIndex + 1} ${parsedValue.error}`,
       };
     }
 
@@ -407,8 +420,9 @@ export function parseMelodicTrackArrangement(input: string, loopLength: number):
 
     entriesByStep.set(parsedLine.stepNumber - 1, {
       stepIndex: parsedLine.stepNumber - 1,
-      note,
+      note: parsedValue.note,
       length: finalEndStep - parsedLine.stepNumber + 1,
+      ...(parsedValue.duty === undefined ? {} : { duty: parsedValue.duty }),
     });
   }
 
@@ -755,6 +769,7 @@ function buildMelodicTrack<TTrack extends MelodicTrack>(
       enabled: true,
       note: entry.note,
       length: entry.length,
+      ...(track.kind === "pulse" ? { duty: entry.duty ?? DEFAULT_PULSE_DUTY } : {}),
     };
   });
 
@@ -804,6 +819,90 @@ function normalizeArrangementNote(rawNote: string): NoteValue | null {
 
   const normalizedNote = `${match[1].toUpperCase()}${match[2]}${match[3]}` as NoteValue;
   return supportedNoteSet.has(normalizedNote) ? normalizedNote : null;
+}
+
+function parseMelodicArrangementValue(
+  rawValue: string,
+  supportsPulseDuty: boolean,
+):
+  | {
+      ok: true;
+      note: NoteValue;
+      duty?: PulseDutyValue;
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
+  const segments = rawValue.split("@");
+
+  if (segments.length > 2) {
+    return {
+      ok: false,
+      error: 'must use at most one "@" duty suffix, for example "1: E4 @25%".',
+    };
+  }
+
+  const note = normalizeArrangementNote(segments[0]?.trim() ?? "");
+
+  if (note === null) {
+    return {
+      ok: false,
+      error: "has an unsupported note. Use notes from C0 to B8 with optional sharps.",
+    };
+  }
+
+  const rawDuty = segments[1]?.trim();
+
+  if (rawDuty === undefined) {
+    return {
+      ok: true,
+      note,
+    };
+  }
+
+  if (!supportsPulseDuty) {
+    return {
+      ok: false,
+      error: "includes a pulse duty suffix, but this track only accepts notes.",
+    };
+  }
+
+  const duty = normalizePulseDutyValue(rawDuty);
+
+  if (duty === null) {
+    return {
+      ok: false,
+      error: "has an unsupported pulse duty. Use 12.5%, 25%, 50%, or 75%.",
+    };
+  }
+
+  return {
+    ok: true,
+    note,
+    duty,
+  };
+}
+
+function normalizePulseDutyValue(rawValue: string): PulseDutyValue | null {
+  const match = pulseDutyPattern.exec(rawValue.trim());
+
+  if (match === null) {
+    return null;
+  }
+
+  switch (match[1]) {
+    case "12.5":
+      return 0.125;
+    case "25":
+      return 0.25;
+    case "50":
+      return 0.5;
+    case "75":
+      return 0.75;
+    default:
+      return null;
+  }
 }
 
 function splitArrangementLines(input: string) {

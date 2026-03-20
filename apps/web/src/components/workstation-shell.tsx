@@ -170,7 +170,11 @@ export function WorkstationShell() {
     }
 
     const melodicTrackId = arrangementEditor.trackId;
-    const parsedArrangement = parseMelodicTrackArrangement(arrangementEditor.draft, song.transport.loopLength);
+    const parsedArrangement = parseMelodicTrackArrangement(
+      arrangementEditor.draft,
+      song.transport.loopLength,
+      melodicTrackId,
+    );
 
     if (!parsedArrangement.ok) {
       setArrangementEditor((currentEditor) => {
@@ -607,7 +611,9 @@ function TrackArrangementEditor({
       ? `One trigger per line in the format 1: snare. Available presets: ${noiseTriggerPresets.map((preset) => preset.id).join(", ")}. Steps above ${loopLength} are ignored when you apply.`
       : trackId === "sample"
         ? `One trigger per line in the format 8: ${samples[0]?.id ?? "mic-001"}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x. Steps above ${loopLength} are ignored when you apply.`
-        : `One note per line in the format 1: E4 or 1-4: E4 for sustained notes. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`;
+        : trackId === "pulse1" || trackId === "pulse2"
+          ? `One pulse note per line in the format 1: E4 @25% or 1-4: E4 @12.5% for sustained notes. The duty suffix is optional and defaults to 50%. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`
+          : `One note per line in the format 1: E4 or 1-4: E4 for sustained notes. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`;
   const editorTitle =
     trackId === "noise" ? "Noise Trigger Map" : trackId === "sample" ? "PCM Trigger Map" : "Voice Arrangement";
   const labelSuffix =
