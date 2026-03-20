@@ -472,6 +472,35 @@ describe("workstation-shell", () => {
     expect(screen.getByText("4-10 · 6 / 12 fr")).toBeTruthy();
   });
 
+  it("applies the current trim destructively from the sample deck", () => {
+    renderWorkstationShell();
+
+    const lengthFrameInput = screen.getByLabelText("Sample trim length frame");
+    const windowFrameInput = screen.getByLabelText("Sample trim window frame");
+
+    if (!(lengthFrameInput instanceof HTMLInputElement) || !(windowFrameInput instanceof HTMLInputElement)) {
+      throw new Error("Expected sample trim frame inputs.");
+    }
+
+    fireEvent.change(lengthFrameInput, { target: { value: "6" } });
+    fireEvent.change(windowFrameInput, { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply Trim" }));
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.samples[0]?.frameCount).toBe(6);
+    expect(latestSong.samples[0]?.pcm).toEqual([ -0.2, -0.56, -0.14, 0.1, 0.34, 0.12 ]);
+    expect(latestSong.samples[0]?.trim).toEqual({
+      startFrame: 0,
+      endFrame: 6,
+    });
+    expect(screen.getByText("0-6 · 6 / 6 fr")).toBeTruthy();
+  });
+
   it("toggles the mute state for a specific voice", () => {
     renderWorkstationShell();
 

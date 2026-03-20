@@ -99,6 +99,42 @@ export function updateSampleTrim(song: SongDocument, sampleId: string, updates: 
   };
 }
 
+export function applySampleTrim(song: SongDocument, sampleId: string) {
+  const sample = song.samples.find((entry) => entry.id === sampleId);
+
+  if (sample === undefined) {
+    return song;
+  }
+
+  if (sample.trim.startFrame === 0 && sample.trim.endFrame === sample.frameCount) {
+    return song;
+  }
+
+  const pcm = getTrimmedSamplePcm(sample);
+  const frameCount = pcm.length;
+
+  return {
+    ...song,
+    meta: {
+      ...song.meta,
+      updatedAt: new Date().toISOString(),
+    },
+    samples: song.samples.map((entry) =>
+      entry.id !== sampleId
+        ? entry
+        : {
+            ...entry,
+            pcm,
+            frameCount,
+            trim: {
+              startFrame: 0,
+              endFrame: frameCount,
+            },
+          },
+    ),
+  };
+}
+
 export function removeSampleAsset(song: SongDocument, sampleId: string) {
   if (!song.samples.some((sample) => sample.id === sampleId)) {
     return song;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultSongDocument } from "@/features/song/song-document";
 import {
+  applySampleTrim,
   getTrimmedFrameCount,
   getTrimmedSamplePcm,
   moveSampleTrimWindow,
@@ -140,6 +141,34 @@ describe("song-samples", () => {
       startFrame: 8,
       endFrame: 12,
     });
+  });
+
+  it("applies the current trim destructively and resets the trim window", () => {
+    const song = createDefaultSongDocument();
+    const sample = song.samples[0];
+
+    if (sample === undefined) {
+      throw new Error("Expected a seeded sample.");
+    }
+
+    const trimmedSong = updateSampleTrim(song, sample.id, {
+      startFrame: 2,
+      endFrame: 8,
+    });
+    const committedSong = applySampleTrim(trimmedSong, sample.id);
+    const committedSample = committedSong.samples[0];
+
+    if (committedSample === undefined) {
+      throw new Error("Expected a committed sample.");
+    }
+
+    expect(committedSample.pcm).toEqual(sample.pcm.slice(2, 8));
+    expect(committedSample.frameCount).toBe(6);
+    expect(committedSample.trim).toEqual({
+      startFrame: 0,
+      endFrame: 6,
+    });
+    expect(committedSong.meta.updatedAt).toBe("2026-03-19T10:00:00.000Z");
   });
 
   it("removes a sample and disables PCM steps that referenced it", () => {

@@ -53,6 +53,7 @@ import {
   updateMelodicTrackStep,
 } from "@/features/song/song-pattern";
 import {
+  applySampleTrim,
   getTrimmedFrameCount,
   getTrimmedSamplePcm,
   moveSampleTrimWindow,
@@ -186,6 +187,14 @@ export function WorkstationShell() {
     }
 
     setSong((currentSong) => resizeSampleTrimWindow(currentSong, deckSample.id, frameCount));
+  };
+
+  const applyDeckSampleTrim = () => {
+    if (deckSample === null) {
+      return;
+    }
+
+    setSong((currentSong) => applySampleTrim(currentSong, deckSample.id));
   };
 
   const selectDeckSample = (sampleId: string) => {
@@ -619,6 +628,7 @@ export function WorkstationShell() {
               recorderStatus={recorderStatus}
               recordingDurationMs={recordingDurationMs}
               onDeleteSample={deleteDeckSample}
+              onApplyTrim={applyDeckSampleTrim}
               onPreviewSample={previewDeckSample}
               onMoveTrimWindow={moveDeckSampleTrimWindow}
               onResizeTrimWindow={resizeDeckSampleTrimWindow}
@@ -858,6 +868,7 @@ function SampleDeck({
   recorderStatus,
   recordingDurationMs,
   onDeleteSample,
+  onApplyTrim,
   onPreviewSample,
   onMoveTrimWindow,
   onResizeTrimWindow,
@@ -875,6 +886,7 @@ function SampleDeck({
   recorderStatus: SampleRecorderStatus;
   recordingDurationMs: number;
   onDeleteSample: (sampleId: string) => void;
+  onApplyTrim: () => void;
   onPreviewSample: () => Promise<void>;
   onMoveTrimWindow: (startFrame: number) => void;
   onResizeTrimWindow: (frameCount: number) => void;
@@ -889,6 +901,7 @@ function SampleDeck({
   const waveform = createWaveformFromPcm(trimmedPcm);
   const trimmedFrameCount = sample === null ? 0 : getTrimmedFrameCount(sample);
   const trimWindowMaxStart = sample === null ? 0 : Math.max(0, sample.frameCount - trimmedFrameCount);
+  const hasPendingTrim = sample !== null && (sample.trim.startFrame > 0 || sample.trim.endFrame < sample.frameCount);
   const sampleDurationMs =
     sample === null || sample.sampleRate <= 0 ? 0 : Math.round((trimmedFrameCount / sample.sampleRate) * 1000);
   const statusLabel =
@@ -992,6 +1005,17 @@ function SampleDeck({
             onChange={onResizeTrimWindow}
             value={trimmedFrameCount}
           />
+        </div>
+        <div className="mt-3 flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            disabled={!hasPendingTrim || isRecording || isBusy}
+            onClick={onApplyTrim}
+          >
+            Apply Trim
+          </Button>
         </div>
         <div className="mt-3 grid gap-2 rounded-md border border-white/[0.06] bg-black/20 p-2.5">
           <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
