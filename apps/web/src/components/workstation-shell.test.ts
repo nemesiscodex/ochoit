@@ -224,6 +224,21 @@ describe("workstation-shell", () => {
     expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
   });
 
+  it("updates per-voice volume from the row controls", () => {
+    render(React.createElement(WorkstationShell));
+
+    const pulseVolume = screen.getByLabelText("Pulse I volume");
+
+    if (!(pulseVolume instanceof HTMLInputElement)) {
+      throw new Error("Expected Pulse I volume to be a range input.");
+    }
+
+    fireEvent.change(pulseVolume, { target: { value: "23" } });
+
+    expect(pulseVolume.value).toBe("23");
+    expect(screen.getByText("23%")).toBeTruthy();
+  });
+
   it("updates melodic steps from the note-entry controls", () => {
     render(React.createElement(WorkstationShell));
 

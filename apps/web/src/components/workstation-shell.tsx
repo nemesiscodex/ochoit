@@ -10,6 +10,7 @@ import { WaveformCanvas } from "@/components/waveform-canvas";
 import { sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type TrackId } from "@/features/song/song-document";
+import { updateTrackMute, updateTrackVolume } from "@/features/song/song-mixer";
 import {
   type MelodicStepUpdates,
   type MelodicTrackId,
@@ -55,16 +56,11 @@ export function WorkstationShell() {
   const isPlaying = transportState.playbackState === "playing";
 
   const toggleTrackMute = (trackId: TrackId) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      tracks: {
-        ...currentSong.tracks,
-        [trackId]: {
-          ...currentSong.tracks[trackId],
-          muted: !currentSong.tracks[trackId].muted,
-        },
-      },
-    }));
+    setSong((currentSong) => updateTrackMute(currentSong, trackId));
+  };
+
+  const setTrackVolume = (trackId: TrackId, volume: number) => {
+    setSong((currentSong) => updateTrackVolume(currentSong, trackId, volume));
   };
 
   const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
@@ -281,6 +277,7 @@ export function WorkstationShell() {
               onOpenMelodicTrackEditor={openMelodicTrackEditor}
               onOpenTriggerTrackEditor={openTriggerTrackEditor}
               onToggleTrackMute={toggleTrackMute}
+              onUpdateTrackVolume={setTrackVolume}
               onUpdateMelodicStep={updateMelodicStep}
               onUpdateNoiseStep={updateNoiseStep}
               onUpdateSampleStep={updateSampleStep}

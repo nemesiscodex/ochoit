@@ -13,6 +13,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={() => {}}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -36,6 +37,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={() => {}}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -59,6 +61,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={onToggleTrackMute}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={() => {}}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -73,6 +76,30 @@ describe("sequencer-matrix", () => {
     expect(onToggleTrackMute).toHaveBeenCalledWith("pulse1");
   });
 
+  it("calls the volume update callback for a specific voice", () => {
+    const onUpdateTrackVolume = vi.fn();
+
+    render(
+      <SequencerMatrix
+        engine={null}
+        onOpenMelodicTrackEditor={() => {}}
+        onOpenTriggerTrackEditor={() => {}}
+        onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={onUpdateTrackVolume}
+        onUpdateMelodicStep={() => {}}
+        onUpdateNoiseStep={() => {}}
+        onUpdateSampleStep={() => {}}
+        song={createDefaultSongDocument()}
+        playbackState="stopped"
+        nextStep={0}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Pulse I volume"), { target: { value: "23" } });
+
+    expect(onUpdateTrackVolume).toHaveBeenCalledWith("pulse1", 0.23);
+  });
+
   it("calls the melodic step update callback for pulse and triangle note editing", () => {
     const onUpdateMelodicStep = vi.fn();
 
@@ -82,6 +109,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={onUpdateMelodicStep}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -117,6 +145,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={onUpdateMelodicStep}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -149,6 +178,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={() => {}}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -173,6 +203,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={() => {}}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}
@@ -203,6 +234,7 @@ describe("sequencer-matrix", () => {
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
         onToggleTrackMute={() => {}}
+        onUpdateTrackVolume={() => {}}
         onUpdateMelodicStep={() => {}}
         onUpdateNoiseStep={() => {}}
         onUpdateSampleStep={() => {}}

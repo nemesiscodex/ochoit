@@ -181,6 +181,42 @@ body {
   cursor: pointer;
 }
 
+/* ── Voice volume slider ── */
+
+.oc-track-volume {
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--oc-track-accent), rgba(255, 255, 255, 0.14));
+  outline: none;
+}
+
+.oc-track-volume::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(7, 8, 14, 0.9);
+  border-radius: 999px;
+  background: #f5f7ff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--oc-track-accent) 22%, transparent);
+}
+
+.oc-track-volume::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(7, 8, 14, 0.9);
+  border-radius: 999px;
+  background: #f5f7ff;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--oc-track-accent) 22%, transparent);
+}
+
+.oc-track-volume::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--oc-track-accent), rgba(255, 255, 255, 0.14));
+}
+
 /* tailwind grid-cols-16 utility */
 @utility grid-cols-16 {
   grid-template-columns: repeat(16, minmax(0, 1fr));

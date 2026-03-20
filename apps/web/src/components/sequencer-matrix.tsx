@@ -15,6 +15,7 @@ import {
   type TriangleTrack,
   getOrderedTracks,
 } from "@/features/song/song-document";
+import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
 import {
   getMelodicStepState,
   getMelodicTrackMaxLength,
@@ -45,6 +46,7 @@ export function SequencerMatrix({
   playbackState,
   nextStep,
   onToggleTrackMute,
+  onUpdateTrackVolume,
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
   onUpdateMelodicStep,
@@ -56,6 +58,7 @@ export function SequencerMatrix({
   playbackState: "stopped" | "playing";
   nextStep: number;
   onToggleTrackMute: (trackId: TrackId) => void;
+  onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
@@ -75,6 +78,7 @@ export function SequencerMatrix({
           onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
           onOpenTriggerTrackEditor={onOpenTriggerTrackEditor}
           onToggleTrackMute={onToggleTrackMute}
+          onUpdateTrackVolume={onUpdateTrackVolume}
           onUpdateMelodicStep={onUpdateMelodicStep}
           onUpdateNoiseStep={onUpdateNoiseStep}
           onUpdateSampleStep={onUpdateSampleStep}
@@ -139,6 +143,7 @@ function SequencerRow({
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
   onToggleTrackMute,
+  onUpdateTrackVolume,
   onUpdateMelodicStep,
   onUpdateNoiseStep,
   onUpdateSampleStep,
@@ -151,6 +156,7 @@ function SequencerRow({
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
   onToggleTrackMute: (trackId: TrackId) => void;
+  onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
   onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
@@ -209,10 +215,7 @@ function SequencerRow({
         </div>
 
         {/* Volume readout */}
-        <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/25">
-          <span>Vol {Math.round(track.volume * 100)}%</span>
-          <span>{track.muted ? "Muted" : "Active"}</span>
-        </div>
+        <TrackVolumeControl track={track} onUpdateTrackVolume={onUpdateTrackVolume} />
         {track.kind === "pulse" || track.kind === "triangle" ? (
           <Button
             type="button"
@@ -278,6 +281,52 @@ function SequencerRow({
         ) : (
           <div />
         )}
+      </div>
+    </div>
+  );
+}
+
+function TrackVolumeControl({
+  track,
+  onUpdateTrackVolume,
+}: {
+  track: Track;
+  onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
+}) {
+  const volumeInputId = `track-volume-${track.id}`;
+  const volumePercent = toTrackVolumePercent(track.volume);
+
+  return (
+    <div
+      className="rounded-sm border border-white/[0.06] bg-black/20 px-2 py-1.5"
+      style={{ ["--oc-track-accent" as string]: waveformLineColorByTrackId[track.id] }}
+    >
+      <div className="mb-1.5 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/30">
+        <label htmlFor={volumeInputId} className="text-white/45">
+          Level
+        </label>
+        <span className="text-white/65">{volumePercent}%</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/20">0</span>
+        <input
+          id={volumeInputId}
+          type="range"
+          min={TRACK_VOLUME_PERCENT_RANGE.min}
+          max={TRACK_VOLUME_PERCENT_RANGE.max}
+          step={TRACK_VOLUME_PERCENT_RANGE.step}
+          value={volumePercent}
+          aria-label={`${labelByTrackId[track.id]} volume`}
+          className={cn("oc-track-volume", track.muted && "opacity-60")}
+          onChange={(event) => {
+            onUpdateTrackVolume(track.id, Number(event.currentTarget.value) / TRACK_VOLUME_PERCENT_RANGE.max);
+          }}
+        />
+        <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/20">100</span>
+      </div>
+      <div className="mt-1 flex items-center justify-between font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.16em] text-white/25">
+        <span>{track.muted ? "Muted bus" : "Bus live"}</span>
+        <span>{track.kind}</span>
       </div>
     </div>
   );
