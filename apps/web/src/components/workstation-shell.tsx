@@ -122,6 +122,7 @@ export function WorkstationShell() {
     },
   });
   const audioReady = engineState === "running" || engineState === "suspended";
+  const showAudioGate = !audioReady;
   const isPlaying = transportState.playbackState === "playing";
   const deckSample =
     (deckSampleId === null ? null : song.samples.find((sample) => sample.id === deckSampleId) ?? null) ??
@@ -522,7 +523,7 @@ export function WorkstationShell() {
 
       <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6 lg:px-8">
         {/* ── Transport + Controls Bar ── */}
-        <section className="flex flex-col gap-3">
+        <section className={cn("flex flex-col gap-3", showAudioGate ? "relative z-30" : undefined)}>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
             <TransportStrip
               song={song}
@@ -542,6 +543,7 @@ export function WorkstationShell() {
                 engineState={engineState}
                 audioReady={audioReady}
                 initializeAudio={initializeAudio}
+                showAudioGate={showAudioGate}
               />
               <Button
                 variant="outline"
@@ -646,6 +648,13 @@ export function WorkstationShell() {
           </aside>
         </section>
       </div>
+
+      {showAudioGate ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-20 bg-[#04050b]/72 backdrop-blur-[4px] backdrop-saturate-125"
+        />
+      ) : null}
 
       {arrangementEditor !== null ? (
         <TrackArrangementEditor
@@ -820,26 +829,65 @@ function AudioInitButton({
   engineState,
   audioReady,
   initializeAudio,
+  showAudioGate,
 }: {
   engineState: AudioBootstrapState;
   audioReady: boolean;
   initializeAudio: () => Promise<unknown>;
+  showAudioGate: boolean;
 }) {
+  const promptId = "audio-init-prompt";
+  const showRetryCopy = engineState === "error";
+
   return (
-    <Button
-      className={cn(
-        "h-10 rounded-md px-4 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.1em] transition-all",
-        audioReady
-          ? "bg-[var(--oc-accent)]/15 text-[var(--oc-accent)] hover:bg-[var(--oc-accent)]/25"
-          : "bg-[var(--oc-accent)] text-white hover:bg-[var(--oc-accent)]/90",
-      )}
-      onClick={() => {
-        void initializeAudio();
-      }}
-    >
-      <Zap className="mr-1.5 size-3.5" />
-      {engineState === "initializing" ? "Booting…" : audioReady ? "Audio On" : "Start Audio"}
-    </Button>
+    <div className="relative flex items-center">
+      <Button
+        aria-describedby={showAudioGate ? promptId : undefined}
+        className={cn(
+          "h-10 rounded-md px-4 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.1em] transition-all",
+          audioReady
+            ? "bg-[var(--oc-accent)]/15 text-[var(--oc-accent)] hover:bg-[var(--oc-accent)]/25"
+            : "bg-[var(--oc-accent)] text-white hover:bg-[var(--oc-accent)]/90",
+          showAudioGate
+            ? "oc-audio-init-hotspot h-12 rounded-lg border border-[var(--oc-accent)]/70 px-5 text-sm shadow-[0_0_0_1px_rgba(167,139,250,0.25),0_18px_40px_rgba(10,10,18,0.55)]"
+            : undefined,
+        )}
+        onClick={() => {
+          void initializeAudio();
+        }}
+      >
+        <Zap className={cn("mr-1.5 size-3.5", showAudioGate ? "size-4" : undefined)} />
+        {engineState === "initializing" ? "Booting…" : audioReady ? "Audio On" : "Start Audio"}
+      </Button>
+
+      {showAudioGate ? (
+        <div
+          id={promptId}
+          className="oc-audio-gate absolute top-full right-0 mt-3 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(18,21,34,0.96),rgba(9,11,18,0.98))] p-4 shadow-[0_28px_80px_rgba(3,4,10,0.65)]"
+        >
+          <div className="absolute top-0 right-8 h-4 w-4 -translate-y-1/2 rotate-45 border-t border-l border-white/10 bg-[var(--oc-surface-raised)]" />
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded-full border border-[var(--oc-accent)]/35 bg-[var(--oc-accent)]/12 px-2 py-1 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-accent)]">
+              First step
+            </span>
+            <span className="font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-white/30">
+              Browser audio unlock
+            </span>
+          </div>
+          <p className="font-[var(--oc-display)] text-xl leading-tight text-white">
+            Click <span className="text-[var(--oc-accent)]">Start Audio</span> before using the sequencer.
+          </p>
+          <p className="mt-2 max-w-[32ch] font-[var(--oc-mono)] text-[11px] leading-5 text-white/55">
+            Your browser blocks sound until you interact once. This unlocks playback, sample preview, and recording.
+          </p>
+          {showRetryCopy ? (
+            <p className="mt-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-[var(--oc-noise)]">
+              Audio did not start. Click again to retry.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

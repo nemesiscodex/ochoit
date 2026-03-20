@@ -27,10 +27,11 @@ vi.mock("@/features/audio/sample-recorder", async () => {
 
 function createUseAudioEngineResult(
   playbackState: "stopped" | "playing" = "stopped",
+  engineState: useAudioEngineModule.AudioBootstrapState = "running",
 ): ReturnType<typeof useAudioEngineModule.useAudioEngine> {
   return {
     engine: null,
-    engineState: "running",
+    engineState,
     errorMessage: null,
     transportState: {
       playbackState,
@@ -105,6 +106,32 @@ describe("workstation-shell", () => {
 
     expect(screen.getByDisplayValue("172")).toBeTruthy();
     expect(screen.getByDisplayValue("20")).toBeTruthy();
+  });
+
+  it("highlights start audio as the first action before the engine is ready", () => {
+    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
+
+    renderWorkstationShell();
+
+    expect(screen.getByText("First step")).toBeTruthy();
+    expect(screen.getByText(/before using the sequencer/i)).toBeTruthy();
+
+    const startAudioButton = screen.getByRole("button", { name: "Start Audio" });
+    expect(startAudioButton.getAttribute("aria-describedby")).toBe("audio-init-prompt");
+  });
+
+  it("removes the audio gate once audio is running", () => {
+    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
+
+    const { rerender } = renderWorkstationShell();
+
+    expect(screen.getByText("First step")).toBeTruthy();
+
+    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "running"));
+    rerender(createWorkstationShellElement());
+
+    expect(screen.queryByText("First step")).toBeNull();
+    expect(screen.getByRole("button", { name: "Audio On" }).getAttribute("aria-describedby")).toBeNull();
   });
 
   it("forwards play and stop actions to the audio engine hook", () => {
