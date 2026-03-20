@@ -26,6 +26,11 @@ Build a browser-based chiptune workstation that feels playful and immediate:
 
 The initial version should be NES-inspired rather than a perfect hardware emulator. That keeps the first release focused on musical usability while leaving room for a later "authentic mode" with stricter hardware behavior.
 
+The long-term direction should separate two engine modes clearly:
+
+- `Inspired mode`: musical workflow first, friendlier PCM editing, and convenience features that make composition easier
+- `Authentic mode`: stricter NES-like channel limits, rate-based DPCM behavior, and hardware-oriented terminology
+
 ## Core Experience
 
 The intended user flow is:
@@ -78,7 +83,8 @@ Expected voice behavior:
 - Pulse rows: note, volume, duty cycle
 - Triangle row: note, volume
 - Noise row: trigger, noise rate or mode, volume
-- PCM row: trigger recorded sample, preview sample, trim sample
+- PCM row in `Inspired mode`: trigger recorded sample, preview sample, trim sample, and optionally map playback to musical notes
+- PCM row in `Authentic mode`: trigger short sampled hits using fixed-rate DPCM-style behavior instead of note-mapped playback
 
 ### 3. Visualization Layer
 
@@ -138,3 +144,4 @@ The project is on track when a user can:
 - watch each voice waveform while the loop is playing
 - record and trim a short PCM sound
 - save and reload a song locally
+- understand whether the current song is using `Inspired` or `Authentic` playback rules

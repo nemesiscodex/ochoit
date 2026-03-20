@@ -12,6 +12,8 @@ Build a first playable web app that captures the core idea of the project:
 
 The MVP should prioritize responsiveness, clarity, and a complete end-to-end loop over perfect hardware authenticity.
 
+The first playable version should ship in `Inspired mode` by default. `Authentic mode` should be planned as a later follow-up with stricter NES-style PCM and channel constraints.
+
 ## Scope
 
 ### Included
@@ -28,10 +30,12 @@ The MVP should prioritize responsiveness, clarity, and a complete end-to-end loo
 - short microphone recording for the sample voice
 - basic trim controls for the recorded sample
 - local save/load of song state
+- explicit `engineMode` behavior in the song model, even if the UI stays focused on `Inspired mode` for the first pass
 
 ### Excluded
 
 - exact NES mixer curve emulation
+- full `Authentic mode` PCM/DPCM behavior
 - pulse sweep and envelope emulation
 - advanced tracker effect columns
 - multi-pattern arrangement mode
@@ -44,6 +48,7 @@ The MVP should prioritize responsiveness, clarity, and a complete end-to-end loo
 - As a user, I can assign notes to the two pulse rows and the triangle row.
 - As a user, I can place rhythmic triggers on the noise row.
 - As a user, I can record a short PCM sound with my microphone and trigger it from the sample row.
+- As a user, I can understand that the first version uses an `Inspired mode` sample workflow rather than strict NES-authentic PCM rules.
 - As a user, I can see a waveform for each voice while the sequence is playing.
 - As a user, I can save my current song locally and load it later.
 
@@ -96,6 +101,7 @@ Voice-specific controls:
 - preview the captured waveform
 - trim start and end points
 - assign the trimmed buffer to the PCM voice
+- keep PCM playback rate-based in the first pass, while leaving room for later note-mapped behavior in `Inspired mode`
 
 ### Persistence
 
@@ -133,6 +139,7 @@ type StepEvent = {
 - Noise and PCM rows can store and play step triggers.
 - The user can record, trim, and reuse a short PCM sample.
 - The user can save a song locally and reload it successfully after refresh.
+- The product direction keeps `Inspired mode` and future `Authentic mode` behavior distinct in the design docs and data model.
 
 ## Build Order
 
