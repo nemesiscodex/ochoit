@@ -1,13 +1,27 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkstationShell } from "@/components/workstation-shell";
+import type { AudioEngine } from "@/features/audio/audio-engine";
+import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
 import * as useAudioEngineModule from "@/features/audio/use-audio-engine";
+import * as sampleRecorderModule from "@/features/audio/sample-recorder";
 
 vi.mock("@/features/audio/use-audio-engine", () => ({
   useAudioEngine: vi.fn(),
 }));
+
+vi.mock("@/features/audio/sample-recorder", async () => {
+  const actual = await vi.importActual<typeof import("@/features/audio/sample-recorder")>(
+    "@/features/audio/sample-recorder",
+  );
+
+  return {
+    ...actual,
+    useSampleRecorder: vi.fn(),
+  };
+});
 
 function createUseAudioEngineResult(
   playbackState: "stopped" | "playing" = "stopped",
@@ -29,12 +43,36 @@ function createUseAudioEngineResult(
   };
 }
 
+function createUseSampleRecorderResult(
+  overrides: Partial<ReturnType<typeof sampleRecorderModule.useSampleRecorder>> = {},
+): ReturnType<typeof sampleRecorderModule.useSampleRecorder> {
+  return {
+    errorMessage: null,
+    permissionState: "granted",
+    recordingDurationMs: 0,
+    startRecording: vi.fn(async () => undefined),
+    status: "ready",
+    stopRecording: vi.fn(),
+    waveform: new Uint8Array([128]),
+    ...overrides,
+  };
+}
+
 describe("workstation-shell", () => {
   const mockUseAudioEngine = vi.mocked(useAudioEngineModule.useAudioEngine);
+  const mockUseSampleRecorder = vi.mocked(sampleRecorderModule.useSampleRecorder);
+  let latestRecorderOptions: Parameters<typeof sampleRecorderModule.useSampleRecorder>[0] | null = null;
 
   beforeEach(() => {
     mockUseAudioEngine.mockReset();
+    mockUseSampleRecorder.mockReset();
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult());
+    latestRecorderOptions = null;
+    mockUseSampleRecorder.mockImplementation((options) => {
+      latestRecorderOptions = options;
+
+      return createUseSampleRecorderResult();
+    });
   });
 
   it("updates the bpm and loop length fields in the transport bar", () => {
@@ -52,7 +90,7 @@ describe("workstation-shell", () => {
 
   it("forwards play and stop actions to the audio engine hook", () => {
     const stoppedResult = createUseAudioEngineResult("stopped");
-    mockUseAudioEngine.mockReturnValueOnce(stoppedResult);
+    mockUseAudioEngine.mockReturnValue(stoppedResult);
 
     const { rerender } = render(React.createElement(WorkstationShell));
 
@@ -61,7 +99,7 @@ describe("workstation-shell", () => {
     expect(stoppedResult.startTransport).toHaveBeenCalledTimes(1);
 
     const playingResult = createUseAudioEngineResult("playing");
-    mockUseAudioEngine.mockReturnValueOnce(playingResult);
+    mockUseAudioEngine.mockReturnValue(playingResult);
     rerender(React.createElement(WorkstationShell));
 
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
@@ -382,5 +420,84 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Assign vox-hit at 1.5x" }));
 
     expect(triggerButton.textContent).toBe("vox-hit 1.5x");
+  });
+
+  it("stores a completed microphone take in the sample deck", () => {
+    const startRecording = vi.fn(async () => undefined);
+    const stopRecording = vi.fn();
+
+    mockUseSampleRecorder.mockImplementation((options) => {
+      latestRecorderOptions = options;
+
+      return createUseSampleRecorderResult({
+        startRecording,
+        status: "recording",
+        stopRecording,
+      });
+    });
+
+    render(React.createElement(WorkstationShell));
+
+    const sidebar = screen.getByText("Sample Deck").closest("aside");
+
+    if (sidebar === null) {
+      throw new Error("Expected sample deck sidebar.");
+    }
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Stop" }));
+
+    expect(stopRecording).toHaveBeenCalledTimes(1);
+
+    const recording: RecordedSampleDraft = {
+      asset: {
+        id: "mic-002",
+        name: "mic-002",
+        source: "mic",
+        sampleRate: 11_025,
+        frameCount: 4,
+        channels: 1,
+        trim: {
+          startFrame: 0,
+          endFrame: 4,
+        },
+        pcm: [0, 0.5, -0.25, 0],
+      },
+      durationMs: 180,
+      waveform: new Uint8Array([128, 160, 100, 128]),
+    };
+
+    act(() => {
+      latestRecorderOptions?.onRecordingComplete(recording);
+    });
+
+    expect(screen.getByText("mic-002")).toBeTruthy();
+    expect(screen.getByText("4 fr")).toBeTruthy();
+  });
+
+  it("previews the current deck sample through the audio engine", async () => {
+    const previewSampleTrigger = vi.fn();
+    const previewEngine = {
+      previewSampleTrigger,
+    } as unknown as AudioEngine;
+    const initializeAudio = vi.fn<() => Promise<AudioEngine | null>>(async () => previewEngine);
+
+    mockUseAudioEngine.mockReturnValue({
+      ...createUseAudioEngineResult(),
+      initializeAudio,
+    });
+
+    render(React.createElement(WorkstationShell));
+
+    const sidebar = screen.getByText("Sample Deck").closest("aside");
+
+    if (sidebar === null) {
+      throw new Error("Expected sample deck sidebar.");
+    }
+
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Preview" }));
+
+    expect(initializeAudio).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001");
   });
 });

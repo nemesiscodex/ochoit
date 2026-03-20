@@ -7,7 +7,12 @@ import { useEffect, useState } from "react";
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { WaveformCanvas } from "@/components/waveform-canvas";
-import { sampleDeckPreviewWaveform } from "@/features/audio/waveform-data";
+import {
+  createWaveformFromPcm,
+  useSampleRecorder,
+  type SampleRecorderPermissionState,
+  type SampleRecorderStatus,
+} from "@/features/audio/sample-recorder";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import { createDefaultSongDocument, getOrderedTracks, type SongDocument, type TrackId } from "@/features/song/song-document";
 import { updateTrackMute, updateTrackVolume } from "@/features/song/song-mixer";
@@ -48,12 +53,48 @@ type ArrangementEditorState = {
 
 export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
+  const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
   const tracks = getOrderedTracks(song);
   const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
+  const {
+    errorMessage: recorderErrorMessage,
+    permissionState: recorderPermissionState,
+    recordingDurationMs,
+    startRecording,
+    status: recorderStatus,
+    stopRecording,
+  } = useSampleRecorder({
+    existingSamples: song.samples,
+    onRecordingComplete: ({ asset }) => {
+      setSong((currentSong) => ({
+        ...currentSong,
+        meta: {
+          ...currentSong.meta,
+          updatedAt: new Date().toISOString(),
+        },
+        samples: [...currentSong.samples, asset],
+      }));
+      setDeckSampleId(asset.id);
+    },
+  });
   const audioReady = engineState === "running" || engineState === "suspended";
   const isPlaying = transportState.playbackState === "playing";
+  const deckSample =
+    (deckSampleId === null ? null : song.samples.find((sample) => sample.id === deckSampleId) ?? null) ??
+    song.samples.at(-1) ??
+    null;
+
+  const previewDeckSample = async () => {
+    if (deckSample === null) {
+      return;
+    }
+
+    const readyEngine = engine ?? (await initializeAudio());
+
+    readyEngine?.previewSampleTrigger(deckSample.id);
+  };
 
   const toggleTrackMute = (trackId: TrackId) => {
     setSong((currentSong) => updateTrackMute(currentSong, trackId));
@@ -214,6 +255,20 @@ export function WorkstationShell() {
     };
   }, [arrangementEditor]);
 
+  useEffect(() => {
+    setDeckSampleId((currentSampleId) => {
+      if (song.samples.length === 0) {
+        return null;
+      }
+
+      if (currentSampleId !== null && song.samples.some((sample) => sample.id === currentSampleId)) {
+        return currentSampleId;
+      }
+
+      return song.samples.at(-1)?.id ?? null;
+    });
+  }, [song.samples]);
+
   return (
     <main className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines">
       {/* Ambient gradient backdrop */}
@@ -293,7 +348,16 @@ export function WorkstationShell() {
 
           {/* Sample Deck Sidebar */}
           <aside className="flex flex-col gap-3">
-            <SampleDeck sampleName={song.samples[0]?.name ?? null} />
+            <SampleDeck
+              sample={deckSample}
+              recorderErrorMessage={recorderErrorMessage}
+              recorderPermissionState={recorderPermissionState}
+              recorderStatus={recorderStatus}
+              recordingDurationMs={recordingDurationMs}
+              onPreviewSample={previewDeckSample}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+            />
             <SongMeta song={song} engineState={engineState} trackCount={tracks.length} />
           </aside>
         </section>
@@ -499,7 +563,44 @@ function StatusChip({ label, value }: { label: string; value: string }) {
 
 /* ─────────── Sample Deck ─────────── */
 
-function SampleDeck({ sampleName }: { sampleName: string | null }) {
+function SampleDeck({
+  sample,
+  recorderErrorMessage,
+  recorderPermissionState,
+  recorderStatus,
+  recordingDurationMs,
+  onPreviewSample,
+  onStartRecording,
+  onStopRecording,
+}: {
+  sample: SongDocument["samples"][number] | null;
+  recorderErrorMessage: string | null;
+  recorderPermissionState: SampleRecorderPermissionState;
+  recorderStatus: SampleRecorderStatus;
+  recordingDurationMs: number;
+  onPreviewSample: () => Promise<void>;
+  onStartRecording: () => Promise<void>;
+  onStopRecording: () => void;
+}) {
+  const isRecording = recorderStatus === "recording";
+  const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
+  const waveform = sample === null ? createWaveformFromPcm([]) : createWaveformFromPcm(sample.pcm);
+  const sampleDurationMs =
+    sample === null || sample.sampleRate <= 0 ? 0 : Math.round((sample.trim.endFrame - sample.trim.startFrame) / sample.sampleRate * 1000);
+  const statusLabel =
+    recorderStatus === "recording"
+      ? `Recording ${formatSampleDurationLabel(recordingDurationMs)}`
+      : recorderStatus === "processing"
+        ? "Rendering clip"
+        : recorderStatus === "requesting-permission"
+          ? "Requesting microphone access"
+          : recorderStatus === "error"
+            ? recorderErrorMessage ?? "Recorder error"
+            : sample === null
+              ? "Ready to capture"
+              : `Latest clip ${formatSampleDurationLabel(sampleDurationMs)}`;
+  const permissionLabel = getPermissionLabel(recorderPermissionState);
+
   return (
     <div className="rounded-lg border border-[var(--oc-sample)]/20 bg-[var(--oc-surface)] p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -510,41 +611,89 @@ function SampleDeck({ sampleName }: { sampleName: string | null }) {
       </div>
 
       <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-white/35">
-        Record 1-2s, trim, trigger on the PCM lane.
+        Capture up to 2s from the microphone. New takes are saved to the sample deck without replacing the current PCM lane triggers.
       </p>
 
       <div className="mb-3 grid grid-cols-2 gap-2">
         <Button
+          type="button"
           className="h-8 rounded-md bg-[var(--oc-sample)] font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[#07080e] hover:bg-[var(--oc-sample)]/85"
+          disabled={recorderPermissionState === "unsupported" || isBusy}
+          onClick={() => {
+            if (isRecording) {
+              onStopRecording();
+              return;
+            }
+
+            void onStartRecording();
+          }}
         >
-          Record
+          {isRecording ? <Square className="mr-1.5 size-3" /> : <Mic className="mr-1.5 size-3" />}
+          {isRecording ? "Stop" : recorderStatus === "requesting-permission" ? "Allow Mic" : "Record"}
         </Button>
         <Button
+          type="button"
           variant="outline"
           className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.07] hover:text-white"
+          disabled={sample === null || isBusy || isRecording}
+          onClick={() => {
+            void onPreviewSample();
+          }}
         >
           Preview
         </Button>
       </div>
 
+      <div className="mb-3 grid grid-cols-2 gap-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]">
+        <div className="rounded-md border border-white/[0.06] bg-black/25 px-2.5 py-2 text-white/45">
+          <span className="block text-white/25">Mic</span>
+          <span className="mt-1 block text-white/65">{permissionLabel}</span>
+        </div>
+        <div className="rounded-md border border-white/[0.06] bg-black/25 px-2.5 py-2 text-white/45">
+          <span className="block text-white/25">Recorder</span>
+          <span className="mt-1 block text-white/65">{statusLabel}</span>
+        </div>
+      </div>
+
       <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
         <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
-          <span>Trim</span>
-          <span>{sampleName ?? "No Sample"}</span>
+          <span>Latest Take</span>
+          <span>{sample?.name ?? "No Sample"}</span>
         </div>
         <div className="oc-waveform-wrap rounded-sm">
           <WaveformCanvas
             ariaLabel="PCM trim preview waveform"
-            samples={sampleDeckPreviewWaveform}
+            samples={waveform}
             className="h-12 w-full"
             backgroundColor="rgba(7, 8, 14, 0.9)"
             glowColor={waveformGlowColorByTrackId.sample}
             lineColor={waveformLineColorByTrackId.sample}
           />
         </div>
+        <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">
+          <span>{sample === null ? "No clip loaded" : `${sample.frameCount} fr`}</span>
+          <span>{sample === null ? "0.00s" : formatSampleDurationLabel(sampleDurationMs)}</span>
+        </div>
       </div>
     </div>
   );
+}
+
+function getPermissionLabel(permissionState: SampleRecorderPermissionState) {
+  switch (permissionState) {
+    case "granted":
+      return "Granted";
+    case "denied":
+      return "Blocked";
+    case "unsupported":
+      return "Unsupported";
+    default:
+      return "Not asked";
+  }
+}
+
+function formatSampleDurationLabel(durationMs: number) {
+  return `${(Math.max(0, durationMs) / 1000).toFixed(2)}s`;
 }
 
 /* ─────────── Song Metadata ─────────── */
