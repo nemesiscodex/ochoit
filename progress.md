@@ -29,7 +29,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Add sample preview and trim controls
 - [x] Connect recorded PCM samples to the sample lane
 - [x] Decide `Inspired mode` PCM behavior, including whether samples can be mapped to musical notes
-- [ ] Define `Authentic mode` PCM/DPCM constraints and how they differ from `Inspired mode`
+- [x] Define `Authentic mode` PCM/DPCM constraints and how they differ from `Inspired mode`
 - [ ] Save and load songs from localStorage
 - [ ] Test playback timing under normal UI interaction
 - [ ] Polish the editor UI for desktop and mobile

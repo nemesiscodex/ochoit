@@ -97,6 +97,23 @@ For the current product direction, `Inspired mode` PCM is explicitly trigger-fir
 
 This keeps the sample lane easy to understand beside the pulse and triangle note lanes, while still allowing expressive pitch-shifted playback without introducing a second melodic editing system.
 
+### Authentic Mode PCM/DPCM Constraints
+
+`Authentic mode` should be treated as a separate playback contract rather than a stricter toggle on top of `Inspired mode`.
+
+- the fifth lane becomes hardware-oriented `DPCM` terminology rather than a general-purpose PCM lane
+- each trigger targets a converted DPCM asset plus a fixed NES playback-rate preset, not an arbitrary `0.25x` to `4x` playback multiplier
+- pitch changes come only from the chosen DPCM rate preset, so there is no direct note entry and no free-rate pitch sweep
+- source samples can still be recorded or imported in the editor, but authentic playback converts them into constrained one-bit DPCM-style data before scheduling
+- trimming remains useful during authoring, but the converted playback asset is expected to be short, percussive, and quantized for hardware-style playback rather than treated like a flexible sampler
+- authentic UI copy should describe the lane as one-shot hits, rates, and converted sample assets instead of melodic sample performance
+
+In practical terms, the difference from `Inspired mode` is:
+
+- `Inspired mode` stores `sampleId + playbackRate` for expressive one-shots and pitch-shifted edits
+- `Authentic mode` is planned around `sampleId + rate preset` with stricter playback behavior, hardware wording, and no arbitrary pitch control
+- `Inspired mode` is the musical workflow-first default, while `Authentic mode` is a later follow-up for users who want stricter NES-style limits
+
 ### 3. Visualization Layer
 
 Each voice row should display the generated waveform in real time so the user can both hear and see what that voice is doing.

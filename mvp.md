@@ -113,6 +113,16 @@ The MVP locks `Inspired mode` PCM to a simple rule set:
 - the lane is intended for one-shots, chopped vocals, and percussive accents
 - note-mapped sample performance is deferred to a later design pass, if it is added at all
 
+### Authentic Mode PCM/DPCM Definition
+
+The follow-up `Authentic mode` should diverge from the MVP sample workflow in a few explicit ways:
+
+- the lane should be presented as `DPCM`, not a free-form PCM sampler
+- steps should choose a converted sample asset plus a fixed NES-style rate preset instead of an arbitrary playback-rate multiplier
+- playback should stay one-shot and hardware-oriented, without note entry or continuous pitch shifting
+- authoring tools may still reuse the recorder and trim UI, but authentic playback should convert those edits into constrained DPCM-style assets before sequencing
+- authentic copy and future controls should emphasize rate presets and short converted hits, making the difference from `Inspired mode` obvious in both the song model and the editor language
+
 ### Persistence
 
 - save the song document to localStorage
@@ -150,6 +160,7 @@ type StepEvent = {
 - The user can record, trim, and reuse a short PCM sample.
 - The user can save a song locally and reload it successfully after refresh.
 - The product direction keeps `Inspired mode` and future `Authentic mode` behavior distinct in the design docs and data model, with `Inspired mode` PCM defined as trigger-plus-rate rather than note-mapped playback.
+- The product direction now defines `Authentic mode` as fixed-rate DPCM-style playback with converted sample assets and no arbitrary playback-rate control.
 
 ## Build Order
 

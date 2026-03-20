@@ -327,6 +327,7 @@ describe("workstation-shell", () => {
     expect(screen.getByText(/Inspired mode keeps PCM trigger-based/i)).toBeTruthy();
     expect(screen.getByText(/without musical note mapping/i)).toBeTruthy();
     expect(screen.getByText(/format 8: mic-001@1x/i)).toBeTruthy();
+    expect(screen.getByText(/optional playback rate from 0.25x to 4x/i)).toBeTruthy();
   });
 
   it("renders the sample deck sidebar", () => {
