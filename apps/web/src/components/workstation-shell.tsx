@@ -37,7 +37,12 @@ import {
   serializeMelodicTrackArrangement,
   updateMelodicTrackStep,
 } from "@/features/song/song-pattern";
-import { getTrimmedFrameCount, getTrimmedSamplePcm, updateSampleTrim } from "@/features/song/song-samples";
+import {
+  getTrimmedFrameCount,
+  getTrimmedSamplePcm,
+  moveSampleTrimWindow,
+  resizeSampleTrimWindow,
+} from "@/features/song/song-samples";
 import {
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
@@ -121,12 +126,20 @@ export function WorkstationShell() {
     setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
   };
 
-  const updateDeckSampleTrim = (updates: { startFrame?: number; endFrame?: number }) => {
+  const moveDeckSampleTrimWindow = (startFrame: number) => {
     if (deckSample === null) {
       return;
     }
 
-    setSong((currentSong) => updateSampleTrim(currentSong, deckSample.id, updates));
+    setSong((currentSong) => moveSampleTrimWindow(currentSong, deckSample.id, startFrame));
+  };
+
+  const resizeDeckSampleTrimWindow = (frameCount: number) => {
+    if (deckSample === null) {
+      return;
+    }
+
+    setSong((currentSong) => resizeSampleTrimWindow(currentSong, deckSample.id, frameCount));
   };
 
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
@@ -368,14 +381,10 @@ export function WorkstationShell() {
               recorderStatus={recorderStatus}
               recordingDurationMs={recordingDurationMs}
               onPreviewSample={previewDeckSample}
+              onMoveTrimWindow={moveDeckSampleTrimWindow}
+              onResizeTrimWindow={resizeDeckSampleTrimWindow}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
-              onUpdateTrimEnd={(endFrame) => {
-                updateDeckSampleTrim({ endFrame });
-              }}
-              onUpdateTrimStart={(startFrame) => {
-                updateDeckSampleTrim({ startFrame });
-              }}
             />
             <SongMeta song={song} engineState={engineState} trackCount={tracks.length} />
           </aside>
@@ -589,10 +598,10 @@ function SampleDeck({
   recorderStatus,
   recordingDurationMs,
   onPreviewSample,
+  onMoveTrimWindow,
+  onResizeTrimWindow,
   onStartRecording,
   onStopRecording,
-  onUpdateTrimEnd,
-  onUpdateTrimStart,
 }: {
   sample: SongDocument["samples"][number] | null;
   recorderErrorMessage: string | null;
@@ -600,16 +609,17 @@ function SampleDeck({
   recorderStatus: SampleRecorderStatus;
   recordingDurationMs: number;
   onPreviewSample: () => Promise<void>;
+  onMoveTrimWindow: (startFrame: number) => void;
+  onResizeTrimWindow: (frameCount: number) => void;
   onStartRecording: () => Promise<void>;
   onStopRecording: () => void;
-  onUpdateTrimEnd: (endFrame: number) => void;
-  onUpdateTrimStart: (startFrame: number) => void;
 }) {
   const isRecording = recorderStatus === "recording";
   const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
   const trimmedPcm = sample === null ? [] : getTrimmedSamplePcm(sample);
   const waveform = createWaveformFromPcm(trimmedPcm);
   const trimmedFrameCount = sample === null ? 0 : getTrimmedFrameCount(sample);
+  const trimWindowMaxStart = sample === null ? 0 : Math.max(0, sample.frameCount - trimmedFrameCount);
   const sampleDurationMs =
     sample === null || sample.sampleRate <= 0 ? 0 : Math.round((trimmedFrameCount / sample.sampleRate) * 1000);
   const statusLabel =
@@ -636,7 +646,7 @@ function SampleDeck({
       </div>
 
       <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-white/35">
-        Capture up to 2s from the microphone. New takes are saved to the sample deck without replacing the current PCM lane triggers.
+        Capture up to 2s from the microphone. Set a trim length, then slide the whole window across the take without changing its duration.
       </p>
 
       <div className="mb-3 grid grid-cols-2 gap-2">
@@ -698,23 +708,28 @@ function SampleDeck({
         <div className="mt-3 grid gap-3">
           <SampleTrimControl
             disabled={sample === null || isRecording}
-            label="Start"
-            labelId="sample-trim-start"
-            max={sample?.frameCount ?? 0}
-            onChange={onUpdateTrimStart}
+            label="Window"
+            labelId="sample-trim-window"
+            max={trimWindowMaxStart}
+            onChange={onMoveTrimWindow}
             value={sample?.trim.startFrame ?? 0}
           />
           <SampleTrimControl
             disabled={sample === null || isRecording}
-            label="End"
-            labelId="sample-trim-end"
+            label="Length"
+            labelId="sample-trim-length"
             max={sample?.frameCount ?? 0}
-            onChange={onUpdateTrimEnd}
-            value={sample?.trim.endFrame ?? 0}
+            min={0}
+            onChange={onResizeTrimWindow}
+            value={trimmedFrameCount}
           />
         </div>
         <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">
-          <span>{sample === null ? "No clip loaded" : `${trimmedFrameCount} / ${sample.frameCount} fr`}</span>
+          <span>
+            {sample === null
+              ? "No clip loaded"
+              : `${sample.trim.startFrame}-${sample.trim.endFrame} · ${trimmedFrameCount} / ${sample.frameCount} fr`}
+          </span>
           <span>{sample === null ? "0.00s" : formatSampleDurationLabel(sampleDurationMs)}</span>
         </div>
       </div>
@@ -727,6 +742,7 @@ function SampleTrimControl({
   label,
   labelId,
   max,
+  min = 0,
   onChange,
   value,
 }: {
@@ -734,6 +750,7 @@ function SampleTrimControl({
   label: string;
   labelId: string;
   max: number;
+  min?: number;
   onChange: (value: number) => void;
   value: number;
 }) {
@@ -747,10 +764,10 @@ function SampleTrimControl({
         id={labelId}
         aria-label={`Sample trim ${label.toLowerCase()}`}
         type="range"
-        min={0}
+        min={min}
         max={max}
         step={1}
-        value={Math.min(value, max)}
+        value={Math.max(min, Math.min(value, max))}
         disabled={disabled}
         className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-sample)] disabled:cursor-not-allowed disabled:opacity-40"
         onChange={(event) => {
@@ -760,10 +777,10 @@ function SampleTrimControl({
       <Input
         aria-label={`Sample trim ${label.toLowerCase()} frame`}
         type="number"
-        min={0}
+        min={min}
         max={max}
         step={1}
-        value={Math.min(value, max)}
+        value={Math.max(min, Math.min(value, max))}
         disabled={disabled}
         className="h-7 border-white/[0.08] bg-black/30 px-2 font-[var(--oc-mono)] text-[10px] text-white"
         onChange={(event) => {

@@ -276,18 +276,18 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Song Info")).toBeTruthy();
   });
 
-  it("updates the current sample trim controls in the song state", () => {
+  it("moves the trim window while preserving the selected length", () => {
     render(React.createElement(WorkstationShell));
 
-    const startFrameInput = screen.getByLabelText("Sample trim start frame");
-    const endFrameInput = screen.getByLabelText("Sample trim end frame");
+    const lengthFrameInput = screen.getByLabelText("Sample trim length frame");
+    const windowFrameInput = screen.getByLabelText("Sample trim window frame");
 
-    if (!(startFrameInput instanceof HTMLInputElement) || !(endFrameInput instanceof HTMLInputElement)) {
+    if (!(lengthFrameInput instanceof HTMLInputElement) || !(windowFrameInput instanceof HTMLInputElement)) {
       throw new Error("Expected sample trim frame inputs.");
     }
 
-    fireEvent.change(startFrameInput, { target: { value: "2" } });
-    fireEvent.change(endFrameInput, { target: { value: "8" } });
+    fireEvent.change(lengthFrameInput, { target: { value: "6" } });
+    fireEvent.change(windowFrameInput, { target: { value: "4" } });
 
     const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
 
@@ -295,13 +295,13 @@ describe("workstation-shell", () => {
       throw new Error("Expected the audio engine hook to receive song state.");
     }
 
-    expect(startFrameInput.value).toBe("2");
-    expect(endFrameInput.value).toBe("8");
+    expect(lengthFrameInput.value).toBe("6");
+    expect(windowFrameInput.value).toBe("4");
     expect(latestSong.samples[0]?.trim).toEqual({
-      startFrame: 2,
-      endFrame: 8,
+      startFrame: 4,
+      endFrame: 10,
     });
-    expect(screen.getByText("6 / 12 fr")).toBeTruthy();
+    expect(screen.getByText("4-10 · 6 / 12 fr")).toBeTruthy();
   });
 
   it("toggles the mute state for a specific voice", () => {
@@ -499,7 +499,7 @@ describe("workstation-shell", () => {
     });
 
     expect(screen.getByText("mic-002")).toBeTruthy();
-    expect(screen.getByText("4 fr")).toBeTruthy();
+    expect(screen.getByText("0-4 · 4 / 4 fr")).toBeTruthy();
   });
 
   it("previews the current deck sample through the audio engine", async () => {

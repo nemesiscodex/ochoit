@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultSongDocument } from "@/features/song/song-document";
-import { getTrimmedFrameCount, getTrimmedSamplePcm, updateSampleTrim } from "@/features/song/song-samples";
+import {
+  getTrimmedFrameCount,
+  getTrimmedSamplePcm,
+  moveSampleTrimWindow,
+  resizeSampleTrimWindow,
+  updateSampleTrim,
+} from "@/features/song/song-samples";
 
 describe("song-samples", () => {
   beforeEach(() => {
@@ -70,6 +76,68 @@ describe("song-samples", () => {
     expect(endClampedSample.trim).toEqual({
       startFrame: sample.trim.startFrame,
       endFrame: sample.trim.startFrame,
+    });
+  });
+
+  it("moves the trim window while preserving its current length", () => {
+    const song = createDefaultSongDocument();
+    const sample = song.samples[0];
+
+    if (sample === undefined) {
+      throw new Error("Expected a seeded sample.");
+    }
+
+    const trimmedSong = updateSampleTrim(song, sample.id, {
+      startFrame: 2,
+      endFrame: 8,
+    });
+    const movedSong = moveSampleTrimWindow(trimmedSong, sample.id, 4);
+    const movedSample = movedSong.samples[0];
+
+    if (movedSample === undefined) {
+      throw new Error("Expected a moved sample.");
+    }
+
+    expect(movedSample.trim).toEqual({
+      startFrame: 4,
+      endFrame: 10,
+    });
+  });
+
+  it("resizes the trim window and keeps it within the sample bounds", () => {
+    const song = createDefaultSongDocument();
+    const sample = song.samples[0];
+
+    if (sample === undefined) {
+      throw new Error("Expected a seeded sample.");
+    }
+
+    const resizedSong = resizeSampleTrimWindow(song, sample.id, 5);
+    const resizedSample = resizedSong.samples[0];
+
+    if (resizedSample === undefined) {
+      throw new Error("Expected a resized sample.");
+    }
+
+    expect(resizedSample.trim).toEqual({
+      startFrame: 0,
+      endFrame: 5,
+    });
+
+    const shiftedSong = updateSampleTrim(song, sample.id, {
+      startFrame: 10,
+      endFrame: 12,
+    });
+    const clampedResizeSong = resizeSampleTrimWindow(shiftedSong, sample.id, 4);
+    const clampedResizeSample = clampedResizeSong.samples[0];
+
+    if (clampedResizeSample === undefined) {
+      throw new Error("Expected a resized sample.");
+    }
+
+    expect(clampedResizeSample.trim).toEqual({
+      startFrame: 8,
+      endFrame: 12,
     });
   });
 });

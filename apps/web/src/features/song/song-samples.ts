@@ -21,6 +21,40 @@ export function getTrimmedSamplePcm(sample: SerializedSampleAsset) {
   return sample.pcm.slice(sample.trim.startFrame, sample.trim.endFrame);
 }
 
+export function moveSampleTrimWindow(song: SongDocument, sampleId: string, startFrame: number) {
+  const sample = song.samples.find((entry) => entry.id === sampleId);
+
+  if (sample === undefined) {
+    return song;
+  }
+
+  const trimmedFrameCount = getTrimmedFrameCount(sample);
+  const maxStartFrame = Math.max(0, sample.frameCount - trimmedFrameCount);
+  const nextStartFrame = clampFrame(startFrame, maxStartFrame);
+
+  return updateSampleTrim(song, sampleId, {
+    startFrame: nextStartFrame,
+    endFrame: nextStartFrame + trimmedFrameCount,
+  });
+}
+
+export function resizeSampleTrimWindow(song: SongDocument, sampleId: string, frameCount: number) {
+  const sample = song.samples.find((entry) => entry.id === sampleId);
+
+  if (sample === undefined) {
+    return song;
+  }
+
+  const nextFrameCount = clampFrame(frameCount, sample.frameCount);
+  const maxStartFrame = Math.max(0, sample.frameCount - nextFrameCount);
+  const nextStartFrame = Math.min(sample.trim.startFrame, maxStartFrame);
+
+  return updateSampleTrim(song, sampleId, {
+    startFrame: nextStartFrame,
+    endFrame: nextStartFrame + nextFrameCount,
+  });
+}
+
 export function updateSampleTrim(song: SongDocument, sampleId: string, updates: SampleTrimUpdate) {
   const sample = song.samples.find((entry) => entry.id === sampleId);
 
