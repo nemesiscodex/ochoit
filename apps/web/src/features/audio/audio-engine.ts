@@ -216,7 +216,7 @@ export class AudioEngine {
     gain.gain.linearRampToValueAtTime(0.0001, now + durationSec);
 
     oscillator.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.voices.triangle.input);
 
     oscillator.onended = () => {
       oscillator.disconnect();

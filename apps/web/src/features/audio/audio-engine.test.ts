@@ -388,11 +388,15 @@ describe("audio-engine", () => {
     engine.previewNote("triangle", "C4", 180);
     engine.previewNote("pulse1", "E4", 120, 0.25);
 
+    const trianglePreviewGain = mockContext.createdGains.at(-1);
+
     expect(mockContext.createdOscillators).toHaveLength(1);
     expect(mockContext.createdOscillators[0]?.type).toBe("triangle");
     expect(mockContext.createdOscillators[0]?.frequency.setValueAtTime).toHaveBeenCalled();
+    expect(mockContext.createdOscillators[0]?.connect).toHaveBeenCalledWith(trianglePreviewGain);
     expect(mockContext.createdOscillators[0]?.start).toHaveBeenCalledWith(mockContext.currentTime);
     expect(mockContext.createdOscillators[0]?.stop).toHaveBeenCalledWith(mockContext.currentTime + 0.19);
+    expect(trianglePreviewGain?.connect).toHaveBeenCalledWith(engine.voices.triangle.input);
     expect(audioEngineMocks.pulsePreviewNote).toHaveBeenCalledWith("E4", 0.25, 120, undefined);
   });
 
