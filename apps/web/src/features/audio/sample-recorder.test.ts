@@ -4,6 +4,7 @@ import {
   SAMPLE_RECORDING_TARGET_RATE,
   SAMPLE_RECORDING_WAVEFORM_SIZE,
   createRecordedSampleAsset,
+  createWaveformFromPcm,
   getNextMicSampleId,
 } from "@/features/audio/sample-recorder";
 import { createDefaultSongDocument } from "@/features/song/song-document";
@@ -65,5 +66,11 @@ describe("sample-recorder", () => {
     expect(recording.waveform).toHaveLength(SAMPLE_RECORDING_WAVEFORM_SIZE);
     expect(recording.waveform[0]).toBeGreaterThan(128);
     expect(recording.waveform[recording.waveform.length - 1]).toBeLessThan(128);
+  });
+
+  it("captures bucket peaks so oscillating recordings do not collapse into a flat preview", () => {
+    const waveform = createWaveformFromPcm([1, -1, 1, -1, 1, -1, 1, -1], 4);
+
+    expect(Array.from(waveform)).toEqual([240, 16, 240, 16]);
   });
 });

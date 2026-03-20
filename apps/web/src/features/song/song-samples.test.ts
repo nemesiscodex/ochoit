@@ -5,6 +5,7 @@ import {
   getTrimmedFrameCount,
   getTrimmedSamplePcm,
   moveSampleTrimWindow,
+  removeSampleAsset,
   resizeSampleTrimWindow,
   updateSampleTrim,
 } from "@/features/song/song-samples";
@@ -139,5 +140,22 @@ describe("song-samples", () => {
       startFrame: 8,
       endFrame: 12,
     });
+  });
+
+  it("removes a sample and disables PCM steps that referenced it", () => {
+    const song = createDefaultSongDocument();
+
+    const updatedSong = removeSampleAsset(song, "mic-001");
+
+    expect(updatedSong.samples).toHaveLength(0);
+    expect(updatedSong.tracks.sample.steps[7]).toMatchObject({
+      enabled: false,
+      sampleId: null,
+    });
+    expect(updatedSong.tracks.sample.steps[15]).toMatchObject({
+      enabled: false,
+      sampleId: null,
+    });
+    expect(updatedSong.meta.updatedAt).toBe("2026-03-19T10:00:00.000Z");
   });
 });

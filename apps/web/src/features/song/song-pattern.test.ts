@@ -9,6 +9,7 @@ import {
   parseSampleTrackArrangement,
   replaceMelodicTrackArrangement,
   replaceNoiseTrackArrangement,
+  replaceSampleTrackSampleReference,
   replaceSampleTrackArrangement,
   serializeMelodicTrackArrangement,
   serializeNoiseTrackArrangement,
@@ -337,5 +338,36 @@ describe("song-pattern", () => {
       playbackRate: 0.75,
     });
     expect(updatedSampleSong.tracks.sample.steps[7].enabled).toBe(false);
+  });
+
+  it("replaces enabled PCM step references for the active deck sample only", () => {
+    const song = replaceSampleTrackArrangement(createDefaultSongDocument(), [
+      { stepIndex: 1, sampleId: "mic-001", playbackRate: 0.75 },
+      { stepIndex: 5, sampleId: "vox-hit-alt", playbackRate: 1.5 },
+    ]);
+    const songWithAltSample = {
+      ...song,
+      samples: [
+        ...song.samples,
+        {
+          ...song.samples[0],
+          id: "vox-hit-alt",
+          name: "vox-hit-alt",
+        },
+      ],
+    };
+
+    const updatedSong = replaceSampleTrackSampleReference(songWithAltSample, "mic-001", "mic-002");
+
+    expect(updatedSong.tracks.sample.steps[1]).toMatchObject({
+      enabled: true,
+      sampleId: "mic-002",
+      playbackRate: 0.75,
+    });
+    expect(updatedSong.tracks.sample.steps[5]).toMatchObject({
+      enabled: true,
+      sampleId: "vox-hit-alt",
+      playbackRate: 1.5,
+    });
   });
 });

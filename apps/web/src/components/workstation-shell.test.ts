@@ -274,6 +274,7 @@ describe("workstation-shell", () => {
 
     expect(screen.getByText("Sample Deck")).toBeTruthy();
     expect(screen.getByText("Song Info")).toBeTruthy();
+    expect(screen.getByText("Recorded Clips")).toBeTruthy();
   });
 
   it("moves the trim window while preserving the selected length", () => {
@@ -450,7 +451,7 @@ describe("workstation-shell", () => {
     expect(triggerButton.textContent).toBe("vox-hit 1.5x");
   });
 
-  it("stores a completed microphone take in the sample deck", () => {
+  it("stores a completed microphone take in the sample deck and routes it to the PCM lane", () => {
     const startRecording = vi.fn(async () => undefined);
     const stopRecording = vi.fn();
 
@@ -498,8 +499,49 @@ describe("workstation-shell", () => {
       latestRecorderOptions?.onRecordingComplete(recording);
     });
 
-    expect(screen.getByText("mic-002")).toBeTruthy();
+    expect(screen.getAllByText("mic-002").length).toBeGreaterThan(0);
     expect(screen.getByText("0-4 · 4 / 4 fr")).toBeTruthy();
+    expect(screen.getByLabelText("PCM step 8 trigger").textContent).toBe("mic-002 1x");
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable PCM step 2" }));
+
+    expect(screen.getByLabelText("PCM step 2 trigger").textContent).toBe("mic-002 1x");
+  });
+
+  it("lets you load another sample from the deck list and delete clips", () => {
+    render(React.createElement(WorkstationShell));
+
+    const recording: RecordedSampleDraft = {
+      asset: {
+        id: "mic-002",
+        name: "mic-002",
+        source: "mic",
+        sampleRate: 11_025,
+        frameCount: 4,
+        channels: 1,
+        trim: {
+          startFrame: 0,
+          endFrame: 4,
+        },
+        pcm: [0, 0.5, -0.25, 0],
+      },
+      durationMs: 180,
+      waveform: new Uint8Array([128, 160, 100, 128]),
+    };
+
+    act(() => {
+      latestRecorderOptions?.onRecordingComplete(recording);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Load sample vox-hit" }));
+
+    expect(screen.getByText("0-12 · 12 / 12 fr")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete sample mic-002" }));
+
+    expect(screen.queryByRole("button", { name: "Load sample mic-002" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Enable PCM step 8" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Load sample vox-hit" })).toBeTruthy();
   });
 
   it("previews the current deck sample through the audio engine", async () => {

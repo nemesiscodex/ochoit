@@ -27,7 +27,7 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Add noise rate or mode controls
 - [x] Add microphone permission and recording flow
 - [x] Add sample preview and trim controls
-- [ ] Connect recorded PCM samples to the sample lane
+- [x] Connect recorded PCM samples to the sample lane
 - [ ] Decide `Inspired mode` PCM behavior, including whether samples can be mapped to musical notes
 - [ ] Define `Authentic mode` PCM/DPCM constraints and how they differ from `Inspired mode`
 - [ ] Save and load songs from localStorage

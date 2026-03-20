@@ -130,12 +130,25 @@ export function createWaveformFromPcm(pcm: ArrayLike<number>, sampleSize = SAMPL
     return createFlatWaveform(sampleSize);
   }
 
-  const lastFrameIndex = pcm.length - 1;
+  const bucketCount = Math.max(1, Math.ceil(sampleSize / 2));
 
   return Uint8Array.from({ length: sampleSize }, (_, sampleIndex) => {
-    const progress = sampleSize === 1 ? 0 : sampleIndex / (sampleSize - 1);
-    const sourceIndex = lastFrameIndex === 0 ? 0 : Math.round(progress * lastFrameIndex);
-    const amplitude = clampLevel(pcm[sourceIndex] ?? 0);
+    const bucketIndex = Math.floor(sampleIndex / 2);
+    const frameStart = Math.floor((bucketIndex * pcm.length) / bucketCount);
+    const frameEnd = Math.min(
+      pcm.length,
+      Math.max(frameStart + 1, Math.floor(((bucketIndex + 1) * pcm.length) / bucketCount)),
+    );
+    let minAmplitude = 1;
+    let maxAmplitude = -1;
+
+    for (let frameIndex = frameStart; frameIndex < frameEnd; frameIndex += 1) {
+      const amplitude = clampLevel(pcm[frameIndex] ?? 0);
+      minAmplitude = Math.min(minAmplitude, amplitude);
+      maxAmplitude = Math.max(maxAmplitude, amplitude);
+    }
+
+    const amplitude = sampleIndex % 2 === 0 ? maxAmplitude : minAmplitude;
 
     return clampByte(128 + amplitude * 112);
   });

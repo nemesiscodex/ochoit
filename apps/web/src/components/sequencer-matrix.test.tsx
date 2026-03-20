@@ -9,6 +9,7 @@ describe("sequencer-matrix", () => {
   it("renders one sequencer row per voice", () => {
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -33,6 +34,7 @@ describe("sequencer-matrix", () => {
   it("highlights the current playback step across the ruler and all rows", () => {
     const { container } = render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -57,6 +59,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -81,6 +84,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -105,6 +109,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -134,6 +139,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -159,6 +165,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -195,6 +202,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -228,6 +236,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={engine}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -257,6 +266,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={engine}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}
@@ -282,6 +292,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={null}
         onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
         onOpenTriggerTrackEditor={() => {}}
@@ -315,6 +326,7 @@ describe("sequencer-matrix", () => {
 
     render(
       <SequencerMatrix
+        defaultSampleId={null}
         engine={engine}
         onOpenMelodicTrackEditor={() => {}}
         onOpenTriggerTrackEditor={() => {}}

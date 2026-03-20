@@ -43,6 +43,7 @@ import { NoiseConfigPicker, NoiseTriggerPicker, PulseDutyPicker, SampleTriggerPi
 import { WaveformCanvas } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
+  defaultSampleId,
   engine,
   song,
   playbackState,
@@ -55,6 +56,7 @@ export function SequencerMatrix({
   onUpdateNoiseStep,
   onUpdateSampleStep,
 }: {
+  defaultSampleId: string | null;
   engine: AudioEngine | null;
   song: SongDocument;
   playbackState: "stopped" | "playing";
@@ -75,6 +77,7 @@ export function SequencerMatrix({
       {tracks.map((track) => (
         <SequencerRow
           key={track.id}
+          defaultSampleId={defaultSampleId}
           engine={engine}
           nextStep={nextStep}
           onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
@@ -140,6 +143,7 @@ function StepRuler({
 /* ─────────── Sequencer Row ─────────── */
 
 function SequencerRow({
+  defaultSampleId,
   engine,
   nextStep,
   onOpenMelodicTrackEditor,
@@ -153,6 +157,7 @@ function SequencerRow({
   samples,
   track,
 }: {
+  defaultSampleId: string | null;
   engine: AudioEngine | null;
   nextStep: number;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
@@ -273,6 +278,7 @@ function SequencerRow({
           <SampleStepGrid
             accentClassName={accentByTrackId[track.id]}
             accentColor={waveformLineColorByTrackId[track.id]}
+            defaultSampleId={defaultSampleId}
             engine={engine}
             nextStep={nextStep}
             onUpdateSampleStep={onUpdateSampleStep}
@@ -641,6 +647,7 @@ function NoiseStepGrid({
 function SampleStepGrid({
   accentClassName,
   accentColor,
+  defaultSampleId,
   engine,
   nextStep,
   onUpdateSampleStep,
@@ -650,6 +657,7 @@ function SampleStepGrid({
 }: {
   accentClassName: string;
   accentColor: string;
+  defaultSampleId: string | null;
   engine: AudioEngine | null;
   nextStep: number;
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
@@ -657,7 +665,7 @@ function SampleStepGrid({
   samples: SongDocument["samples"];
   track: SampleTrack;
 }) {
-  const defaultSampleTrigger = getDefaultSampleTrigger(samples);
+  const defaultSampleTrigger = getDefaultSampleTrigger(samples, defaultSampleId);
 
   return (
     <div className="grid grid-cols-8 gap-1 md:grid-cols-16">

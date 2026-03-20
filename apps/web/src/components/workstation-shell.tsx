@@ -1,8 +1,8 @@
 import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Mic, Pause, Play, Save, Square, Upload, Zap } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Mic, Pause, Play, Save, Square, Trash2, Upload, Zap } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
@@ -30,6 +30,7 @@ import {
   replaceNoiseTrackArrangement,
   replaceSampleTrackArrangement,
   replaceMelodicTrackArrangement,
+  replaceSampleTrackSampleReference,
   serializeNoiseTrackArrangement,
   serializeSampleTrackArrangement,
   updateNoiseTrackStep,
@@ -41,6 +42,7 @@ import {
   getTrimmedFrameCount,
   getTrimmedSamplePcm,
   moveSampleTrimWindow,
+  removeSampleAsset,
   resizeSampleTrimWindow,
 } from "@/features/song/song-samples";
 import {
@@ -61,7 +63,9 @@ export function WorkstationShell() {
   const [song, setSong] = useState(() => createDefaultSongDocument());
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
+  const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
+  deckSampleIdRef.current = deckSampleId;
   const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
     useAudioEngine(song);
   const {
@@ -74,14 +78,19 @@ export function WorkstationShell() {
   } = useSampleRecorder({
     existingSamples: song.samples,
     onRecordingComplete: ({ asset }) => {
-      setSong((currentSong) => ({
-        ...currentSong,
-        meta: {
-          ...currentSong.meta,
-          updatedAt: new Date().toISOString(),
-        },
-        samples: [...currentSong.samples, asset],
-      }));
+      setSong((currentSong) => {
+        const replacedSampleId = deckSampleIdRef.current ?? currentSong.samples.at(-1)?.id ?? null;
+        const recordedSong = {
+          ...currentSong,
+          meta: {
+            ...currentSong.meta,
+            updatedAt: new Date().toISOString(),
+          },
+          samples: [...currentSong.samples, asset],
+        };
+
+        return replaceSampleTrackSampleReference(recordedSong, replacedSampleId, asset.id);
+      });
       setDeckSampleId(asset.id);
     },
   });
@@ -140,6 +149,15 @@ export function WorkstationShell() {
     }
 
     setSong((currentSong) => resizeSampleTrimWindow(currentSong, deckSample.id, frameCount));
+  };
+
+  const selectDeckSample = (sampleId: string) => {
+    setDeckSampleId(sampleId);
+  };
+
+  const deleteDeckSample = (sampleId: string) => {
+    setSong((currentSong) => removeSampleAsset(currentSong, sampleId));
+    setDeckSampleId((currentSampleId) => (currentSampleId === sampleId ? null : currentSampleId));
   };
 
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
@@ -358,6 +376,7 @@ export function WorkstationShell() {
           {/* Sequencer Matrix */}
           <div className="min-w-0">
             <SequencerMatrix
+              defaultSampleId={deckSample?.id ?? null}
               engine={engine}
               onOpenMelodicTrackEditor={openMelodicTrackEditor}
               onOpenTriggerTrackEditor={openTriggerTrackEditor}
@@ -375,14 +394,18 @@ export function WorkstationShell() {
           {/* Sample Deck Sidebar */}
           <aside className="flex flex-col gap-3">
             <SampleDeck
+              samples={song.samples}
               sample={deckSample}
+              selectedSampleId={deckSample?.id ?? null}
               recorderErrorMessage={recorderErrorMessage}
               recorderPermissionState={recorderPermissionState}
               recorderStatus={recorderStatus}
               recordingDurationMs={recordingDurationMs}
+              onDeleteSample={deleteDeckSample}
               onPreviewSample={previewDeckSample}
               onMoveTrimWindow={moveDeckSampleTrimWindow}
               onResizeTrimWindow={resizeDeckSampleTrimWindow}
+              onSelectSample={selectDeckSample}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
             />
@@ -592,25 +615,33 @@ function StatusChip({ label, value }: { label: string; value: string }) {
 /* ─────────── Sample Deck ─────────── */
 
 function SampleDeck({
+  samples,
   sample,
+  selectedSampleId,
   recorderErrorMessage,
   recorderPermissionState,
   recorderStatus,
   recordingDurationMs,
+  onDeleteSample,
   onPreviewSample,
   onMoveTrimWindow,
   onResizeTrimWindow,
+  onSelectSample,
   onStartRecording,
   onStopRecording,
 }: {
+  samples: SongDocument["samples"];
   sample: SongDocument["samples"][number] | null;
+  selectedSampleId: string | null;
   recorderErrorMessage: string | null;
   recorderPermissionState: SampleRecorderPermissionState;
   recorderStatus: SampleRecorderStatus;
   recordingDurationMs: number;
+  onDeleteSample: (sampleId: string) => void;
   onPreviewSample: () => Promise<void>;
   onMoveTrimWindow: (startFrame: number) => void;
   onResizeTrimWindow: (frameCount: number) => void;
+  onSelectSample: (sampleId: string) => void;
   onStartRecording: () => Promise<void>;
   onStopRecording: () => void;
 }) {
@@ -731,6 +762,84 @@ function SampleDeck({
               : `${sample.trim.startFrame}-${sample.trim.endFrame} · ${trimmedFrameCount} / ${sample.frameCount} fr`}
           </span>
           <span>{sample === null ? "0.00s" : formatSampleDurationLabel(sampleDurationMs)}</span>
+        </div>
+      </div>
+
+      <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
+        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
+          <span>Recorded Clips</span>
+          <span>{samples.length}</span>
+        </div>
+        <div className="grid gap-2">
+          {samples.length === 0 ? (
+            <div className="rounded-md border border-dashed border-white/[0.08] bg-black/20 px-3 py-4 text-center font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/28">
+              Record something to build your PCM clip list.
+            </div>
+          ) : (
+            [...samples].reverse().map((entry) => {
+              const waveform = createWaveformFromPcm(getTrimmedSamplePcm(entry), 48);
+              const isSelected = entry.id === selectedSampleId;
+              const trimmedDurationMs =
+                entry.sampleRate <= 0 ? 0 : Math.round((getTrimmedFrameCount(entry) / entry.sampleRate) * 1000);
+
+              return (
+                <div
+                  key={entry.id}
+                  className={cn(
+                    "grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md border p-2 transition-colors",
+                    isSelected
+                      ? "border-[var(--oc-sample)]/50 bg-[var(--oc-sample)]/10"
+                      : "border-white/[0.06] bg-black/20",
+                  )}
+                >
+                  <button
+                    type="button"
+                    aria-label={`Load sample ${entry.name}`}
+                    className="min-w-0 text-left"
+                    onClick={() => {
+                      onSelectSample(entry.id);
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                        {entry.name}
+                      </span>
+                      {isSelected ? (
+                        <span className="rounded-sm bg-[var(--oc-sample)]/18 px-1.5 py-0.5 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--oc-sample)]">
+                          Live
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/34">
+                      {entry.id} · {formatSampleDurationLabel(trimmedDurationMs)}
+                    </div>
+                    <div className="mt-2 rounded-sm border border-white/[0.05] bg-[#07080e]/80">
+                      <WaveformCanvas
+                        ariaLabel={`${entry.name} waveform`}
+                        samples={waveform}
+                        className="h-8 w-full"
+                        backgroundColor="rgba(7, 8, 14, 0.82)"
+                        glowColor={waveformGlowColorByTrackId.sample}
+                        lineColor={waveformLineColorByTrackId.sample}
+                      />
+                    </div>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label={`Delete sample ${entry.name}`}
+                    className="size-8 self-start border-white/[0.08] bg-white/[0.03] text-white/45 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+                    onClick={() => {
+                      onDeleteSample(entry.id);
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

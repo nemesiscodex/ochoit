@@ -350,6 +350,45 @@ export function updateSampleTrackStep(song: SongDocument, stepIndex: number, upd
   };
 }
 
+export function replaceSampleTrackSampleReference(
+  song: SongDocument,
+  previousSampleId: string | null,
+  nextSampleId: string,
+): SongDocument {
+  if (previousSampleId === nextSampleId) {
+    return song;
+  }
+
+  let hasUpdates = false;
+  const nextSteps = song.tracks.sample.steps.map((step) => {
+    if (!step.enabled || step.sampleId !== previousSampleId) {
+      return step;
+    }
+
+    hasUpdates = true;
+
+    return {
+      ...step,
+      sampleId: nextSampleId,
+    };
+  });
+
+  if (!hasUpdates) {
+    return song;
+  }
+
+  return {
+    ...song,
+    tracks: {
+      ...song.tracks,
+      sample: {
+        ...song.tracks.sample,
+        steps: nextSteps,
+      },
+    },
+  };
+}
+
 export function serializeMelodicTrackArrangement(track: MelodicTrack) {
   return getMelodicArrangementEntries(track)
     .map((entry) => {
@@ -650,9 +689,15 @@ export function getSampleStepLabel(
 
 export function getDefaultSampleTrigger(
   samples: readonly SerializedSampleAsset[],
+  preferredSampleId?: string | null,
 ): Pick<SampleTrack["steps"][number], "sampleId" | "playbackRate"> {
+  const preferredSample =
+    preferredSampleId === undefined || preferredSampleId === null
+      ? null
+      : samples.find((sample) => sample.id === preferredSampleId) ?? null;
+
   return {
-    sampleId: samples[0]?.id ?? null,
+    sampleId: preferredSample?.id ?? samples.at(-1)?.id ?? null,
     playbackRate: defaultSamplePlaybackRate,
   };
 }

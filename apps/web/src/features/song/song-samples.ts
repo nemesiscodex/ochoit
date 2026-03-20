@@ -98,3 +98,33 @@ export function updateSampleTrim(song: SongDocument, sampleId: string, updates: 
     ),
   };
 }
+
+export function removeSampleAsset(song: SongDocument, sampleId: string) {
+  if (!song.samples.some((sample) => sample.id === sampleId)) {
+    return song;
+  }
+
+  return {
+    ...song,
+    meta: {
+      ...song.meta,
+      updatedAt: new Date().toISOString(),
+    },
+    tracks: {
+      ...song.tracks,
+      sample: {
+        ...song.tracks.sample,
+        steps: song.tracks.sample.steps.map((step) =>
+          step.sampleId !== sampleId
+            ? step
+            : {
+                ...step,
+                enabled: false,
+                sampleId: null,
+              },
+        ),
+      },
+    },
+    samples: song.samples.filter((sample) => sample.id !== sampleId),
+  };
+}
