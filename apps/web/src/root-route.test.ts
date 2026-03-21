@@ -43,4 +43,76 @@ describe("root route head", () => {
       href: "/apple-touch-icon.png",
     });
   });
+
+  it("registers canonical, open graph, and twitter metadata", async () => {
+    const headFn = Route.options.head;
+    const head = await headFn?.({} as Parameters<NonNullable<typeof headFn>>[0]);
+
+    expect(head?.links).toContainEqual({
+      rel: "canonical",
+      href: "https://ochoit.nemesiscodex.org",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:type",
+      content: "website",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:url",
+      content: "https://ochoit.nemesiscodex.org",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:title",
+      content: "Ochoit — Browser-Based 8-Bit Music Workstation",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:description",
+      content:
+        "Create NES-inspired music in the browser with pulse, triangle, noise, and PCM sample tracks. Record sounds, export WAV, or share songs by link.",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:site_name",
+      content: "Ochoit",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:image",
+      content: "https://ochoit.nemesiscodex.org/og-cover.png",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:image:alt",
+      content: "Ochoit browser-based 8-bit music workstation",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:image:width",
+      content: "1200",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:image:height",
+      content: "630",
+    });
+    expect(head?.meta).toContainEqual({
+      property: "og:logo",
+      content: "https://ochoit.nemesiscodex.org/ochoit-logo.png",
+    });
+    expect(head?.meta).toContainEqual({
+      name: "twitter:card",
+      content: "summary_large_image",
+    });
+    expect(head?.meta).toContainEqual({
+      name: "twitter:title",
+      content: "Ochoit — Browser-Based 8-Bit Music Workstation",
+    });
+    expect(head?.meta).toContainEqual({
+      name: "twitter:description",
+      content:
+        "Create NES-inspired music in the browser with pulse, triangle, noise, and PCM sample tracks. Record sounds, export WAV, or share songs by link.",
+    });
+    expect(head?.meta).toContainEqual({
+      name: "twitter:image",
+      content: "https://ochoit.nemesiscodex.org/og-cover.png",
+    });
+    expect(head?.meta).toContainEqual({
+      name: "twitter:image:alt",
+      content: "Ochoit browser-based 8-bit music workstation",
+    });
+  });
 });

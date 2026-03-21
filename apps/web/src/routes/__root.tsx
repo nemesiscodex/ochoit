@@ -9,6 +9,13 @@ import appCss from "../index.css?url";
 
 export interface RouterAppContext {}
 
+const siteUrl = "https://ochoit.nemesiscodex.org";
+const siteTitle = "Ochoit — Browser-Based 8-Bit Music Workstation";
+const siteDescription =
+  "Create NES-inspired music in the browser with pulse, triangle, noise, and PCM sample tracks. Record sounds, export WAV, or share songs by link.";
+const ogImageUrl = `${siteUrl}/og-cover.png`;
+const logoUrl = `${siteUrl}/ochoit-logo.png`;
+
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
@@ -20,17 +27,81 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Ochoit — 8-Bit Music Workstation",
+        title: siteTitle,
       },
       {
         name: "description",
-        content: "A browser-based NES-inspired 5-voice chiptune sequencer with pulse, triangle, noise, and PCM sample lanes.",
+        content: siteDescription,
+      },
+      {
+        property: "og:type",
+        content: "website",
+      },
+      {
+        property: "og:url",
+        content: siteUrl,
+      },
+      {
+        property: "og:title",
+        content: siteTitle,
+      },
+      {
+        property: "og:description",
+        content: siteDescription,
+      },
+      {
+        property: "og:site_name",
+        content: "Ochoit",
+      },
+      {
+        property: "og:image",
+        content: ogImageUrl,
+      },
+      {
+        property: "og:image:alt",
+        content: "Ochoit browser-based 8-bit music workstation",
+      },
+      {
+        property: "og:image:width",
+        content: "1200",
+      },
+      {
+        property: "og:image:height",
+        content: "630",
+      },
+      {
+        property: "og:logo",
+        content: logoUrl,
+      },
+      {
+        name: "twitter:card",
+        content: "summary_large_image",
+      },
+      {
+        name: "twitter:title",
+        content: siteTitle,
+      },
+      {
+        name: "twitter:description",
+        content: siteDescription,
+      },
+      {
+        name: "twitter:image",
+        content: ogImageUrl,
+      },
+      {
+        name: "twitter:image:alt",
+        content: "Ochoit browser-based 8-bit music workstation",
       },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "canonical",
+        href: siteUrl,
       },
       {
         rel: "icon",
