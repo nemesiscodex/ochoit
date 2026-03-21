@@ -36,7 +36,13 @@ import {
   serializeSongShareText,
 } from "@/features/song/song-share";
 import { getSongExampleById, songExamples, type SongExample } from "@/features/song/song-examples";
-import { updateTrackMute, updateTrackVolume } from "@/features/song/song-mixer";
+import {
+  TRACK_VOLUME_PERCENT_RANGE,
+  toTrackVolumePercent,
+  updateMasterVolume,
+  updateTrackMute,
+  updateTrackVolume,
+} from "@/features/song/song-mixer";
 import {
   type MelodicStepUpdates,
   type MelodicTrackId,
@@ -169,6 +175,10 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
 
   const setTrackVolume = (trackId: TrackId, volume: number) => {
     setSong((currentSong) => updateTrackVolume(currentSong, trackId, volume));
+  };
+
+  const setMasterSongVolume = (volume: number) => {
+    setSong((currentSong) => updateMasterVolume(currentSong, volume));
   };
 
   const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
@@ -658,6 +668,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               startTransport={startTransport}
               stopTransport={stopTransport}
               isPlaying={isPlaying}
+              onMasterVolumeChange={setMasterSongVolume}
               onBpmChange={(nextBpm) => {
                 setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
               }}
@@ -841,6 +852,7 @@ function TransportStrip({
   startTransport,
   stopTransport,
   isPlaying,
+  onMasterVolumeChange,
   onBpmChange,
   onLoopLengthChange,
 }: {
@@ -849,6 +861,7 @@ function TransportStrip({
   startTransport: () => Promise<void>;
   stopTransport: () => void;
   isPlaying: boolean;
+  onMasterVolumeChange: (value: number) => void;
   onBpmChange: (value: number) => void;
   onLoopLengthChange: (value: number) => void;
 }) {
@@ -909,6 +922,8 @@ function TransportStrip({
         suffix="st"
       />
 
+      <MasterVolumeField value={song.mixer.masterVolume} onChange={onMasterVolumeChange} />
+
       {/* Divider */}
       <div className="mx-1 hidden h-6 w-px bg-white/[0.08] lg:block" />
 
@@ -917,6 +932,41 @@ function TransportStrip({
         <StatusChip label="Audio" value={engineState} />
         <StatusChip label="Playback" value={isPlaying ? "playing" : "stopped"} />
       </div>
+    </div>
+  );
+}
+
+function MasterVolumeField({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const percentValue = toTrackVolumePercent(value);
+
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-black/20 px-2.5 py-1.5">
+      <label
+        htmlFor="transport-master-volume"
+        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/40"
+      >
+        Master
+      </label>
+      <input
+        id="transport-master-volume"
+        aria-label="Global Volume"
+        type="range"
+        min={TRACK_VOLUME_PERCENT_RANGE.min}
+        max={TRACK_VOLUME_PERCENT_RANGE.max}
+        step={TRACK_VOLUME_PERCENT_RANGE.step}
+        value={percentValue}
+        className="h-2 w-20 cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-play)]"
+        onChange={(event) => {
+          onChange(Number(event.currentTarget.value) / 100);
+        }}
+      />
+      <span className="w-9 text-right font-[var(--oc-mono)] text-[9px] uppercase text-white/35">{percentValue}%</span>
     </div>
   );
 }

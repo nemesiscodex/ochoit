@@ -22,6 +22,20 @@ export function toTrackVolumePercent(value: number) {
   return Math.round(clampTrackVolume(value) * trackVolumePrecision);
 }
 
+export function updateMasterVolume(song: SongDocument, volume: number): SongDocument {
+  if (!Number.isFinite(volume)) {
+    return song;
+  }
+
+  return {
+    ...song,
+    mixer: {
+      ...song.mixer,
+      masterVolume: clampTrackVolume(volume),
+    },
+  };
+}
+
 export function updateTrackMute(song: SongDocument, trackId: TrackId): SongDocument {
   switch (trackId) {
     case "pulse1":

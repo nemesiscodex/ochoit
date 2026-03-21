@@ -115,6 +115,29 @@ describe("workstation-shell", () => {
     expect(screen.getByDisplayValue("20")).toBeTruthy();
   });
 
+  it("updates the global volume from the transport bar", () => {
+    renderWorkstationShell();
+
+    const globalVolume = screen.getByLabelText("Global Volume");
+
+    if (!(globalVolume instanceof HTMLInputElement)) {
+      throw new Error("Expected Global Volume to be a range input.");
+    }
+
+    fireEvent.change(globalVolume, { target: { value: "61" } });
+
+    expect(globalVolume.value).toBe("61");
+    expect(screen.getByText("61%")).toBeTruthy();
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.mixer.masterVolume).toBe(0.61);
+  });
+
   it("highlights start audio as the first action before the engine is ready", () => {
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
 

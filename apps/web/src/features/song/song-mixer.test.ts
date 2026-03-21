@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { createDefaultSongDocument } from "@/features/song/song-document";
-import { clampTrackVolume, toTrackVolumePercent, updateTrackMute, updateTrackVolume } from "@/features/song/song-mixer";
+import {
+  clampTrackVolume,
+  toTrackVolumePercent,
+  updateMasterVolume,
+  updateTrackMute,
+  updateTrackVolume,
+} from "@/features/song/song-mixer";
 
 describe("song-mixer", () => {
   it("clamps track volumes to the supported range and precision", () => {
@@ -25,6 +31,16 @@ describe("song-mixer", () => {
     const ignoredSong = updateTrackVolume(song, "sample", Number.NaN);
 
     expect(updatedSong.tracks.noise.volume).toBe(1);
+    expect(updatedSong.tracks.pulse1.volume).toBe(song.tracks.pulse1.volume);
+    expect(ignoredSong).toBe(song);
+  });
+
+  it("updates master volume and ignores invalid values", () => {
+    const song = createDefaultSongDocument();
+    const updatedSong = updateMasterVolume(song, 0.61);
+    const ignoredSong = updateMasterVolume(song, Number.NaN);
+
+    expect(updatedSong.mixer.masterVolume).toBe(0.61);
     expect(updatedSong.tracks.pulse1.volume).toBe(song.tracks.pulse1.volume);
     expect(ignoredSong).toBe(song);
   });
