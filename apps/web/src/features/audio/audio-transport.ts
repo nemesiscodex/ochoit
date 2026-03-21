@@ -6,7 +6,7 @@ import {
   type TransportProcessorCommand,
   type TransportProcessorEvent,
 } from "@/features/audio/transport-worklet-shared";
-import transportWorkletUrl from "@/features/audio/transport.worklet.ts?url";
+import transportWorkletUrl from "@/features/audio/transport.worklet.ts?worker&url";
 
 export type AudioTransportPlaybackState = "stopped" | "playing";
 

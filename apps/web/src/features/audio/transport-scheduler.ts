@@ -2,7 +2,7 @@ import {
   DEFAULT_TRANSPORT_LOOKAHEAD_SECONDS,
   type ScheduledTransportStep,
   type TransportConfig,
-} from "@/features/audio/transport-worklet-shared";
+} from "./transport-worklet-shared";
 
 export type TransportSchedulerState = {
   config: TransportConfig;

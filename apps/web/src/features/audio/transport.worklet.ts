@@ -3,7 +3,7 @@ import {
   type TransportProcessorCommand,
   type TransportProcessorEvent,
   TRANSPORT_WORKLET_NAME,
-} from "@/features/audio/transport-worklet-shared";
+} from "./transport-worklet-shared";
 import {
   collectScheduledSteps,
   configureTransportScheduler,
@@ -11,7 +11,7 @@ import {
   startTransportScheduler,
   stopTransportScheduler,
   type TransportSchedulerState,
-} from "@/features/audio/transport-scheduler";
+} from "./transport-scheduler";
 
 const defaultTransportConfig: TransportConfig = {
   bpm: 136,
