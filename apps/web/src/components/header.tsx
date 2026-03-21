@@ -5,9 +5,11 @@ export default function Header() {
     <header className="border-b border-white/[0.06] bg-[#07080e]/95 px-4 py-2.5 backdrop-blur-sm md:px-6">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-8 items-center justify-center rounded-md bg-gradient-to-br from-[var(--oc-pulse1)] to-[var(--oc-noise)]">
-            <span className="font-[var(--oc-display)] text-xs font-black text-[#07080e]">O</span>
-          </div>
+          <img
+            src="/ochoit-logo.png"
+            alt="Ochoit logo"
+            className="size-10 rounded-md object-contain shadow-[0_0_18px_rgba(92,184,255,0.18)]"
+          />
           <div>
             <p className="font-[var(--oc-display)] text-base leading-tight font-bold tracking-wide text-white">
               Ochoit
@@ -30,9 +32,9 @@ export default function Header() {
             <span className="hidden sm:inline">GitHub</span>
           </a>
           <div className="flex items-center gap-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.2em] text-white/35">
-          <span className="hidden sm:inline">NES-Inspired Sequencer</span>
-          <div className="size-1.5 rounded-full bg-[var(--oc-play)]" />
-        </div>
+            <span className="hidden sm:inline">NES-Inspired Sequencer</span>
+            <div className="size-1.5 rounded-full bg-[var(--oc-play)]" />
+          </div>
         </div>
       </div>
     </header>

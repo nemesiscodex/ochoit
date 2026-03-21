@@ -4,6 +4,14 @@ import { describe, expect, it } from "vitest";
 import Header from "@/components/header";
 
 describe("header", () => {
+  it("renders the page logo from the public assets folder", () => {
+    render(<Header />);
+
+    const logo = screen.getByRole("img", { name: "Ochoit logo" });
+
+    expect(logo.getAttribute("src")).toBe("/ochoit-logo.png");
+  });
+
   it("renders a GitHub link to the repository", () => {
     render(<Header />);
 
