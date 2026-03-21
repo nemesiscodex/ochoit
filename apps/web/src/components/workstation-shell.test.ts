@@ -182,7 +182,8 @@ describe("workstation-shell", () => {
   it("starts without any preconfigured notes or recordings when no initial song is provided", () => {
     renderEmptyWorkstationShell();
 
-    expect(screen.getByDisplayValue("Untitled Song")).toBeTruthy();
+    expect(screen.getByDisplayValue("(No name)")).toBeTruthy();
+    expect(screen.getByDisplayValue("(Anonymous)")).toBeTruthy();
     expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
@@ -209,6 +210,19 @@ describe("workstation-shell", () => {
       expect(screen.getByDisplayValue("Link Tune")).toBeTruthy();
       expect(screen.getByText("172 bpm")).toBeTruthy();
       expect(screen.getByText("Loaded shared song from the current link.")).toBeTruthy();
+    });
+  });
+
+  it("loads a built-in example from the examples dialog", async () => {
+    renderEmptyWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open examples" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load example Mario Theme" }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Mario Theme")).toBeTruthy();
+      expect(screen.getByDisplayValue("nemesiscodex")).toBeTruthy();
+      expect(screen.getByText("Loaded example: Mario Theme.")).toBeTruthy();
     });
   });
 
@@ -303,6 +317,28 @@ describe("workstation-shell", () => {
     }
 
     expect(latestSong.meta.name).toBe("Boss Theme");
+  });
+
+  it("updates the author from the song info panel", () => {
+    renderWorkstationShell();
+
+    const authorInput = screen.getByLabelText("Author");
+
+    if (!(authorInput instanceof HTMLInputElement)) {
+      throw new Error("Expected Author to be an input.");
+    }
+
+    fireEvent.change(authorInput, { target: { value: "Julio" } });
+
+    expect(authorInput.value).toBe("Julio");
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.meta.author).toBe("Julio");
   });
 
   it("clears the current song, recordings, and share link after confirmation", async () => {

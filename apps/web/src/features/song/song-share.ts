@@ -2,6 +2,7 @@ import { deflateRaw, inflateRaw } from "pako";
 
 import {
   DEFAULT_PULSE_DUTY,
+  createEmptySongDocument,
   createDefaultSongDocument,
   parseSongDocument,
   type NoiseTrack,
@@ -28,7 +29,7 @@ const SHARE_FORMAT_VERSION = 3;
 const SHARE_PAYLOAD_PREFIX = `v${SHARE_FORMAT_VERSION}.`;
 const shareLineBreak = "\n";
 const sampleLinePrefix = "$";
-const defaultSharedMeta = createDefaultSongDocument().meta;
+const defaultSharedMeta = createEmptySongDocument().meta;
 
 const trackIdBySectionNumber = {
   1: "pulse1",

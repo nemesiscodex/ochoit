@@ -38,11 +38,20 @@ describe("song-document", () => {
 
     expect(song.kind).toBe(SONG_DOCUMENT_KIND);
     expect(song.version).toBe(SONG_DOCUMENT_VERSION);
+    expect(song.meta.name).toBe("(No name)");
+    expect(song.meta.author).toBe("(Anonymous)");
     expect(trackOrder.map((trackId) => song.tracks[trackId].steps.length)).toEqual([16, 16, 16, 16, 16]);
     expect(trackOrder.every((trackId) => song.tracks[trackId].steps.every((step) => step.enabled === false))).toBe(
       true,
     );
     expect(song.samples).toEqual([]);
+  });
+
+  it("uses anonymous metadata defaults for seeded test songs too", () => {
+    const song = createDefaultSongDocument();
+
+    expect(song.meta.name).toBe("(No name)");
+    expect(song.meta.author).toBe("(Anonymous)");
   });
 
   it("rejects songs with more than four embedded samples", () => {

@@ -212,8 +212,8 @@ export type SerializedSampleAsset = z.infer<typeof serializedSampleAssetSchema>;
 
 const baseTimestamp = "2026-03-18T00:00:00.000Z";
 const defaultLoopLength = 16;
-const defaultAuthor = "Julio";
-const defaultEmptySongName = "Untitled Song";
+const defaultAuthor = "(Anonymous)";
+const defaultEmptySongName = "(No name)";
 
 function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z.infer<typeof pulseDutySchema>; length?: number }>) {
   const seededSteps = new Map(pattern.map((entry) => [entry.index, entry]));
@@ -344,7 +344,7 @@ export function createDefaultSongDocument(): SongDocument {
     kind: SONG_DOCUMENT_KIND,
     version: SONG_DOCUMENT_VERSION,
     meta: {
-      name: "Castle Loop",
+      name: defaultEmptySongName,
       author: defaultAuthor,
       createdAt: baseTimestamp,
       updatedAt: baseTimestamp,

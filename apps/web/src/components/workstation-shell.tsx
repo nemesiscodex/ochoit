@@ -35,6 +35,7 @@ import {
   readSongShareFromHash,
   serializeSongShareText,
 } from "@/features/song/song-share";
+import { getSongExampleById, songExamples, type SongExample } from "@/features/song/song-examples";
 import { updateTrackMute, updateTrackVolume } from "@/features/song/song-mixer";
 import {
   type MelodicStepUpdates,
@@ -99,6 +100,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
   const [shareDslEditor, setShareDslEditor] = useState<ShareDslEditorState | null>(null);
+  const [examplesOpen, setExamplesOpen] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
@@ -198,6 +200,17 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       meta: {
         ...currentSong.meta,
         name: name.slice(0, 80),
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  };
+
+  const updateSongAuthor = (author: string) => {
+    setSong((currentSong) => ({
+      ...currentSong,
+      meta: {
+        ...currentSong.meta,
+        author: author.slice(0, 80),
         updatedAt: new Date().toISOString(),
       },
     }));
@@ -348,6 +361,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   };
 
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
+    setExamplesOpen(false);
     setShareDslEditor(null);
     setArrangementEditor({
       trackId,
@@ -357,6 +371,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   };
 
   const openTriggerTrackEditor = (trackId: TriggerTrackId) => {
+    setExamplesOpen(false);
     setShareDslEditor(null);
     setArrangementEditor({
       trackId,
@@ -373,11 +388,57 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   };
 
   const openShareDslEditor = () => {
+    setExamplesOpen(false);
     setArrangementEditor(null);
     setShareDslEditor({
       draft: serializeSongShareText(song),
       error: null,
     });
+  };
+
+  const openExamplesDialog = () => {
+    setArrangementEditor(null);
+    setShareDslEditor(null);
+    setExamplesOpen(true);
+  };
+
+  const closeExamplesDialog = () => {
+    setExamplesOpen(false);
+  };
+
+  const loadSongExample = (exampleId: string) => {
+    const example = getSongExampleById(exampleId);
+
+    if (example === null) {
+      setShareStatus({
+        tone: "error",
+        message: "That example is no longer available.",
+      });
+      return;
+    }
+
+    try {
+      const nextSong = parseSongShareText(example.dsl);
+
+      stopTransport();
+      clearSongShareFromCurrentUrl();
+      startTransition(() => {
+        setSong(nextSong);
+        setArrangementEditor(null);
+        setShareDslEditor(null);
+        setExamplesOpen(false);
+        setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
+      });
+      setShareStatus({
+        tone: "neutral",
+        message: `Loaded example: ${example.name}.`,
+      });
+    } catch (error) {
+      setShareStatus({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Could not load the selected example.",
+      });
+    }
   };
 
   const closeShareDslEditor = () => {
@@ -541,7 +602,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   };
 
   useEffect(() => {
-    if (arrangementEditor === null && shareDslEditor === null) {
+    if (arrangementEditor === null && shareDslEditor === null && !examplesOpen) {
       return;
     }
 
@@ -549,6 +610,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       if (event.key === "Escape") {
         setArrangementEditor(null);
         setShareDslEditor(null);
+        setExamplesOpen(false);
       }
     };
 
@@ -557,7 +619,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [arrangementEditor, shareDslEditor]);
+  }, [arrangementEditor, examplesOpen, shareDslEditor]);
 
   useEffect(() => {
     setDeckSampleId((currentSampleId) => {
@@ -619,6 +681,14 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               >
                 <Trash2 className="mr-1.5 size-3.5" />
                 Clear
+              </Button>
+              <Button
+                variant="outline"
+                className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+                aria-label="Open examples"
+                onClick={openExamplesDialog}
+              >
+                Examples
               </Button>
               <Button
                 variant="outline"
@@ -717,6 +787,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
             <SongMeta
               engineState={engineState}
               onUpdateEngineMode={updateEngineMode}
+              onUpdateSongAuthor={updateSongAuthor}
               onUpdateSongName={updateSongName}
               song={song}
               trackCount={tracks.length}
@@ -754,6 +825,9 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
           onClose={closeShareDslEditor}
           onCopy={copyShareDsl}
         />
+      ) : null}
+      {examplesOpen ? (
+        <ExamplesDialog examples={songExamples} onClose={closeExamplesDialog} onLoadExample={loadSongExample} />
       ) : null}
     </main>
   );
@@ -1378,12 +1452,14 @@ function SongMeta({
   song,
   engineState,
   onUpdateEngineMode,
+  onUpdateSongAuthor,
   onUpdateSongName,
   trackCount,
 }: {
   song: SongDocument;
   engineState: AudioBootstrapState;
   onUpdateEngineMode: (engineMode: EngineMode) => void;
+  onUpdateSongAuthor: (author: string) => void;
   onUpdateSongName: (name: string) => void;
   trackCount: number;
 }) {
@@ -1407,6 +1483,24 @@ function SongMeta({
           className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
           onChange={(event) => {
             onUpdateSongName(event.currentTarget.value);
+          }}
+        />
+      </div>
+      <div className="mb-3 grid gap-1.5">
+        <label
+          htmlFor="song-author"
+          className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35"
+        >
+          Author
+        </label>
+        <Input
+          id="song-author"
+          aria-label="Author"
+          maxLength={80}
+          value={song.meta.author}
+          className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
+          onChange={(event) => {
+            onUpdateSongAuthor(event.currentTarget.value);
           }}
         />
       </div>
@@ -1545,6 +1639,76 @@ function ShareDslEditor({
           >
             Apply DSL
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExamplesDialog({
+  examples,
+  onClose,
+  onLoadExample,
+}: {
+  examples: readonly SongExample[];
+  onClose: () => void;
+  onLoadExample: (exampleId: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/72 px-4 py-10 backdrop-blur-sm">
+      <div className="w-full max-w-3xl rounded-xl border border-white/[0.08] bg-[var(--oc-surface)] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-[var(--oc-mono)] text-sm font-semibold uppercase tracking-[0.18em] text-white">
+              Examples
+            </h2>
+            <p className="mt-2 max-w-2xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/45">
+              Load a built-in song into the editor. This replaces the current song and clears any stale share hash
+              until you copy a new link.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          {examples.map((example) => (
+            <div
+              key={example.id}
+              className="rounded-lg border border-white/[0.08] bg-black/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-white/35">
+                    Built-in Example
+                  </div>
+                  <h3 className="mt-1 font-[var(--oc-display)] text-2xl leading-none text-white">{example.name}</h3>
+                  <div className="mt-2 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-[var(--oc-accent)]">
+                    by {example.author}
+                  </div>
+                  <p className="mt-3 max-w-[58ch] font-[var(--oc-mono)] text-[10px] leading-5 text-white/50">
+                    {example.summary}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  className="shrink-0 bg-[var(--oc-accent)] px-4 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-[var(--oc-accent)]/85"
+                  aria-label={`Load example ${example.name}`}
+                  onClick={() => {
+                    onLoadExample(example.id);
+                  }}
+                >
+                  Load Example
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
