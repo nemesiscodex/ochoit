@@ -1,8 +1,10 @@
+import BorderGlow from "@ochoit/ui/components/BorderGlow";
 import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Download, Mic, Pause, Play, Save, Square, Trash2, Upload, Zap } from "lucide-react";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { NotePicker } from "@/components/note-picker";
@@ -111,6 +113,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   const [isExportingWav, setIsExportingWav] = useState(false);
+  const [showExamplesGlow, setShowExamplesGlow] = useState(false);
   const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
   deckSampleIdRef.current = deckSampleId;
@@ -677,6 +680,27 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     });
   }, [song.samples]);
 
+  const prevAudioReadyRef = useRef(audioReady);
+
+  useEffect(() => {
+    if (audioReady && !prevAudioReadyRef.current) {
+      const delayTimer = setTimeout(() => {
+        setShowExamplesGlow(true);
+      }, 200);
+
+      const dismissTimer = setTimeout(() => {
+        setShowExamplesGlow(false);
+      }, 3200);
+
+      return () => {
+        clearTimeout(delayTimer);
+        clearTimeout(dismissTimer);
+      };
+    }
+
+    prevAudioReadyRef.current = audioReady;
+  }, [audioReady]);
+
   useEffect(() => {
     applySharedSongFromCurrentUrl(null);
   }, []);
@@ -692,91 +716,160 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
 
       <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6 lg:px-8">
         {/* ── Transport + Controls Bar ── */}
-        <section className={cn("flex flex-col gap-3", showAudioGate ? "relative z-30" : undefined)}>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <TransportStrip
-              song={song}
+        <section className={cn("flex flex-col gap-2.5", showAudioGate ? "relative z-30" : undefined)}>
+          {/* Row 1: Transport Strip — the "hardware panel" */}
+          <TransportStrip
+            song={song}
+            engineState={engineState}
+            startTransport={startTransport}
+            stopTransport={stopTransport}
+            isPlaying={isPlaying}
+            onMasterVolumeChange={setMasterSongVolume}
+            onOldSpeakerModeChange={setOldSpeakerMode}
+            onBpmChange={(nextBpm) => {
+              setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
+            }}
+            onLoopLengthChange={(nextLoopLength) => {
+              setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
+            }}
+          />
+
+          {/* Row 2: Actions Bar — distinct from transport */}
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.04] bg-[var(--oc-surface)]/60 px-3 py-2 backdrop-blur-sm">
+            {/* Primary: Audio gate */}
+            <AudioInitButton
               engineState={engineState}
-              startTransport={startTransport}
-              stopTransport={stopTransport}
-              isPlaying={isPlaying}
-              onMasterVolumeChange={setMasterSongVolume}
-              onOldSpeakerModeChange={setOldSpeakerMode}
-              onBpmChange={(nextBpm) => {
-                setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
-              }}
-              onLoopLengthChange={(nextLoopLength) => {
-                setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
-              }}
+              audioReady={audioReady}
+              initializeAudio={initializeAudio}
+              showAudioGate={showAudioGate}
             />
-            <div className="flex items-center gap-2">
-              <AudioInitButton
-                engineState={engineState}
-                audioReady={audioReady}
-                initializeAudio={initializeAudio}
-                showAudioGate={showAudioGate}
-              />
+
+            <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
+
+            {/* Featured: Examples — the star of the show */}
+            <BorderGlow
+              animated={showExamplesGlow}
+              backgroundColor="rgba(13, 15, 24, 0.85)"
+              borderRadius={8}
+              glowRadius={16}
+              glowIntensity={0.9}
+              edgeSensitivity={20}
+              coneSpread={30}
+              fillOpacity={0.35}
+              glowColor="263 90 76"
+              colors={["#a78bfa", "#5cb8ff", "#ff5ea0"]}
+            >
               <Button
-                type="button"
                 variant="outline"
-                className="h-10 rounded-md border-[var(--oc-noise)]/20 bg-[var(--oc-noise)]/[0.05] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-[var(--oc-noise)]/75 hover:bg-[var(--oc-noise)]/12 hover:text-[var(--oc-noise)]"
-                aria-label="Clear song"
-                onClick={resetSong}
-              >
-                <Trash2 className="mr-1.5 size-3.5" />
-                Clear
-              </Button>
-              <Button
-                variant="outline"
-                className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+                className="h-10 rounded-lg border-0 bg-transparent px-4 font-[var(--oc-mono)] text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--oc-accent)]/80 hover:bg-[var(--oc-accent)]/10 hover:text-[var(--oc-accent)]"
                 aria-label="Open examples"
-                onClick={openExamplesDialog}
+                onClick={() => {
+                  setShowExamplesGlow(false);
+                  openExamplesDialog();
+                }}
               >
+                <Sparkles className="mr-1.5 size-3.5" />
                 Examples
               </Button>
-              <Button
-                variant="outline"
-                className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
-                aria-label="Edit share DSL"
-                onClick={openShareDslEditor}
-              >
-                DSL
-              </Button>
-              <Button
-                variant="outline"
-                className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
-                aria-label="Save arrangement as WAV"
-                disabled={isExportingWav}
-                onClick={() => {
-                  void saveArrangementAsWav();
-                }}
-              >
-                <Download className="mr-1.5 size-3.5" />
-                {isExportingWav ? "Saving..." : "WAV"}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-10 border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.07] hover:text-white"
-                aria-label="Copy share link"
-                onClick={() => {
-                  void copyShareLink();
-                }}
-              >
-                <Save className="size-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-10 border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.07] hover:text-white"
-                aria-label="Load song from link"
-                onClick={() => {
-                  applySharedSongFromCurrentUrl("No shared song was found in the current link.");
-                }}
-              >
-                <Upload className="size-4" />
-              </Button>
+            </BorderGlow>
+
+            <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
+
+            {/* Utility cluster: DSL, WAV, Share, Load */}
+            <div className="flex items-center gap-1.5">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      aria-label="Edit share DSL"
+                      onClick={openShareDslEditor}
+                    />
+                  }
+                >
+                  DSL
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Edit song as text DSL</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      aria-label="Download arrangement as WAV file"
+                      disabled={isExportingWav}
+                      onClick={() => {
+                        void saveArrangementAsWav();
+                      }}
+                    />
+                  }
+                >
+                  <Download className="mr-1 size-3" />
+                  <span className="hidden sm:inline">{isExportingWav ? "Saving…" : "WAV"}</span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Download as WAV file</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      aria-label="Copy shareable link to clipboard"
+                      onClick={() => {
+                        void copyShareLink();
+                      }}
+                    />
+                  }
+                >
+                  <Link className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Copy shareable link</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      aria-label="Load song from current URL"
+                      onClick={() => {
+                        applySharedSongFromCurrentUrl("No shared song was found in the current link.");
+                      }}
+                    />
+                  }
+                >
+                  <Upload className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Load song from URL</TooltipContent>
+              </Tooltip>
             </div>
+
+            {/* Spacer pushes destructive action to the end */}
+            <div className="hidden flex-1 lg:block" />
+
+            {/* Destructive: Clear */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 rounded-md border-[var(--oc-noise)]/15 bg-[var(--oc-noise)]/[0.04] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-noise)]/60 hover:border-[var(--oc-noise)]/30 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+                    aria-label="Clear song"
+                    onClick={resetSong}
+                  />
+                }
+              >
+                <Trash2 className="mr-1 size-3" />
+                <span className="hidden sm:inline">Clear</span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Reset song &amp; clear all data</TooltipContent>
+            </Tooltip>
           </div>
 
           {shareStatus !== null ? (
@@ -913,15 +1006,15 @@ function TransportStrip({
   onLoopLengthChange: (value: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-2 backdrop-blur">
-      {/* Play / Stop */}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-gradient-to-b from-[#0e1019] to-[#0a0c14] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.3)]">
+      {/* ── Playback controls ── */}
       <div className="flex items-center gap-1.5">
         <Button
           className={cn(
-            "oc-btn-play h-10 rounded-md px-4 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.12em]",
+            "oc-btn-play h-10 rounded-lg px-5 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.12em]",
             isPlaying
               ? "bg-[var(--oc-play)]/20 text-[var(--oc-play)] hover:bg-[var(--oc-play)]/30"
-              : "bg-[var(--oc-play)] text-[#07080e] hover:bg-[var(--oc-play)]/90",
+              : "bg-[var(--oc-play)] text-[#07080e] shadow-[0_0_12px_rgba(61,220,132,0.2)] hover:bg-[var(--oc-play)]/90 hover:shadow-[0_0_20px_rgba(61,220,132,0.35)]",
           )}
           onClick={() => {
             void startTransport();
@@ -932,7 +1025,7 @@ function TransportStrip({
         </Button>
         <Button
           variant="outline"
-          className="oc-btn-stop h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-xs uppercase tracking-[0.12em] text-white/60 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+          className="oc-btn-stop h-10 rounded-lg border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-xs uppercase tracking-[0.12em] text-white/55 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
           disabled={!isPlaying}
           onClick={() => {
             stopTransport();
@@ -943,32 +1036,36 @@ function TransportStrip({
         </Button>
       </div>
 
-      {/* Divider */}
-      <div className="mx-1 hidden h-6 w-px bg-white/[0.08] lg:block" />
+      {/* ── Separator ── */}
+      <div className="oc-action-divider hidden md:block" aria-hidden="true" />
 
-      {/* BPM */}
-      <TransportField
-        label="BPM"
-        value={song.transport.bpm}
-        min={SONG_BPM_RANGE.min}
-        max={SONG_BPM_RANGE.max}
-        step={1}
-        onChange={onBpmChange}
-        parseValue={(rawValue) => resolveSongBpmInput(rawValue, song.transport.bpm)}
-      />
+      {/* ── Tempo & length dials ── */}
+      <div className="flex items-center gap-2">
+        <TransportField
+          label="BPM"
+          value={song.transport.bpm}
+          min={SONG_BPM_RANGE.min}
+          max={SONG_BPM_RANGE.max}
+          step={1}
+          onChange={onBpmChange}
+          parseValue={(rawValue) => resolveSongBpmInput(rawValue, song.transport.bpm)}
+        />
+        <TransportField
+          label="Loop"
+          value={song.transport.loopLength}
+          min={SONG_LOOP_LENGTH_RANGE.min}
+          max={SONG_LOOP_LENGTH_RANGE.max}
+          step={SONG_LOOP_LENGTH_RANGE.step}
+          onChange={onLoopLengthChange}
+          parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, song.transport.loopLength)}
+          suffix="st"
+        />
+      </div>
 
-      {/* Loop Length */}
-      <TransportField
-        label="Loop"
-        value={song.transport.loopLength}
-        min={SONG_LOOP_LENGTH_RANGE.min}
-        max={SONG_LOOP_LENGTH_RANGE.max}
-        step={SONG_LOOP_LENGTH_RANGE.step}
-        onChange={onLoopLengthChange}
-        parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, song.transport.loopLength)}
-        suffix="st"
-      />
+      {/* ── Separator ── */}
+      <div className="oc-action-divider hidden md:block" aria-hidden="true" />
 
+      {/* ── Master output ── */}
       <MasterVolumeField
         value={song.mixer.masterVolume}
         oldSpeakerMode={song.mixer.oldSpeakerMode}
@@ -976,13 +1073,13 @@ function TransportStrip({
         onOldSpeakerModeChange={onOldSpeakerModeChange}
       />
 
-      {/* Divider */}
-      <div className="mx-1 hidden h-6 w-px bg-white/[0.08] lg:block" />
+      {/* ── Spacer ── */}
+      <div className="hidden flex-1 lg:block" />
 
-      {/* Status chips */}
+      {/* ── Status LEDs ── */}
       <div className="flex items-center gap-2">
-        <StatusChip label="Audio" value={engineState} />
-        <StatusChip label="Playback" value={isPlaying ? "playing" : "stopped"} />
+        <StatusChip label="Audio" value={engineState} active={engineState === "running"} />
+        <StatusChip label="Playback" value={isPlaying ? "playing" : "stopped"} active={isPlaying} />
       </div>
     </div>
   );
@@ -1002,10 +1099,10 @@ function MasterVolumeField({
   const percentValue = toTrackVolumePercent(value);
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-white/[0.08] bg-black/20 px-2.5 py-1.5">
+    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-black/25 px-3 py-1.5">
       <label
         htmlFor="transport-master-volume"
-        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/40"
+        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/35"
       >
         Master
       </label>
@@ -1017,29 +1114,37 @@ function MasterVolumeField({
         max={TRACK_VOLUME_PERCENT_RANGE.max}
         step={TRACK_VOLUME_PERCENT_RANGE.step}
         value={percentValue}
-        className="h-2 w-20 cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-play)]"
+        className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-play)]"
         onChange={(event) => {
           onChange(Number(event.currentTarget.value) / 100);
         }}
       />
-      <span className="w-9 text-right font-[var(--oc-mono)] text-[9px] uppercase text-white/35">{percentValue}%</span>
-      <Button
-        type="button"
-        variant="outline"
-        aria-label="Old Speaker Mode"
-        aria-pressed={oldSpeakerMode}
-        className={cn(
-          "h-7 rounded-md border px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em]",
-          oldSpeakerMode
-            ? "border-[var(--oc-noise)]/35 bg-[var(--oc-noise)]/12 text-[var(--oc-noise)] hover:bg-[var(--oc-noise)]/18"
-            : "border-white/[0.08] bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/80",
-        )}
-        onClick={() => {
-          onOldSpeakerModeChange(!oldSpeakerMode);
-        }}
-      >
-        Speaker
-      </Button>
+      <span className="w-8 text-right font-[var(--oc-mono)] text-[9px] tabular-nums text-white/35">{percentValue}%</span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Lo-fi speaker filter"
+              aria-pressed={oldSpeakerMode}
+              className={cn(
+                "h-7 rounded-md border px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
+                oldSpeakerMode
+                  ? "border-[var(--oc-noise)]/35 bg-[var(--oc-noise)]/12 text-[var(--oc-noise)] hover:bg-[var(--oc-noise)]/18"
+                  : "border-white/[0.06] bg-white/[0.02] text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+              )}
+              onClick={() => {
+                onOldSpeakerModeChange(!oldSpeakerMode);
+              }}
+            />
+          }
+        >
+          <Volume2 className="mr-1 size-3" />
+          Lo-fi
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Simulates a tinny old TV speaker with low-pass filtering</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -1066,27 +1171,63 @@ function TransportField({
   parseValue: (rawValue: string) => number;
 }) {
   const inputId = `transport-${label.toLowerCase().replace(/\s+/g, "-")}`;
+  const [draft, setDraft] = useState(String(value));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setDraft(String(value));
+    }
+  }, [value, isFocused]);
+
+  const commitValue = useCallback(() => {
+    const resolved = parseValue(draft);
+    onChange(resolved);
+    setDraft(String(resolved));
+  }, [draft, onChange, parseValue]);
 
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-black/20 px-2.5 py-1.5">
+    <div className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-1.5">
       <label
         htmlFor={inputId}
-        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/40"
+        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/35"
       >
         {label}
       </label>
       <Input
         id={inputId}
-        type="number"
+        type="text"
         inputMode="numeric"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
+        value={draft}
         aria-label={label === "Loop" ? "Loop Length" : label}
-        className="h-7 w-14 border-0 bg-transparent px-0 text-center font-[var(--oc-mono)] text-sm font-semibold text-white focus-visible:ring-0"
+        aria-valuemin={min}
+        aria-valuemax={max}
+        className="h-7 w-14 border-0 bg-transparent px-0 text-center font-[var(--oc-mono)] text-sm font-semibold tabular-nums text-white focus-visible:ring-0"
+        onFocus={(event) => {
+          setIsFocused(true);
+          event.currentTarget.select();
+        }}
+        onBlur={() => {
+          setIsFocused(false);
+          commitValue();
+        }}
         onChange={(event) => {
-          onChange(parseValue(event.currentTarget.value));
+          setDraft(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            const next = Math.min(max, value + step);
+            onChange(next);
+            setDraft(String(next));
+          } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            const next = Math.max(min, value - step);
+            onChange(next);
+            setDraft(String(next));
+          }
         }}
       />
       {suffix ? (
@@ -1136,9 +1277,9 @@ function AudioInitButton({
       {showAudioGate ? (
         <div
           id={promptId}
-          className="oc-audio-gate absolute top-full right-0 mt-3 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(18,21,34,0.96),rgba(9,11,18,0.98))] p-4 shadow-[0_28px_80px_rgba(3,4,10,0.65)]"
+          className="oc-audio-gate absolute top-full left-0 mt-3 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(18,21,34,0.96),rgba(9,11,18,0.98))] p-4 shadow-[0_28px_80px_rgba(3,4,10,0.65)]"
         >
-          <div className="absolute top-0 right-8 h-4 w-4 -translate-y-1/2 rotate-45 border-t border-l border-white/10 bg-[var(--oc-surface-raised)]" />
+          <div className="absolute top-0 left-6 h-4 w-4 -translate-y-1/2 rotate-45 border-t border-l border-white/10 bg-[var(--oc-surface-raised)]" />
           <div className="mb-2 flex items-center gap-2">
             <span className="rounded-full border border-[var(--oc-accent)]/35 bg-[var(--oc-accent)]/12 px-2 py-1 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-accent)]">
               First step
@@ -1166,9 +1307,18 @@ function AudioInitButton({
 
 /* ─────────── Status Chip ─────────── */
 
-function StatusChip({ label, value }: { label: string; value: string }) {
+function StatusChip({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-white/[0.06] bg-white/[0.02] px-2 py-1.5">
+    <div className="flex items-center gap-1.5 rounded-md border border-white/[0.05] bg-black/25 px-2 py-1.5">
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          active
+            ? "bg-[var(--oc-play)] shadow-[0_0_4px_rgba(61,220,132,0.6)]"
+            : "bg-white/20",
+        )}
+        aria-hidden="true"
+      />
       <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/30">{label}</span>
       <span className="font-[var(--oc-mono)] text-[10px] font-medium uppercase tracking-[0.12em] text-white/70">
         {value}

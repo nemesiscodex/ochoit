@@ -159,7 +159,7 @@ describe("workstation-shell", () => {
   it("toggles old speaker mode from the transport bar", () => {
     renderWorkstationShell();
 
-    const speakerModeButton = screen.getByRole("button", { name: "Old Speaker Mode" });
+    const speakerModeButton = screen.getByRole("button", { name: "Lo-fi speaker filter" });
 
     expect(speakerModeButton.getAttribute("aria-pressed")).toBe("false");
 
@@ -291,7 +291,7 @@ describe("workstation-shell", () => {
     renderWorkstationShell();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy share link" }));
+      fireEvent.click(screen.getByRole("button", { name: "Copy shareable link to clipboard" }));
     });
 
     await waitFor(() => {
@@ -307,7 +307,7 @@ describe("workstation-shell", () => {
     renderWorkstationShell();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save arrangement as WAV" }));
+      fireEvent.click(screen.getByRole("button", { name: "Download arrangement as WAV file" }));
     });
 
     await waitFor(() => {

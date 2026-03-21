@@ -150,6 +150,20 @@ body {
   }
 }
 
+/* ── action bar divider ── */
+
+.oc-action-divider {
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 40%,
+    rgba(255, 255, 255, 0.1) 60%,
+    transparent 100%
+  );
+}
+
 /* ── waveform container ── */
 
 .oc-waveform-wrap {

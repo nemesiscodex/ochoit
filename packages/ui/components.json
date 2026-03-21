@@ -11,14 +11,16 @@
     "prefix": ""
   },
   "iconLibrary": "lucide",
+  "menuColor": "default",
+  "menuAccent": "subtle",
   "aliases": {
     "components": "@ochoit/ui/components",
     "utils": "@ochoit/ui/lib/utils",
-    "hooks": "@ochoit/ui/hooks",
+    "ui": "@ochoit/ui/components",
     "lib": "@ochoit/ui/lib",
-    "ui": "@ochoit/ui/components"
+    "hooks": "@ochoit/ui/hooks"
   },
-  "menuColor": "default",
-  "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@react-bits": "https://reactbits.dev/r/{name}.json"
+  }
 }

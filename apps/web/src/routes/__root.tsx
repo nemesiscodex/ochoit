@@ -1,4 +1,5 @@
 import { Toaster } from "@ochoit/ui/components/sonner";
+import { TooltipProvider } from "@ochoit/ui/components/tooltip";
 import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
@@ -53,14 +54,16 @@ function RootDocument() {
         <HeadContent />
       </head>
       <body>
-        <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
-          <Header />
-          <div className="overflow-auto">
-            <Outlet />
+        <TooltipProvider>
+          <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
+            <Header />
+            <div className="overflow-auto">
+              <Outlet />
+            </div>
           </div>
-        </div>
-        <Toaster richColors />
-        <TanStackRouterDevtools position="bottom-left" />
+          <Toaster richColors />
+          <TanStackRouterDevtools position="bottom-left" />
+        </TooltipProvider>
         <Scripts />
       </body>
     </html>

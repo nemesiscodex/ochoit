@@ -33,4 +33,3 @@ For context, check the files `project.md` and `mvp.md`
 - [x] Save and load songs from a shareable URL hash
 - [ ] Test playback timing under normal UI interaction
 - [ ] Polish the editor UI for desktop and mobile
-- [ ] Decide when to introduce a more authentic NES emulation mode
