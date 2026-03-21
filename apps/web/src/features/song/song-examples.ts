@@ -174,6 +174,115 @@ export const songExamples: readonly SongExample[] = [
 63:mic-001>G3
 $mic-001|mic-001|m|C4||11025|0|475|AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8BAAAAAAAAAf8AAAEAAAAAAQAAAAAAAAD_AAAAAAwG6iLSEeUQDQT_4REBF-z59RAL8_jxHfcM5gAYAA_TC_Yg7vT3DB73-OITBAzu9wgODev--Rf99vP6Gv4K5AoDDfztBP8X8f_3DQb7-vkPAwXwAAMJ_fIF_RX1AfYICvj-8RADB_P-CAkB8f0AEP779gQNAP3uCgIL9fcDBgzy_fkOBf31_gsEAPIBAwn-9_8CDPv-9wgD__v6CgAF9QIBBf_3AgEI-__9BgL9-_0HAgP3AAIFAPgB_gv8_voDBgD--QMEBPv8_wQF-_77BwEB_P4EAAL5Av8F_v4AAAP9AP0DAf_-_wMAAPsCAAP-_QEABfsB_AYAAPwABAEB-wACAwD7AAAF___8AwMA_vsEAQX8__4EA_7-_gYAAfwAAgIB_AH_BQD-_gAD_wD8AgEC__4CAAL9Af8D__8AAAP-AP0CAQD__gMAAvwAAAMA_v8AA_8A_QIBAv7-AQED_f__AgL-AP4EAAD8AQECAP0AAQIA_QAAA_8A_gIAAv7_AQAB_gD_Av____8B___-AAAA__4BAAH-_w`,
   },
+  {
+    id: "mario-underwater",
+    name: "Mario Underwater",
+    author: "nemesiscodex",
+    summary: "A slower underwater groove with layered pulse melodies, walking harmony, and soft noise accents.",
+    dsl: `!v=3;bpm=97;loop=64;spb=4;mode=i;mv=43;spk=0;name=Mario%20Underwater;author=nemesiscodex;created=2026-03-18T00:00:00.000Z;updated=2026-03-21T18:25:14.397Z
+=1;vol=84;mute=0
+1:D4
+2-3:F4
+4-5:F#4
+6-7:G4
+8-9:A4
+10-11:A#4
+12:B4
+13:B4
+14:B4
+16:B4
+18-21:B4
+24-28:E5
+30-34:D#5
+36-40:E5
+43:G4
+44:A4
+45:B4
+46:C5
+47:D5
+48-52:E5
+54-57:D#5
+58-59:F5
+60-64:E5
+=2;vol=76;mute=0
+1:D4~84
+2-3:C#4~84
+4-5:C4~84
+6-7:B3~84
+8-9:C4~84
+10-11:C#4~84
+12:D4~84
+13:D4~84
+14:D4~84
+16:E4~84
+18-21:F4
+22:G4
+24-28:G4
+30-34:F#4
+36-40:G4
+43:G4
+44:A4
+45:B4
+46:C5
+47:D5
+48-52:G4
+54-57:F#4
+58-59:A4
+60-64:G4
+=3;vol=78;mute=0
+17:G3
+19-21:G3
+22-23:G3
+24:C3
+26:G3
+28:C4
+30:B2
+32:G3
+34:B3
+36:C3
+38:G3
+40:C4
+42:E3
+44:G3
+46:C4
+48:C3
+50:G3
+52:C4
+54:B2
+56:G3
+58:B3
+60:C3
+62:G3
+64:C4
+=4;vol=45;mute=0
+3:short P1~81
+5:long P5~82
+9:short P1~82
+10:short P1~78
+11:long P5~78
+15:short P1~58
+17:long P5~68
+21:short P1~68
+22:short P1~68
+23:long P5~68
+27:short P1~68
+29:long P5~68
+33:short P1~68
+34:short P1~68
+35:long P5~68
+39:short P1~68
+41:long P5~68
+45:short P1~68
+46:short P1~68
+47:long P5~68
+51:short P1~68
+53:long P5~68
+57:short P1~68
+58:short P1~68
+59:long P5~68
+64:short P1~68
+=5;vol=74;mute=0`,
+  },
 ];
 
 export function getSongExampleById(exampleId: string) {

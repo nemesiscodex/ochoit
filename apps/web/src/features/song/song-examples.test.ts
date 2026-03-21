@@ -18,4 +18,20 @@ describe("song-examples", () => {
     expect(song.transport.loopLength).toBe(64);
     expect(song.samples).toHaveLength(1);
   });
+
+  it("ships a parseable built-in Mario Underwater example", () => {
+    const marioUnderwater = songExamples.find((example) => example.id === "mario-underwater");
+
+    if (marioUnderwater === undefined) {
+      throw new Error("Expected the Mario Underwater example to be registered.");
+    }
+
+    const song = parseSongShareText(marioUnderwater.dsl);
+
+    expect(song.meta.name).toBe("Mario Underwater");
+    expect(song.meta.author).toBe("nemesiscodex");
+    expect(song.transport.loopLength).toBe(64);
+    expect(song.mixer.masterVolume).toBe(0.43);
+    expect(song.samples).toHaveLength(0);
+  });
 });
