@@ -15,7 +15,8 @@ describe("song-transport", () => {
     expect(clampSongBpm(251)).toBe(240);
     expect(clampSongLoopLength(6)).toBe(8);
     expect(clampSongLoopLength(19)).toBe(20);
-    expect(clampSongLoopLength(66)).toBe(64);
+    expect(clampSongLoopLength(66)).toBe(68);
+    expect(clampSongLoopLength(140)).toBe(128);
   });
 
   it("falls back to the current transport values for invalid text input", () => {

@@ -4,6 +4,8 @@ export const SONG_DOCUMENT_KIND = "ochoit-song";
 export const SONG_DOCUMENT_VERSION = 1 as const;
 export const SONG_STORAGE_KEY = `ochoit.song.v${SONG_DOCUMENT_VERSION}`;
 export const DEFAULT_PULSE_DUTY = 0.5 as const;
+export const SONG_MAX_LOOP_LENGTH = 128 as const;
+export const SONG_MAX_SAMPLE_COUNT = 4 as const;
 
 export const trackOrder = ["pulse1", "pulse2", "triangle", "noise", "sample"] as const;
 
@@ -15,8 +17,8 @@ const pulseDutySchema = z.union([
   z.literal(0.5),
   z.literal(0.75),
 ]);
-const loopLengthSchema = z.number().int().min(8).max(64).multipleOf(4);
-const melodicStepLengthSchema = z.number().int().min(1).max(64);
+const loopLengthSchema = z.number().int().min(8).max(SONG_MAX_LOOP_LENGTH).multipleOf(4);
+const melodicStepLengthSchema = z.number().int().min(1).max(SONG_MAX_LOOP_LENGTH);
 const trackSettingsSchema = z.object({
   muted: z.boolean(),
   solo: z.boolean(),
@@ -58,7 +60,7 @@ const pulseTrackSchema = z.object({
   kind: z.literal("pulse"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(pulseStepSchema).min(8).max(64),
+  steps: z.array(pulseStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const triangleTrackSchema = z.object({
@@ -66,7 +68,7 @@ const triangleTrackSchema = z.object({
   kind: z.literal("triangle"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(triangleStepSchema).min(8).max(64),
+  steps: z.array(triangleStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const noiseTrackSchema = z.object({
@@ -74,7 +76,7 @@ const noiseTrackSchema = z.object({
   kind: z.literal("noise"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(noiseStepSchema).min(8).max(64),
+  steps: z.array(noiseStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const sampleTrackSchema = z.object({
@@ -82,7 +84,7 @@ const sampleTrackSchema = z.object({
   kind: z.literal("sample"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(sampleStepSchema).min(8).max(64),
+  steps: z.array(sampleStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const serializedSampleAssetSchema = z
@@ -146,7 +148,7 @@ export const songDocumentSchema = z
       noise: noiseTrackSchema,
       sample: sampleTrackSchema,
     }),
-    samples: z.array(serializedSampleAssetSchema),
+    samples: z.array(serializedSampleAssetSchema).max(SONG_MAX_SAMPLE_COUNT),
   })
   .superRefine((song, ctx) => {
     const expectedLength = song.transport.loopLength;

@@ -1,4 +1,4 @@
-import { DEFAULT_PULSE_DUTY, type SongDocument } from "@/features/song/song-document";
+import { DEFAULT_PULSE_DUTY, SONG_MAX_LOOP_LENGTH, type SongDocument } from "@/features/song/song-document";
 
 export const SONG_BPM_RANGE = {
   min: 40,
@@ -7,7 +7,7 @@ export const SONG_BPM_RANGE = {
 
 export const SONG_LOOP_LENGTH_RANGE = {
   min: 8,
-  max: 64,
+  max: SONG_MAX_LOOP_LENGTH,
   step: 4,
 } as const;
 

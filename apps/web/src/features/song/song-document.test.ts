@@ -6,6 +6,7 @@ import {
   parseSongDocument,
   SONG_DOCUMENT_KIND,
   SONG_DOCUMENT_VERSION,
+  SONG_MAX_SAMPLE_COUNT,
   trackOrder,
 } from "@/features/song/song-document";
 
@@ -42,5 +43,35 @@ describe("song-document", () => {
       true,
     );
     expect(song.samples).toEqual([]);
+  });
+
+  it("rejects songs with more than four embedded samples", () => {
+    const song = createEmptySongDocument();
+    song.samples = Array.from({ length: SONG_MAX_SAMPLE_COUNT + 1 }, (_, index) => ({
+      id: `mic-${String(index + 1).padStart(3, "0")}`,
+      name: `mic-${String(index + 1).padStart(3, "0")}`,
+      source: "mic" as const,
+      baseNote: "C4",
+      detectedBaseNote: null,
+      sampleRate: 11_025,
+      frameCount: 1,
+      channels: 1 as const,
+      trim: {
+        startFrame: 0,
+        endFrame: 1,
+      },
+      pcm: [0],
+    }));
+
+    try {
+      parseSongDocument(song);
+      throw new Error("Expected parseSongDocument to reject extra samples.");
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
+
+      expect(error.message).toContain(`${SONG_MAX_SAMPLE_COUNT}`);
+    }
   });
 });

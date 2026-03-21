@@ -18,6 +18,7 @@ import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-a
 import {
   createEmptySongDocument,
   getOrderedTracks,
+  SONG_MAX_SAMPLE_COUNT,
   type SongDocument,
   type TrackId,
 } from "@/features/song/song-document";
@@ -114,6 +115,14 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   } = useSampleRecorder({
     existingSamples: song.samples,
     onRecordingComplete: ({ asset }) => {
+      if (song.samples.length >= SONG_MAX_SAMPLE_COUNT) {
+        setShareStatus({
+          tone: "error",
+          message: `Sample limit reached. Delete a clip before recording another one.`,
+        });
+        return;
+      }
+
       setSong((currentSong) => {
         const replacedSampleId = deckSampleIdRef.current ?? currentSong.samples.at(-1)?.id ?? null;
         const recordedSong = {
@@ -1012,6 +1021,7 @@ function SampleDeck({
 }) {
   const isRecording = recorderStatus === "recording";
   const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
+  const sampleLimitReached = samples.length >= SONG_MAX_SAMPLE_COUNT;
   const trimmedPcm = sample === null ? [] : getTrimmedSamplePcm(sample);
   const waveform = createWaveformFromPcm(trimmedPcm);
   const trimmedFrameCount = sample === null ? 0 : getTrimmedFrameCount(sample);
@@ -1028,6 +1038,8 @@ function SampleDeck({
           ? "Requesting microphone access"
           : recorderStatus === "error"
             ? recorderErrorMessage ?? "Recorder error"
+            : sampleLimitReached
+              ? `Clip limit reached (${samples.length}/${SONG_MAX_SAMPLE_COUNT})`
             : sample === null
               ? "Ready to capture"
               : `Latest clip ${formatSampleDurationLabel(sampleDurationMs)}`;
@@ -1043,14 +1055,15 @@ function SampleDeck({
       </div>
 
       <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-white/35">
-        Capture up to 2s from the microphone. Set a trim length, then slide the whole window across the take without changing its duration.
+        Capture up to 2s from the microphone. Store up to {SONG_MAX_SAMPLE_COUNT} clips, then trim and swap
+        between them from the deck.
       </p>
 
       <div className="mb-3 grid grid-cols-2 gap-2">
         <Button
           type="button"
           className="h-8 rounded-md bg-[var(--oc-sample)] font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[#07080e] hover:bg-[var(--oc-sample)]/85"
-          disabled={recorderPermissionState === "unsupported" || isBusy}
+          disabled={recorderPermissionState === "unsupported" || isBusy || (!isRecording && sampleLimitReached)}
           onClick={() => {
             if (isRecording) {
               onStopRecording();
@@ -1086,6 +1099,11 @@ function SampleDeck({
           <span className="mt-1 block text-white/65">{statusLabel}</span>
         </div>
       </div>
+      {sampleLimitReached ? (
+        <div className="mb-3 rounded-md border border-[var(--oc-noise)]/25 bg-[var(--oc-noise)]/[0.06] px-2.5 py-2 font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-noise)]">
+          Delete a clip before recording another one. Share links also cap embedded samples at {SONG_MAX_SAMPLE_COUNT}.
+        </div>
+      ) : null}
 
       <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
         <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">

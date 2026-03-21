@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkstationShell } from "@/components/workstation-shell";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
-import { createDefaultSongDocument, type SongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, SONG_MAX_SAMPLE_COUNT, type SongDocument } from "@/features/song/song-document";
 import { buildSongShareUrl, serializeSongShareText } from "@/features/song/song-share";
 import * as useAudioEngineModule from "@/features/audio/use-audio-engine";
 import * as sampleRecorderModule from "@/features/audio/sample-recorder";
@@ -550,6 +550,47 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Sample Deck")).toBeTruthy();
     expect(screen.getByText("Song Info")).toBeTruthy();
     expect(screen.getByText("Recorded Clips")).toBeTruthy();
+  });
+
+  it("blocks new recordings once the sample deck reaches the share limit", () => {
+    const song = createDefaultSongDocument();
+    const baseSample = song.samples[0];
+
+    if (baseSample === undefined) {
+      throw new Error("Expected the default song to include a sample.");
+    }
+
+    song.samples = [
+      ...song.samples,
+      {
+        ...baseSample,
+        id: "mic-002",
+        name: "mic-002",
+      },
+      {
+        ...baseSample,
+        id: "mic-003",
+        name: "mic-003",
+      },
+      {
+        ...baseSample,
+        id: "mic-004",
+        name: "mic-004",
+      },
+    ];
+
+    renderWorkstationShell(song);
+
+    const recordButton = screen.getByRole("button", { name: "Record" });
+
+    if (!(recordButton instanceof HTMLButtonElement)) {
+      throw new Error("Expected the sample deck record control to be a button.");
+    }
+
+    expect(song.samples).toHaveLength(SONG_MAX_SAMPLE_COUNT);
+    expect(recordButton.disabled).toBe(true);
+    expect(screen.getByText(`Clip limit reached (${SONG_MAX_SAMPLE_COUNT}/${SONG_MAX_SAMPLE_COUNT})`)).toBeTruthy();
+    expect(screen.getByText(/delete a clip before recording another one/i)).toBeTruthy();
   });
 
   it("moves the trim window while preserving the selected length", () => {
