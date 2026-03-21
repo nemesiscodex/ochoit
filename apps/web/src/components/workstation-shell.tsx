@@ -1,7 +1,7 @@
 import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Mic, Pause, Play, Save, Square, Trash2, Upload, Zap } from "lucide-react";
+import { Download, Mic, Pause, Play, Save, Square, Trash2, Upload, Zap } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
@@ -43,6 +43,7 @@ import {
   updateTrackMute,
   updateTrackVolume,
 } from "@/features/song/song-mixer";
+import { createSongWavBlob, createSongWavFileName } from "@/features/song/song-wav";
 import {
   type MelodicStepUpdates,
   type MelodicTrackId,
@@ -108,6 +109,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const [shareDslEditor, setShareDslEditor] = useState<ShareDslEditorState | null>(null);
   const [examplesOpen, setExamplesOpen] = useState(false);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
+  const [isExportingWav, setIsExportingWav] = useState(false);
   const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
   deckSampleIdRef.current = deckSampleId;
@@ -368,6 +370,31 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       tone: "neutral",
       message: didCopy ? "Share link copied to clipboard." : "Share link is now in the address bar.",
     });
+  };
+
+  const saveArrangementAsWav = async () => {
+    if (isExportingWav) {
+      return;
+    }
+
+    setIsExportingWav(true);
+
+    try {
+      const wavBlob = createSongWavBlob(song);
+      const fileName = createSongWavFileName(song);
+      downloadBlobFile(wavBlob, fileName);
+      setShareStatus({
+        tone: "neutral",
+        message: "WAV download started.",
+      });
+    } catch (error) {
+      setShareStatus({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Could not export the current arrangement as WAV.",
+      });
+    } finally {
+      setIsExportingWav(false);
+    }
   };
 
   const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
@@ -708,6 +735,18 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
                 onClick={openShareDslEditor}
               >
                 DSL
+              </Button>
+              <Button
+                variant="outline"
+                className="h-10 rounded-md border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+                aria-label="Save arrangement as WAV"
+                disabled={isExportingWav}
+                onClick={() => {
+                  void saveArrangementAsWav();
+                }}
+              >
+                <Download className="mr-1.5 size-3.5" />
+                {isExportingWav ? "Saving..." : "WAV"}
               </Button>
               <Button
                 variant="outline"
@@ -1494,6 +1533,22 @@ async function copyTextToClipboard(value: string) {
   } catch {
     return false;
   }
+}
+
+function downloadBlobFile(blob: Blob, fileName: string) {
+  if (typeof document === "undefined" || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+    throw new Error("This browser cannot download WAV files.");
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fileName;
+  link.rel = "noopener";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 /* ─────────── Song Metadata ─────────── */

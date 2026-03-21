@@ -79,6 +79,9 @@ describe("workstation-shell", () => {
   let latestRecorderOptions: Parameters<typeof sampleRecorderModule.useSampleRecorder>[0] | null = null;
   let clipboardWriteText: ReturnType<typeof vi.fn<(value: string) => Promise<void>>>;
   let confirmDialog: ReturnType<typeof vi.fn<(message?: string) => boolean>>;
+  let createObjectURL: ReturnType<typeof vi.fn<(blob: Blob) => string>>;
+  let revokeObjectURL: ReturnType<typeof vi.fn<(url: string) => void>>;
+  let anchorClick: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
     mockUseAudioEngine.mockReset();
@@ -99,6 +102,21 @@ describe("workstation-shell", () => {
     });
     confirmDialog = vi.fn(() => true);
     window.confirm = confirmDialog;
+    createObjectURL = vi.fn(() => "blob:arrangement");
+    revokeObjectURL = vi.fn();
+    anchorClick = vi.fn();
+    Object.defineProperty(window.URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(window.URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    Object.defineProperty(HTMLAnchorElement.prototype, "click", {
+      configurable: true,
+      value: anchorClick,
+    });
     window.history.replaceState({}, "", "/");
   });
 
@@ -263,6 +281,29 @@ describe("workstation-shell", () => {
     expect(clipboardWriteText).toHaveBeenCalledTimes(1);
     expect(clipboardWriteText.mock.calls[0]?.[0]).toContain("#song=");
     expect(screen.getByText("Share link copied to clipboard.")).toBeTruthy();
+  });
+
+  it("downloads the current arrangement as a wav file", async () => {
+    renderWorkstationShell();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Save arrangement as WAV" }));
+    });
+
+    await waitFor(() => {
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+    });
+
+    const exportedBlob = createObjectURL.mock.calls[0]?.[0];
+
+    if (!(exportedBlob instanceof Blob)) {
+      throw new Error("Expected WAV export to create a Blob.");
+    }
+
+    expect(exportedBlob.type).toBe("audio/wav");
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:arrangement");
+    expect(screen.getByText("WAV download started.")).toBeTruthy();
   });
 
   it("opens the share dsl editor and copies the current dsl text", async () => {
