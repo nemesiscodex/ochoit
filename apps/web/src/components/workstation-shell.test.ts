@@ -451,7 +451,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected Pulse I arrangement text to be a textarea.");
     }
 
-    expect(textarea.value).toBe("1: C5 @12.5%\n5: E5 @25%\n9: G5 @50%\n13: E5 @25%");
+    expect(textarea.value).toBe("1: C5 @12.5%\n5: E5 @25%\n9: G5\n13: E5 @25%");
   });
 
   it("applies a pasted voice arrangement and ignores steps beyond the loop length", () => {
@@ -483,7 +483,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected Pulse I arrangement text to be a textarea.");
     }
 
-    expect(verifyTextarea.value).toBe("1: E4 @25%\n3: G4 @50%\n5: A4 @75%");
+    expect(verifyTextarea.value).toBe("1: E4 @25%\n3: G4\n5: A4 @75%");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 

@@ -135,9 +135,7 @@ describe("song-pattern", () => {
     const song = createDefaultSongDocument();
     const sustainedSong = updateMelodicTrackStep(song, "pulse1", 0, { length: 3 });
 
-    expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1)).toBe(
-      "1-3: C5 @12.5%\n5: E5 @25%\n9: G5 @50%\n13: E5 @25%",
-    );
+    expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1)).toBe("1-3: C5 @12.5%\n5: E5 @25%\n9: G5\n13: E5 @25%");
   });
 
   it("serializes the enabled noise and sample arrangements", () => {
@@ -291,6 +289,12 @@ describe("song-pattern", () => {
     expect(updatedSong.tracks.pulse1.steps[0]?.duty).toBe(0.25);
     expect(updatedSong.tracks.pulse1.steps[4]?.duty).toBe(DEFAULT_PULSE_DUTY);
     expect(updatedSong.tracks.pulse1.steps[8]?.duty).toBe(0.75);
+  });
+
+  it("omits the pulse duty suffix when serializing the default 50% duty", () => {
+    const song = createDefaultSongDocument();
+
+    expect(serializeMelodicTrackArrangement(song.tracks.pulse1)).toBe("1: C5 @12.5%\n5: E5 @25%\n9: G5\n13: E5 @25%");
   });
 
   it("truncates overlapping melodic arrangement entries to keep tracks monophonic", () => {

@@ -400,8 +400,11 @@ export function replaceSampleTrackSampleReference(
 export function serializeMelodicTrackArrangement(track: MelodicTrack) {
   return getMelodicArrangementEntries(track)
     .map((entry) => {
+      const normalizedDuty = entry.duty ?? DEFAULT_PULSE_DUTY;
       const dutySuffix =
-        track.kind === "pulse" ? ` @${formatPulseDutyLabel(entry.duty ?? DEFAULT_PULSE_DUTY)}` : "";
+        track.kind === "pulse" && normalizedDuty !== DEFAULT_PULSE_DUTY
+          ? ` @${formatPulseDutyLabel(normalizedDuty)}`
+          : "";
 
       if (entry.length === 1) {
         return `${entry.stepIndex + 1}: ${entry.note}${dutySuffix}`;
