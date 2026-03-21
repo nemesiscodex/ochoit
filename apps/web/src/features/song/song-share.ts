@@ -62,6 +62,7 @@ type ParsedShareHeader = {
   engineMode: SongDocument["meta"]["engineMode"];
   loopLength: number;
   masterVolume: number;
+  oldSpeakerMode: boolean;
   name: string;
   stepsPerBeat: number;
   updatedAt: string;
@@ -217,6 +218,7 @@ export function parseSongShareText(input: string) {
     },
     mixer: {
       masterVolume: header.masterVolume,
+      oldSpeakerMode: header.oldSpeakerMode,
     },
     tracks: {
       pulse1: buildSharedPulseTrack(defaultSong.tracks.pulse1, trackSections.pulse1, loopLength, "pulse1"),
@@ -241,6 +243,7 @@ function serializeHeader(song: SongDocument) {
     `spb=${song.transport.stepsPerBeat}`,
     `mode=${modeToken}`,
     `mv=${formatLevelPercent(song.mixer.masterVolume)}`,
+    `spk=${song.mixer.oldSpeakerMode ? "1" : "0"}`,
     `name=${encodeURIComponent(song.meta.name)}`,
     `author=${encodeURIComponent(song.meta.author)}`,
     `created=${song.meta.createdAt}`,
@@ -360,6 +363,7 @@ function parseHeader(line: string): ParsedShareHeader {
     engineMode: modeToken === "a" ? "authentic" : "inspired",
     loopLength: parseIntegerValue(getRequiredEntry(headerEntries, "loop"), "loop"),
     masterVolume: parseLevelPercent(getOptionalEntry(headerEntries, "mv") ?? "88", "mv"),
+    oldSpeakerMode: (getOptionalEntry(headerEntries, "spk") ?? "0") === "1",
     name: decodeURIComponent(getOptionalEntry(headerEntries, "name") ?? "Shared Song"),
     stepsPerBeat: parseIntegerValue(getOptionalEntry(headerEntries, "spb") ?? "4", "spb"),
     updatedAt: getOptionalEntry(headerEntries, "updated") ?? defaultSharedMeta.updatedAt,

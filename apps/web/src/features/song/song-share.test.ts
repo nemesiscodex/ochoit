@@ -4,6 +4,7 @@ import { createDefaultSongDocument } from "@/features/song/song-document";
 import {
   buildSongShareUrl,
   parseSongSharePayload,
+  parseSongShareText,
   readSongShareFromHash,
   serializeSongSharePayload,
 } from "@/features/song/song-share";
@@ -14,6 +15,7 @@ describe("song-share", () => {
     song.meta.name = "Share Tune";
     song.meta.engineMode = "authentic";
     song.transport.bpm = 172;
+    song.mixer.oldSpeakerMode = true;
     song.tracks.pulse1.muted = true;
     song.tracks.pulse2.volume = 0.63;
     song.tracks.pulse2.steps[2] = {
@@ -37,6 +39,7 @@ describe("song-share", () => {
     expect(payload.startsWith("v3.")).toBe(true);
     expect(parsedSong.meta.name).toBe(song.meta.name);
     expect(parsedSong.transport.bpm).toBe(song.transport.bpm);
+    expect(parsedSong.mixer.oldSpeakerMode).toBe(true);
     expect(parsedSong.tracks.pulse1.muted).toBe(true);
     expect(parsedSong.tracks.pulse2.volume).toBeCloseTo(0.63, 5);
     expect(parsedSong.tracks.pulse2.steps[2]?.volume).toBeCloseTo(0.91, 5);
@@ -74,6 +77,21 @@ describe("song-share", () => {
     const legacyPayload = encodeLegacyBase64Url(JSON.stringify(song));
 
     expect(compactPayload.length).toBeLessThan(legacyPayload.length / 3);
+  });
+
+  it("defaults old speaker mode to off when reading older share text", () => {
+    const legacyShareText = [
+      "!v=3;bpm=136;loop=16;spb=4;mode=i;mv=88;name=Shared%20Song;author=Julio;created=2026-03-18T00:00:00.000Z;updated=2026-03-18T00:00:00.000Z",
+      "=1;vol=84;mute=0",
+      "=2;vol=76;mute=0",
+      "=3;vol=78;mute=0",
+      "=4;vol=68;mute=0",
+      "=5;vol=74;mute=0",
+    ].join("\n");
+
+    const parsedSong = parseSongShareText(legacyShareText);
+
+    expect(parsedSong.mixer.oldSpeakerMode).toBe(false);
   });
 });
 

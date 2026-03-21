@@ -1,3 +1,4 @@
+import { configureOldSpeakerFilters } from "@/features/audio/old-speaker";
 import { NoiseVoice } from "@/features/audio/noise-voice";
 import { AudioTransport } from "@/features/audio/audio-transport";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
@@ -23,6 +24,10 @@ export class AudioEngine {
   readonly masterGain: GainNode;
   readonly voices: Record<TrackId, VoiceBus>;
   readonly transport: AudioTransport;
+  private readonly masterDryGain: GainNode;
+  private readonly masterSpeakerWetGain: GainNode;
+  private readonly masterSpeakerHighPass: BiquadFilterNode;
+  private readonly masterSpeakerLowPass: BiquadFilterNode;
   private readonly pulseVoice1: PulseVoice;
   private readonly pulseVoice2: PulseVoice;
   private readonly triangleVoice: TriangleVoice;
@@ -33,6 +38,10 @@ export class AudioEngine {
   private constructor(
     context: AudioContext,
     masterGain: GainNode,
+    masterDryGain: GainNode,
+    masterSpeakerWetGain: GainNode,
+    masterSpeakerHighPass: BiquadFilterNode,
+    masterSpeakerLowPass: BiquadFilterNode,
     voices: Record<TrackId, VoiceBus>,
     transport: AudioTransport,
     pulseVoice1: PulseVoice,
@@ -44,6 +53,10 @@ export class AudioEngine {
   ) {
     this.context = context;
     this.masterGain = masterGain;
+    this.masterDryGain = masterDryGain;
+    this.masterSpeakerWetGain = masterSpeakerWetGain;
+    this.masterSpeakerHighPass = masterSpeakerHighPass;
+    this.masterSpeakerLowPass = masterSpeakerLowPass;
     this.voices = voices;
     this.transport = transport;
     this.pulseVoice1 = pulseVoice1;
@@ -62,8 +75,21 @@ export class AudioEngine {
     const context = new AudioContext({ latencyHint: "interactive" });
     const transport = await AudioTransport.create(context);
     const masterGain = context.createGain();
+    const masterDryGain = context.createGain();
+    const masterSpeakerWetGain = context.createGain();
+    const masterSpeakerHighPass = context.createBiquadFilter();
+    const masterSpeakerLowPass = context.createBiquadFilter();
+
     masterGain.gain.value = 0.88;
-    masterGain.connect(context.destination);
+    masterDryGain.gain.value = 1;
+    masterSpeakerWetGain.gain.value = 0;
+    configureOldSpeakerFilters(masterSpeakerHighPass, masterSpeakerLowPass);
+    masterGain.connect(masterDryGain);
+    masterDryGain.connect(context.destination);
+    masterGain.connect(masterSpeakerHighPass);
+    masterSpeakerHighPass.connect(masterSpeakerLowPass);
+    masterSpeakerLowPass.connect(masterSpeakerWetGain);
+    masterSpeakerWetGain.connect(context.destination);
 
     const voices = Object.fromEntries(
       trackOrder.map((trackId) => {
@@ -113,6 +139,10 @@ export class AudioEngine {
     return new AudioEngine(
       context,
       masterGain,
+      masterDryGain,
+      masterSpeakerWetGain,
+      masterSpeakerHighPass,
+      masterSpeakerLowPass,
       voices,
       transport,
       pulseVoice1,
@@ -144,12 +174,18 @@ export class AudioEngine {
     this.masterGain.gain.value = volume;
   }
 
+  setOldSpeakerMode(enabled: boolean) {
+    this.masterDryGain.gain.value = enabled ? 0 : 1;
+    this.masterSpeakerWetGain.gain.value = enabled ? 1 : 0;
+  }
+
   setVoiceVolume(trackId: TrackId, volume: number) {
     this.voices[trackId].gain.gain.value = volume;
   }
 
   configureSong(song: SongDocument) {
     this.setMasterVolume(song.mixer.masterVolume);
+    this.setOldSpeakerMode(song.mixer.oldSpeakerMode);
     getOrderedTracks(song).forEach((track) => {
       this.setVoiceVolume(track.id, track.muted ? 0 : track.volume);
     });
@@ -292,6 +328,10 @@ export class AudioEngine {
     this.unsubscribeTransport();
     this.transport.disconnect();
     this.masterGain.disconnect();
+    this.masterDryGain.disconnect();
+    this.masterSpeakerWetGain.disconnect();
+    this.masterSpeakerHighPass.disconnect();
+    this.masterSpeakerLowPass.disconnect();
     trackOrder.forEach((trackId) => {
       const voice = this.voices[trackId];
       voice.input.disconnect();

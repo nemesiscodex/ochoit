@@ -156,6 +156,26 @@ describe("workstation-shell", () => {
     expect(latestSong.mixer.masterVolume).toBe(0.61);
   });
 
+  it("toggles old speaker mode from the transport bar", () => {
+    renderWorkstationShell();
+
+    const speakerModeButton = screen.getByRole("button", { name: "Old Speaker Mode" });
+
+    expect(speakerModeButton.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(speakerModeButton);
+
+    expect(speakerModeButton.getAttribute("aria-pressed")).toBe("true");
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.mixer.oldSpeakerMode).toBe(true);
+  });
+
   it("highlights start audio as the first action before the engine is ready", () => {
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
 

@@ -140,6 +140,7 @@ export const songDocumentSchema = z
     }),
     mixer: z.object({
       masterVolume: levelSchema,
+      oldSpeakerMode: z.boolean().default(false),
     }),
     tracks: z.object({
       pulse1: pulseTrackSchema,
@@ -287,6 +288,7 @@ export function createEmptySongDocument(): SongDocument {
     },
     mixer: {
       masterVolume: 0.88,
+      oldSpeakerMode: false,
     },
     tracks: {
       pulse1: {
@@ -357,6 +359,7 @@ export function createDefaultSongDocument(): SongDocument {
     },
     mixer: {
       masterVolume: 0.88,
+      oldSpeakerMode: false,
     },
     tracks: {
       pulse1: {

@@ -33,6 +33,21 @@ describe("song-document", () => {
     );
   });
 
+  it("defaults old speaker mode to off when parsing legacy song data", () => {
+    const initialSong = createDefaultSongDocument();
+    const serializedSong = JSON.parse(JSON.stringify(initialSong)) as typeof initialSong;
+    const legacySong = {
+      ...serializedSong,
+      mixer: {
+        masterVolume: serializedSong.mixer.masterVolume,
+      },
+    };
+
+    const parsedSong = parseSongDocument(legacySong);
+
+    expect(parsedSong.mixer.oldSpeakerMode).toBe(false);
+  });
+
   it("creates a valid empty song document for starting from scratch", () => {
     const song = createEmptySongDocument();
 

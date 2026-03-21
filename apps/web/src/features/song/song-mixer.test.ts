@@ -5,6 +5,7 @@ import {
   clampTrackVolume,
   toTrackVolumePercent,
   updateMasterVolume,
+  updateOldSpeakerMode,
   updateTrackMute,
   updateTrackVolume,
 } from "@/features/song/song-mixer";
@@ -43,5 +44,14 @@ describe("song-mixer", () => {
     expect(updatedSong.mixer.masterVolume).toBe(0.61);
     expect(updatedSong.tracks.pulse1.volume).toBe(song.tracks.pulse1.volume);
     expect(ignoredSong).toBe(song);
+  });
+
+  it("updates old speaker mode without affecting track levels", () => {
+    const song = createDefaultSongDocument();
+    const updatedSong = updateOldSpeakerMode(song, true);
+
+    expect(updatedSong.mixer.oldSpeakerMode).toBe(true);
+    expect(updatedSong.mixer.masterVolume).toBe(song.mixer.masterVolume);
+    expect(updatedSong.tracks.noise.volume).toBe(song.tracks.noise.volume);
   });
 });

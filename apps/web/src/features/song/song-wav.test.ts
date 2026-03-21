@@ -45,6 +45,18 @@ describe("song-wav", () => {
     expect(renderedSong.durationSeconds).toBeGreaterThan(loopDurationSeconds);
   });
 
+  it("applies the old speaker effect during wav rendering when enabled", () => {
+    const cleanSong = createDefaultSongDocument();
+    const filteredSong = createDefaultSongDocument();
+    filteredSong.mixer.oldSpeakerMode = true;
+
+    const cleanRender = renderSongToPcm(cleanSong, { sampleRate: 8_000 });
+    const filteredRender = renderSongToPcm(filteredSong, { sampleRate: 8_000 });
+
+    expect(filteredRender.pcm).toHaveLength(cleanRender.pcm.length);
+    expect(filteredRender.pcm.some((sample, index) => sample !== cleanRender.pcm[index])).toBe(true);
+  });
+
   it("creates stable wav filenames from song metadata", () => {
     const song = createEmptySongDocument();
 

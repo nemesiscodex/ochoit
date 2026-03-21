@@ -36,6 +36,16 @@ export function updateMasterVolume(song: SongDocument, volume: number): SongDocu
   };
 }
 
+export function updateOldSpeakerMode(song: SongDocument, enabled: boolean): SongDocument {
+  return {
+    ...song,
+    mixer: {
+      ...song.mixer,
+      oldSpeakerMode: enabled,
+    },
+  };
+}
+
 export function updateTrackMute(song: SongDocument, trackId: TrackId): SongDocument {
   switch (trackId) {
     case "pulse1":

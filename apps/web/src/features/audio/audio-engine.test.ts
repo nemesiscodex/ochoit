@@ -171,6 +171,14 @@ class MockGainNode {
   readonly disconnect = vi.fn<() => void>();
 }
 
+class MockBiquadFilterNode {
+  type: BiquadFilterType = "lowpass";
+  readonly frequency = new MockAudioParam(350);
+  readonly Q = new MockAudioParam(1);
+  readonly connect = vi.fn<(destination: AudioNode) => void>();
+  readonly disconnect = vi.fn<() => void>();
+}
+
 class MockOscillatorNode {
   type: OscillatorType = "sine";
   readonly frequency = new MockAudioParam(0);
@@ -200,6 +208,7 @@ class MockAudioContext {
   readonly destination = {} as AudioDestinationNode;
   readonly sampleRate = 48_000;
   readonly createdAnalysers: MockAnalyserNode[] = [];
+  readonly createdBiquadFilters: MockBiquadFilterNode[] = [];
   readonly createdGains: MockGainNode[] = [];
   readonly createdOscillators: MockOscillatorNode[] = [];
   readonly createGain = vi.fn(() => {
@@ -216,6 +225,11 @@ class MockAudioContext {
     const analyser = new MockAnalyserNode(120 + this.createdAnalysers.length);
     this.createdAnalysers.push(analyser);
     return analyser as unknown as AnalyserNode;
+  });
+  readonly createBiquadFilter = vi.fn(() => {
+    const filter = new MockBiquadFilterNode();
+    this.createdBiquadFilters.push(filter);
+    return filter as unknown as BiquadFilterNode;
   });
   readonly resume = vi.fn(async () => {
     this.state = "running";
@@ -281,6 +295,9 @@ describe("audio-engine", () => {
     expect(audioEngineMocks.noiseVoiceConstructor).toHaveBeenCalledWith(mockContext, engine.voices.noise.input);
     expect(audioEngineMocks.sampleVoiceConstructor).toHaveBeenCalledWith(mockContext, engine.voices.sample.input);
     expect(mockContext.createAnalyser).toHaveBeenCalledTimes(trackOrder.length);
+    expect(mockContext.createBiquadFilter).toHaveBeenCalledTimes(2);
+    expect(mockContext.createdBiquadFilters[0]?.type).toBe("highpass");
+    expect(mockContext.createdBiquadFilters[1]?.type).toBe("lowpass");
 
     trackOrder.forEach((trackId, index) => {
       const voice = engine.voices[trackId];
@@ -304,6 +321,7 @@ describe("audio-engine", () => {
       ...song,
       mixer: {
         masterVolume: 0.61,
+        oldSpeakerMode: true,
       },
       tracks: {
         ...song.tracks,
@@ -330,6 +348,8 @@ describe("audio-engine", () => {
     engine.configureSong(mutedTriangleSong);
 
     expect(engine.masterGain.gain.value).toBe(0.61);
+    expect(mockContext.createdGains[1]?.gain.value).toBe(0);
+    expect(mockContext.createdGains[2]?.gain.value).toBe(1);
     expect((engine.voices.pulse1.gain as unknown as MockGainNode).gain.value).toBe(0.43);
     expect((engine.voices.triangle.gain as unknown as MockGainNode).gain.value).toBe(0);
     expect((engine.voices.noise.gain as unknown as MockGainNode).gain.value).toBe(0.57);
@@ -375,6 +395,10 @@ describe("audio-engine", () => {
 
     expect(audioEngineMocks.unsubscribeTransport).toHaveBeenCalledTimes(1);
     expect(audioEngineMocks.transport.disconnect).toHaveBeenCalledTimes(1);
+    expect(mockContext.createdGains[1]?.disconnect).toHaveBeenCalledTimes(1);
+    expect(mockContext.createdGains[2]?.disconnect).toHaveBeenCalledTimes(1);
+    expect(mockContext.createdBiquadFilters[0]?.disconnect).toHaveBeenCalledTimes(1);
+    expect(mockContext.createdBiquadFilters[1]?.disconnect).toHaveBeenCalledTimes(1);
     trackOrder.forEach((trackId) => {
       const voice = engine.voices[trackId];
 

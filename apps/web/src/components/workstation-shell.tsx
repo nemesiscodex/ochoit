@@ -40,6 +40,7 @@ import {
   TRACK_VOLUME_PERCENT_RANGE,
   toTrackVolumePercent,
   updateMasterVolume,
+  updateOldSpeakerMode,
   updateTrackMute,
   updateTrackVolume,
 } from "@/features/song/song-mixer";
@@ -181,6 +182,10 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
 
   const setMasterSongVolume = (volume: number) => {
     setSong((currentSong) => updateMasterVolume(currentSong, volume));
+  };
+
+  const setOldSpeakerMode = (enabled: boolean) => {
+    setSong((currentSong) => updateOldSpeakerMode(currentSong, enabled));
   };
 
   const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
@@ -696,6 +701,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               stopTransport={stopTransport}
               isPlaying={isPlaying}
               onMasterVolumeChange={setMasterSongVolume}
+              onOldSpeakerModeChange={setOldSpeakerMode}
               onBpmChange={(nextBpm) => {
                 setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
               }}
@@ -892,6 +898,7 @@ function TransportStrip({
   stopTransport,
   isPlaying,
   onMasterVolumeChange,
+  onOldSpeakerModeChange,
   onBpmChange,
   onLoopLengthChange,
 }: {
@@ -901,6 +908,7 @@ function TransportStrip({
   stopTransport: () => void;
   isPlaying: boolean;
   onMasterVolumeChange: (value: number) => void;
+  onOldSpeakerModeChange: (enabled: boolean) => void;
   onBpmChange: (value: number) => void;
   onLoopLengthChange: (value: number) => void;
 }) {
@@ -961,7 +969,12 @@ function TransportStrip({
         suffix="st"
       />
 
-      <MasterVolumeField value={song.mixer.masterVolume} onChange={onMasterVolumeChange} />
+      <MasterVolumeField
+        value={song.mixer.masterVolume}
+        oldSpeakerMode={song.mixer.oldSpeakerMode}
+        onChange={onMasterVolumeChange}
+        onOldSpeakerModeChange={onOldSpeakerModeChange}
+      />
 
       {/* Divider */}
       <div className="mx-1 hidden h-6 w-px bg-white/[0.08] lg:block" />
@@ -977,10 +990,14 @@ function TransportStrip({
 
 function MasterVolumeField({
   value,
+  oldSpeakerMode,
   onChange,
+  onOldSpeakerModeChange,
 }: {
   value: number;
+  oldSpeakerMode: boolean;
   onChange: (value: number) => void;
+  onOldSpeakerModeChange: (enabled: boolean) => void;
 }) {
   const percentValue = toTrackVolumePercent(value);
 
@@ -1006,6 +1023,23 @@ function MasterVolumeField({
         }}
       />
       <span className="w-9 text-right font-[var(--oc-mono)] text-[9px] uppercase text-white/35">{percentValue}%</span>
+      <Button
+        type="button"
+        variant="outline"
+        aria-label="Old Speaker Mode"
+        aria-pressed={oldSpeakerMode}
+        className={cn(
+          "h-7 rounded-md border px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em]",
+          oldSpeakerMode
+            ? "border-[var(--oc-noise)]/35 bg-[var(--oc-noise)]/12 text-[var(--oc-noise)] hover:bg-[var(--oc-noise)]/18"
+            : "border-white/[0.08] bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/80",
+        )}
+        onClick={() => {
+          onOldSpeakerModeChange(!oldSpeakerMode);
+        }}
+      >
+        Speaker
+      </Button>
     </div>
   );
 }

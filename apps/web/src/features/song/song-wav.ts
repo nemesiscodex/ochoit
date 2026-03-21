@@ -1,3 +1,4 @@
+import { applyOldSpeakerEffect } from "@/features/audio/old-speaker";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { createNoiseCycle, getNoisePlaybackRate } from "@/features/audio/noise-voice";
 import { createPulseCycle } from "@/features/audio/pulse-voice";
@@ -54,6 +55,10 @@ export function renderSongToPcm(song: SongDocument, options: RenderSongToPcmOpti
   renderTriangleTrack(pcm, song.tracks.triangle, song, stepDurationSeconds, sampleRate);
   renderNoiseTrack(pcm, song.tracks.noise, song, stepDurationSeconds, sampleRate);
   renderSampleTrack(pcm, song.tracks.sample, song, stepDurationSeconds, sampleRate);
+
+  if (song.mixer.oldSpeakerMode) {
+    applyOldSpeakerEffect(pcm, sampleRate);
+  }
 
   return {
     durationSeconds: totalFrameCount / sampleRate,
