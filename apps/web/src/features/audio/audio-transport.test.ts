@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AudioTransport } from "@/features/audio/audio-transport";
+import { AudioTransport, TRANSPORT_WORKLET_URL } from "@/features/audio/audio-transport";
 import type {
   ScheduledTransportStep,
   TransportConfig,
@@ -100,7 +100,7 @@ describe("audio-transport", () => {
     };
 
     expect(addModule).toHaveBeenCalledTimes(1);
-    expect(addModule.mock.calls[0]?.[0]).toContain("transport.worklet.ts");
+    expect(addModule.mock.calls[0]?.[0]).toBe(TRANSPORT_WORKLET_URL);
     expect(mockNode?.connect).toHaveBeenCalledWith(sink);
     expect(sink.connect).toHaveBeenCalledWith(destination);
 

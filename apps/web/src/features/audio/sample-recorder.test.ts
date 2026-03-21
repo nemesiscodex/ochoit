@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import React, { type ReactElement } from "react";
+import { renderToString } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   SAMPLE_RECORDING_TARGET_RATE,
@@ -6,6 +9,7 @@ import {
   createRecordedSampleAsset,
   createWaveformFromPcm,
   getNextMicSampleId,
+  useSampleRecorder,
 } from "@/features/audio/sample-recorder";
 import { createDefaultSongDocument } from "@/features/song/song-document";
 
@@ -75,4 +79,57 @@ describe("sample-recorder", () => {
 
     expect(Array.from(waveform)).toEqual([240, 16, 240, 16]);
   });
+
+  it("renders an SSR-safe unknown permission state before browser detection", () => {
+    vi.stubGlobal("window", undefined);
+    vi.stubGlobal("navigator", undefined);
+    vi.stubGlobal("MediaRecorder", undefined);
+
+    try {
+      expect(renderToString(createRecorderProbe())).toContain("unknown");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("detects unsupported browsers after mount", async () => {
+    const originalMediaRecorder = globalThis.MediaRecorder;
+    const originalMediaDevices = navigator.mediaDevices;
+
+    vi.stubGlobal("MediaRecorder", undefined);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: undefined,
+    });
+
+    render(createRecorderProbe());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("permission-state").textContent).toBe("unsupported");
+    });
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: originalMediaDevices,
+    });
+
+    if (originalMediaRecorder === undefined) {
+      vi.unstubAllGlobals();
+    } else {
+      vi.stubGlobal("MediaRecorder", originalMediaRecorder);
+    }
+  });
 });
+
+function RecorderProbe() {
+  const { permissionState } = useSampleRecorder({
+    existingSamples: [],
+    onRecordingComplete: () => {},
+  });
+
+  return React.createElement("div", { "data-testid": "permission-state" }, permissionState);
+}
+
+function createRecorderProbe(): ReactElement {
+  return React.createElement(RecorderProbe);
+}

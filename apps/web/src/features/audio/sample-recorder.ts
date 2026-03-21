@@ -30,6 +30,8 @@ export type RecordedSampleDraft = {
   waveform: Uint8Array;
 };
 
+const defaultRecorderPermissionState: SampleRecorderPermissionState = "unknown";
+
 type SampleRecorderResult = {
   errorMessage: string | null;
   permissionState: SampleRecorderPermissionState;
@@ -263,7 +265,8 @@ export function useSampleRecorder({
   const isMountedRef = useRef(true);
   const samplesRef = useRef(existingSamples);
   const onRecordingCompleteRef = useRef(onRecordingComplete);
-  const [permissionState, setPermissionState] = useState<SampleRecorderPermissionState>(() => getRecorderSupportState());
+  const [permissionState, setPermissionState] =
+    useState<SampleRecorderPermissionState>(defaultRecorderPermissionState);
   const [status, setStatus] = useState<SampleRecorderStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
@@ -461,6 +464,10 @@ export function useSampleRecorder({
 
   useEffect(() => {
     isMountedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    setPermissionState(getRecorderSupportState());
   }, []);
 
   return {

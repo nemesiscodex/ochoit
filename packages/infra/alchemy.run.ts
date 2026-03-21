@@ -1,11 +1,16 @@
 import alchemy from "alchemy";
 import { TanStackStart } from "alchemy/cloudflare";
 import { config } from "dotenv";
-
-config({ path: "./.env" });
-config({ path: "../../apps/web/.env" });
-
+// const stage = process.env.STAGE || "dev";
 const app = await alchemy("ochoit");
+
+if (app.stage === "prod") {
+  config({ path: "./.env.prod" });
+  config({ path: "../../apps/web/.env.prod" });
+} else {
+  config({ path: "./.env" });
+  config({ path: "../../apps/web/.env" });
+}
 
 export const web = await TanStackStart("web", {
   cwd: "../../apps/web",

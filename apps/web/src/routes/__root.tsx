@@ -41,6 +41,10 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
         href: "https://fonts.gstatic.com",
         crossOrigin: "anonymous",
       },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Anybody:wght@400;700;900&display=swap",
+      },
     ],
   }),
 

@@ -6,6 +6,7 @@ import {
   type TransportProcessorCommand,
   type TransportProcessorEvent,
 } from "@/features/audio/transport-worklet-shared";
+import transportWorkletUrl from "@/features/audio/transport.worklet.ts?url";
 
 export type AudioTransportPlaybackState = "stopped" | "playing";
 
@@ -28,8 +29,10 @@ export type AudioTransportEvent =
 
 type AudioTransportListener = (event: AudioTransportEvent) => void;
 
+export const TRANSPORT_WORKLET_URL = transportWorkletUrl;
+
 function createTransportWorkletUrl() {
-  return new URL("./transport.worklet.ts", import.meta.url).href;
+  return TRANSPORT_WORKLET_URL;
 }
 
 export class AudioTransport {
