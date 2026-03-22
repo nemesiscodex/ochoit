@@ -6,6 +6,8 @@ import { cn } from "@ochoit/ui/lib/utils";
 import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
+import { type Skin } from "@/features/ui/skin-config";
+import { useSkinSearch } from "@/features/ui/use-skin-search";
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { NotePicker } from "@/components/note-picker";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
@@ -103,9 +105,32 @@ type ShareStatus = {
 
 type WorkstationShellProps = {
   initialSong?: SongDocument;
+  skin?: Skin;
 };
 
-export function WorkstationShell({ initialSong }: WorkstationShellProps) {
+export function WorkstationShell({ initialSong, skin }: WorkstationShellProps) {
+  if (skin !== undefined) {
+    return skin === "8bitcn" ? (
+      <RetroWorkstationView initialSong={initialSong} />
+    ) : (
+      <ClassicWorkstationView initialSong={initialSong} />
+    );
+  }
+
+  return <ConnectedWorkstationShell initialSong={initialSong} />;
+}
+
+function ConnectedWorkstationShell({ initialSong }: Pick<WorkstationShellProps, "initialSong">) {
+  const { normalizedSearch } = useSkinSearch();
+
+  return normalizedSearch.skin === "8bitcn" ? (
+    <RetroWorkstationView initialSong={initialSong} />
+  ) : (
+    <ClassicWorkstationView initialSong={initialSong} />
+  );
+}
+
+export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellProps, "initialSong">) {
   const [song, setSong] = useState(() => initialSong ?? createEmptySongDocument());
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
@@ -706,7 +731,11 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   }, []);
 
   return (
-    <main className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines">
+    <main
+      data-skin="classic"
+      data-testid="classic-workstation-view"
+      className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines"
+    >
       {/* Ambient gradient backdrop */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute top-0 left-[8%] h-[340px] w-[420px] rounded-full bg-[var(--oc-pulse1)]/[0.04] blur-[100px]" />
@@ -979,6 +1008,14 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
         <ExamplesDialog examples={songExamples} onClose={closeExamplesDialog} onLoadExample={loadSongExample} />
       ) : null}
     </main>
+  );
+}
+
+export function RetroWorkstationView({ initialSong }: Pick<WorkstationShellProps, "initialSong">) {
+  return (
+    <div data-skin="8bitcn" data-testid="retro-workstation-view" className="retro">
+      <ClassicWorkstationView initialSong={initialSong} />
+    </div>
   );
 }
 

@@ -62,7 +62,14 @@ function createUseSampleRecorderResult(
 }
 
 function createWorkstationShellElement(initialSong: SongDocument = createDefaultSongDocument()) {
-  return React.createElement(WorkstationShell, { initialSong });
+  return React.createElement(WorkstationShell, { initialSong, skin: "classic" });
+}
+
+function createSkinnedWorkstationShellElement(
+  skin: "classic" | "8bitcn",
+  initialSong: SongDocument = createDefaultSongDocument(),
+) {
+  return React.createElement(WorkstationShell, { initialSong, skin });
 }
 
 function renderWorkstationShell(initialSong: SongDocument = createDefaultSongDocument()) {
@@ -70,7 +77,7 @@ function renderWorkstationShell(initialSong: SongDocument = createDefaultSongDoc
 }
 
 function renderEmptyWorkstationShell() {
-  return render(React.createElement(WorkstationShell));
+  return render(React.createElement(WorkstationShell, { skin: "classic" }));
 }
 
 describe("workstation-shell", () => {
@@ -131,6 +138,19 @@ describe("workstation-shell", () => {
 
     expect(screen.getByDisplayValue("172")).toBeTruthy();
     expect(screen.getByDisplayValue("20")).toBeTruthy();
+  });
+
+  it("renders the classic workstation view", () => {
+    renderWorkstationShell();
+
+    expect(screen.getByTestId("classic-workstation-view")).toBeTruthy();
+    expect(screen.queryByTestId("retro-workstation-view")).toBeNull();
+  });
+
+  it("renders the retro wrapper when 8bitcn skin is selected", () => {
+    render(createSkinnedWorkstationShellElement("8bitcn"));
+
+    expect(screen.getByTestId("retro-workstation-view")).toBeTruthy();
   });
 
   it("updates the global volume from the transport bar", () => {

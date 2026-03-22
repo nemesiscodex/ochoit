@@ -64,6 +64,17 @@ describe("song-share", () => {
     expect(result.song.meta.name).toBe(song.meta.name);
   });
 
+  it("preserves skin query params when building a share url", () => {
+    const song = createDefaultSongDocument();
+    const shareUrl = buildSongShareUrl("https://ochoit.test/?skin=8bitcn&theme=nintendo&mode=light", song);
+    const url = new URL(shareUrl);
+
+    expect(url.searchParams.get("skin")).toBe("8bitcn");
+    expect(url.searchParams.get("theme")).toBe("nintendo");
+    expect(url.searchParams.get("mode")).toBe("light");
+    expect(readSongShareFromHash(url.hash).status).toBe("loaded");
+  });
+
   it("reports invalid share payloads", () => {
     expect(readSongShareFromHash("#song=broken")).toEqual({
       status: "invalid",

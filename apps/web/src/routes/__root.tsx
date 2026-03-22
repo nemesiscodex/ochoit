@@ -4,6 +4,7 @@ import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanst
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "../components/header";
+import { AppSkinProvider } from "@/features/ui/skin-provider";
 
 import appCss from "../index.css?url";
 
@@ -146,21 +147,23 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function RootDocument() {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body>
-        <TooltipProvider>
-          <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
-            <Header />
-            <div className="overflow-auto">
-              <Outlet />
+        <AppSkinProvider>
+          <TooltipProvider>
+            <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
+              <Header />
+              <div className="overflow-auto">
+                <Outlet />
+              </div>
             </div>
-          </div>
-          <Toaster richColors />
-          <TanStackRouterDevtools position="bottom-left" />
-        </TooltipProvider>
+            <Toaster richColors />
+            <TanStackRouterDevtools position="bottom-left" />
+          </TooltipProvider>
+        </AppSkinProvider>
         <Scripts />
       </body>
     </html>

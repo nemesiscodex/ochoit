@@ -38,6 +38,29 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html[data-skin="8bitcn"],
+body[data-skin="8bitcn"],
+[data-skin="8bitcn"] {
+  --oc-bg: var(--background);
+  --oc-surface: color-mix(in srgb, var(--card) 86%, black 14%);
+  --oc-surface-raised: color-mix(in srgb, var(--popover) 90%, black 10%);
+  --oc-border: color-mix(in srgb, var(--border) 78%, transparent);
+  --oc-border-bright: color-mix(in srgb, var(--ring) 60%, transparent);
+  --oc-pulse1: var(--chart-1);
+  --oc-pulse2: var(--chart-2);
+  --oc-triangle: var(--chart-3);
+  --oc-noise: var(--chart-4);
+  --oc-sample: var(--chart-5);
+  --oc-play: var(--primary);
+  --oc-stop: var(--destructive);
+  --oc-accent: var(--accent);
+}
+
+body[data-skin="8bitcn"] {
+  background: var(--background);
+  color: var(--foreground);
+}
+
 /* ── subtle CRT scanline overlay ── */
 
 .oc-scanlines::after {

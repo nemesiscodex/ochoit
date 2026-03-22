@@ -1,4 +1,5 @@
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
+import { NuqsAdapter } from "nuqs/adapters/tanstack-router";
 
 import Loader from "./components/loader";
 
@@ -13,7 +14,7 @@ export const getRouter = () => {
     context: {},
     defaultPendingComponent: () => <Loader />,
     defaultNotFoundComponent: () => <div>Not Found</div>,
-    Wrap: ({ children }) => <>{children}</>,
+    Wrap: ({ children }) => <NuqsAdapter>{children}</NuqsAdapter>,
   });
   return router;
 };

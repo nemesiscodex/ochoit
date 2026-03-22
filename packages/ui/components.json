@@ -21,6 +21,7 @@
     "hooks": "@ochoit/ui/hooks"
   },
   "registries": {
+    "@8bitcn": "https://www.8bitcn.com/r/{name}.json",
     "@react-bits": "https://reactbits.dev/r/{name}.json"
   }
 }
