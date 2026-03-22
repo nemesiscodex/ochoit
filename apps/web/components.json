@@ -20,5 +20,7 @@
   },
   "menuColor": "default",
   "menuAccent": "subtle",
-  "registries": {}
+  "registries": {
+    "@8bitcn": "https://www.8bitcn.com/r/{name}.json"
+  }
 }
