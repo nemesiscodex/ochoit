@@ -74,4 +74,19 @@ describe("waveform-canvas", () => {
     expect(mockContext.lineTo).toHaveBeenCalled();
     expect(mockContext.stroke).toHaveBeenCalled();
   });
+
+  it("renders with light variant (cream background preset)", () => {
+    render(
+      <WaveformCanvas
+        ariaLabel="Light waveform"
+        samples={new Uint8Array([128, 128])}
+        className="h-20 w-full"
+        variant="light"
+        lineColor="#333333"
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Light waveform" })).toBeTruthy();
+    expect(mockContext.fillRect).toHaveBeenCalled();
+  });
 });

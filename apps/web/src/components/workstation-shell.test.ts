@@ -148,9 +148,27 @@ describe("workstation-shell", () => {
   });
 
   it("renders the retro wrapper when 8bitcn skin is selected", () => {
-    render(createSkinnedWorkstationShellElement("8bitcn"));
+    act(() => {
+      render(createSkinnedWorkstationShellElement("8bitcn"));
+    });
 
     expect(screen.getByTestId("retro-workstation-view")).toBeTruthy();
+    expect(screen.queryByTestId("classic-workstation-view")).toBeNull();
+  });
+
+  it("renders the retro workstation with data-skin=8bitcn and distinct transport", () => {
+    act(() => {
+      render(createSkinnedWorkstationShellElement("8bitcn"));
+    });
+
+    const retroView = screen.getByTestId("retro-workstation-view");
+
+    expect(retroView.getAttribute("data-skin")).toBe("8bitcn");
+
+    // Retro view should still render the sequencer controls
+    expect(screen.getByLabelText("Global Volume")).toBeTruthy();
+    expect(screen.getByLabelText("BPM")).toBeTruthy();
+    expect(screen.getByLabelText("Loop Length")).toBeTruthy();
   });
 
   it("updates the global volume from the transport bar", () => {
@@ -206,6 +224,26 @@ describe("workstation-shell", () => {
 
     const startAudioButton = screen.getByRole("button", { name: "Start Audio" });
     expect(startAudioButton.getAttribute("aria-describedby")).toBe("audio-init-prompt");
+    expect(screen.getByText("First step").closest("#audio-init-prompt")?.getAttribute("data-skin-variant")).toBe(
+      "classic",
+    );
+  });
+
+  it("keeps the retro audio gate visible outside the transport card", () => {
+    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
+
+    render(createSkinnedWorkstationShellElement("8bitcn"));
+
+    const prompt = screen.getByText("First step").closest("#audio-init-prompt");
+
+    if (prompt === null) {
+      throw new Error("Expected retro audio gate prompt to be rendered.");
+    }
+
+    expect(prompt.closest('[data-slot="card"]')?.className).toContain("overflow-visible");
+    expect(prompt.className).toContain("oc-audio-gate");
+    expect(prompt.getAttribute("data-skin-variant")).toBe("8bitcn");
+    expect(prompt.querySelector(".oc-audio-gate-caret")).toBeTruthy();
   });
 
   it("removes the audio gate once audio is running", () => {

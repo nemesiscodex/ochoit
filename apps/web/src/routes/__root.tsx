@@ -1,9 +1,9 @@
 import { Toaster } from "@ochoit/ui/components/sonner";
-import { TooltipProvider } from "@ochoit/ui/components/tooltip";
 import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
 import Header from "../components/header";
+import { SkinTooltipProvider as TooltipProvider } from "@/components/ui/skin-controls";
 import { AppSkinProvider } from "@/features/ui/skin-provider";
 
 import appCss from "../index.css?url";
@@ -137,7 +137,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Anybody:wght@400;700;900&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Anybody:wght@400;700;900&family=Press+Start+2P&display=swap",
       },
     ],
   }),

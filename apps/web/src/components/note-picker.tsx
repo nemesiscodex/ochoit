@@ -2,6 +2,7 @@ import { cn } from "@ochoit/ui/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { SkinButton } from "@/components/ui/skin-controls";
 import type { NoteValue } from "@/features/song/song-pattern";
 
 /* ── Constants ── */
@@ -124,9 +125,8 @@ export function NotePicker({
 
   return (
     <>
-      <button
+      <SkinButton
         ref={triggerRef}
-        type="button"
         aria-label={ariaLabel}
         disabled={disabled}
         className={cn(
@@ -139,7 +139,7 @@ export function NotePicker({
         onClick={openPicker}
       >
         {selectedNote}
-      </button>
+      </SkinButton>
 
       {isOpen ? (
         <NotePickerOverlay
@@ -259,9 +259,8 @@ function NotePickerOverlay({
                   const inSweetSpot = octave >= sweetSpotMin && octave <= sweetSpotMax;
 
                   return (
-                    <button
+                    <SkinButton
                       key={cell.note}
-                      type="button"
                       aria-label={`Select note ${cell.note}`}
                       className={cn(
                         "oc-note-cell flex h-[26px] items-center justify-center rounded-[2px] font-[var(--oc-mono)] text-[8px] font-medium uppercase transition-all",
@@ -293,7 +292,7 @@ function NotePickerOverlay({
                       }}
                     >
                       {isSharp ? "#" : cell.label.replace(/[0-8]/g, "")}
-                    </button>
+                    </SkinButton>
                   );
                 })}
               </div>

@@ -1,8 +1,8 @@
-import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Volume2, VolumeX } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { SkinButton as Button, SkinSlider } from "@/components/ui/skin-controls";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
@@ -36,7 +36,7 @@ import {
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
 import { StepDetailPanel, type StepSelection } from "@/components/step-detail-panel";
-import { WaveformCanvas } from "@/components/waveform-canvas";
+import { WaveformCanvas, useWaveformCanvasVariant } from "@/components/waveform-canvas";
 
 export function SequencerMatrix({
   defaultSampleId,
@@ -183,8 +183,8 @@ function StepRuler({
   playbackState: "stopped" | "playing";
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-2 backdrop-blur">
-      <div className="mb-2 flex items-center justify-between px-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">
+    <div className="rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-surface)] p-2 backdrop-blur">
+      <div className="mb-2 flex items-center justify-between px-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-[var(--oc-text-faint)]">
         <span>Pattern Ruler</span>
         <span>{loopLength} step loop</span>
       </div>
@@ -202,8 +202,8 @@ function StepRuler({
                 isActive
                   ? "oc-playhead-active bg-[var(--oc-play)]/15 text-[var(--oc-play)]"
                   : isQuarterBoundary
-                    ? "bg-white/[0.06] text-white/50"
-                    : "bg-white/[0.03] text-white/25",
+                    ? "bg-[var(--oc-btn-subtle-hover)] text-[var(--oc-text-muted)]"
+                    : "bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-ghost)]",
               )}
             >
               {index + 1}
@@ -370,18 +370,18 @@ function SequencerRow({
 
   return (
     <div
-      className="oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]"
+      className="oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]"
       style={{ borderLeftColor: voiceColorByTrackId[track.id], borderLeftWidth: "3px" }}
     >
       {/* Voice info panel */}
-      <div className="flex flex-col gap-2 border-b border-white/[0.06] p-3 lg:border-r lg:border-b-0">
+      <div className="flex flex-col gap-2 border-b border-[var(--oc-panel-border)] p-3 lg:border-r lg:border-b-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span
               className="inline-block size-2 rounded-full"
               style={{ backgroundColor: waveformLineColorByTrackId[track.id] }}
             />
-            <h3 className="font-[var(--oc-mono)] text-sm font-bold uppercase tracking-[0.12em] text-white">
+            <h3 className="font-[var(--oc-mono)] text-sm font-bold uppercase tracking-[0.12em] text-[var(--oc-text)]">
               {labelByTrackId[track.id]}
             </h3>
           </div>
@@ -401,7 +401,7 @@ function SequencerRow({
               aria-label={`${track.muted ? "Unmute" : "Mute"} ${labelByTrackId[track.id]}`}
               aria-pressed={track.muted}
               className={cn(
-                "size-7 text-white/40 hover:bg-white/[0.06] hover:text-white",
+                "size-7 text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]",
                 track.muted && "text-[var(--oc-noise)] hover:text-[var(--oc-noise)]",
               )}
               onClick={() => {
@@ -414,7 +414,7 @@ function SequencerRow({
         </div>
 
         {/* Inline waveform */}
-        <div className="oc-waveform-wrap rounded-sm border border-white/[0.05] bg-black/30">
+        <div className="oc-waveform-wrap rounded-sm border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)]">
           <VoiceWaveformPanel engine={engine} track={track} />
         </div>
 
@@ -426,7 +426,7 @@ function SequencerRow({
             variant="outline"
             size="sm"
             aria-label={`Edit ${labelByTrackId[track.id]} arrangement as text`}
-            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            className="h-7 rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={() => {
               onOpenMelodicTrackEditor(track.id);
             }}
@@ -439,7 +439,7 @@ function SequencerRow({
             variant="outline"
             size="sm"
             aria-label={`Edit ${labelByTrackId[track.id]} arrangement as text`}
-            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            className="h-7 rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={() => {
               onOpenTriggerTrackEditor(track.id);
             }}
@@ -495,33 +495,32 @@ function TrackVolumeControl({
 
   return (
     <div
-      className="rounded-sm border border-white/[0.06] bg-black/20 px-2 py-1.5"
+      className="rounded-sm border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2 py-1.5"
       style={{ ["--oc-track-accent" as string]: waveformLineColorByTrackId[track.id] }}
     >
-      <div className="mb-1.5 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/30">
-        <label htmlFor={volumeInputId} className="text-white/45">
+      <div className="mb-1.5 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-faint)]">
+        <label htmlFor={volumeInputId} className="text-[var(--oc-text-muted)]">
           Level
         </label>
-        <span className="text-white/65">{volumePercent}%</span>
+        <span className="text-[var(--oc-text-dim)]">{volumePercent}%</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/20">0</span>
-        <input
-          id={volumeInputId}
-          type="range"
-          min={TRACK_VOLUME_PERCENT_RANGE.min}
-          max={TRACK_VOLUME_PERCENT_RANGE.max}
-          step={TRACK_VOLUME_PERCENT_RANGE.step}
-          value={volumePercent}
+        <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-[var(--oc-text-ghost)]">0</span>
+        <SkinSlider
           aria-label={`${labelByTrackId[track.id]} volume`}
           className={cn("oc-track-volume", track.muted && "opacity-60")}
-          onChange={(event) => {
-            onUpdateTrackVolume(track.id, Number(event.currentTarget.value) / TRACK_VOLUME_PERCENT_RANGE.max);
+          id={volumeInputId}
+          max={TRACK_VOLUME_PERCENT_RANGE.max}
+          min={TRACK_VOLUME_PERCENT_RANGE.min}
+          step={TRACK_VOLUME_PERCENT_RANGE.step}
+          value={volumePercent}
+          onValueChange={(nextValue) => {
+            onUpdateTrackVolume(track.id, nextValue / TRACK_VOLUME_PERCENT_RANGE.max);
           }}
         />
-        <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/20">100</span>
+        <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-[var(--oc-text-ghost)]">100</span>
       </div>
-      <div className="mt-1 flex items-center justify-between font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.16em] text-white/25">
+      <div className="mt-1 flex items-center justify-between font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.16em] text-[var(--oc-text-ghost)]">
         <span>{track.muted ? "Muted bus" : "Bus live"}</span>
         <span>{track.kind}</span>
       </div>
@@ -538,6 +537,7 @@ function VoiceWaveformPanel({
   engine: AudioEngine | null;
   track: Track;
 }) {
+  const waveformVariant = useWaveformCanvasVariant();
   const waveform = useTrackWaveform({
     engine,
     trackId: track.id,
@@ -549,7 +549,7 @@ function VoiceWaveformPanel({
       ariaLabel={`${labelByTrackId[track.id]} waveform`}
       samples={waveform}
       className="h-14 w-full"
-      backgroundColor="rgba(7, 8, 14, 0.85)"
+      variant={waveformVariant}
       glowColor={waveformGlowColorByTrackId[track.id]}
       lineColor={waveformLineColorByTrackId[track.id]}
     />
@@ -730,8 +730,7 @@ function CompactStepCell({
   const isQuarterBoundary = index % 4 === 0;
 
   return (
-    <button
-      type="button"
+    <Button
       aria-current={isActive ? "step" : undefined}
       aria-label={ariaLabel}
       aria-selected={isSelected || undefined}
@@ -739,25 +738,25 @@ function CompactStepCell({
         "oc-step-cell relative flex h-12 flex-col items-center justify-center gap-0.5 rounded-sm border font-[var(--oc-mono)] text-[10px] transition-all",
         isHold
           ? isPartOfSelectedNote
-            ? "border-white/[0.1] bg-white/[0.06]"
-            : "border-white/[0.06] bg-white/[0.03]"
+            ? "border-[var(--oc-border-bright)] bg-[var(--oc-btn-subtle-hover)]"
+            : "border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)]"
           : enabled
             ? `${accentClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]`
             : isQuarterBoundary
-              ? "border-white/[0.08] bg-white/[0.04] text-white/30"
-              : "border-white/[0.05] bg-white/[0.02] text-white/20",
-        isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
+              ? "border-[var(--oc-border)] bg-[var(--oc-btn-subtle-hover)] text-[var(--oc-text-faint)]"
+              : "border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-ghost)]",
+        isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-[var(--oc-text)]",
         isSelected && "ring-2 ring-offset-0",
       )}
       style={isSelected ? { ["--tw-ring-color" as string]: accentColor } : undefined}
       onMouseEnter={onHover}
       onClick={onClick}
     >
-      <span className="text-[8px] leading-none text-white/30">{index + 1}</span>
+      <span className="text-[8px] leading-none text-[var(--oc-text-faint)]">{index + 1}</span>
       <span
         className={cn(
           "max-w-full truncate px-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.06em]",
-          isHold ? "text-white/35" : enabled ? "text-inherit" : "text-white/20",
+          isHold ? "text-[var(--oc-text-faint)]" : enabled ? "text-inherit" : "text-[var(--oc-text-ghost)]",
         )}
       >
         {isHold ? (holdNote ?? "\u2014") : label}
@@ -765,7 +764,7 @@ function CompactStepCell({
 
       {/* Velocity bar */}
       {enabled && !isHold ? (
-        <div className="h-[3px] w-3/4 overflow-hidden rounded-full bg-white/[0.08]">
+        <div className="h-[3px] w-3/4 overflow-hidden rounded-full bg-[var(--oc-panel-border)]">
           <div
             className="h-full rounded-full transition-[width] duration-150"
             style={{ width: `${volume * 100}%`, backgroundColor: accentColor }}
@@ -780,6 +779,6 @@ function CompactStepCell({
           style={{ backgroundColor: `${accentColor}35` }}
         />
       ) : null}
-    </button>
+    </Button>
   );
 }

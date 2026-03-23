@@ -1,11 +1,17 @@
+import { useTheme } from "next-themes";
 import { useCallback, useEffect, useRef } from "react";
 
 import { cn } from "@ochoit/ui/lib/utils";
+
+/** Visual theme for the canvas fill and grid — pair with app light/dark (e.g. 8bitcn light mode). */
+export type WaveformCanvasVariant = "dark" | "light";
 
 type WaveformCanvasProps = {
   ariaLabel: string;
   samples: ArrayLike<number>;
   className?: string;
+  /** When set, picks background + grid defaults; explicit color props still override. */
+  variant?: WaveformCanvasVariant;
   backgroundColor?: string;
   glowColor?: string;
   gridColor?: string;
@@ -23,6 +29,27 @@ const defaultDrawConfig: DrawConfig = {
   gridColor: "rgba(255, 255, 255, 0.12)",
   lineColor: "#8bd3ff",
 };
+
+/** Defaults aligned with retro dark / light surfaces from `retro-themes.ts`. */
+const variantPresets: Record<
+  WaveformCanvasVariant,
+  Pick<WaveformCanvasProps, "backgroundColor" | "gridColor">
+> = {
+  dark: {
+    backgroundColor: "rgba(7, 8, 14, 0.92)",
+    gridColor: "rgba(255, 255, 255, 0.12)",
+  },
+  light: {
+    backgroundColor: "rgba(247, 244, 234, 0.94)",
+    gridColor: "rgba(23, 23, 23, 0.18)",
+  },
+};
+
+/** Maps `next-themes` resolved mode to canvas waveform colors (retro light vs dark). */
+export function useWaveformCanvasVariant(): WaveformCanvasVariant {
+  const { resolvedTheme } = useTheme();
+  return resolvedTheme === "light" ? "light" : "dark";
+}
 
 function getCanvasSize(canvas: HTMLCanvasElement) {
   const bounds = canvas.getBoundingClientRect();
@@ -42,19 +69,24 @@ export function WaveformCanvas({
   ariaLabel,
   samples,
   className,
-  backgroundColor = defaultDrawConfig.backgroundColor,
+  variant = "dark",
+  backgroundColor,
   glowColor = defaultDrawConfig.glowColor,
-  gridColor = defaultDrawConfig.gridColor,
+  gridColor,
   lineColor = defaultDrawConfig.lineColor,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawConfigRef = useRef<DrawConfig>(defaultDrawConfig);
 
+  const preset = variantPresets[variant];
+  const resolvedBackground = backgroundColor ?? preset.backgroundColor ?? defaultDrawConfig.backgroundColor;
+  const resolvedGrid = gridColor ?? preset.gridColor ?? defaultDrawConfig.gridColor;
+
   drawConfigRef.current = {
     samples,
-    backgroundColor,
+    backgroundColor: resolvedBackground,
     glowColor,
-    gridColor,
+    gridColor: resolvedGrid,
     lineColor,
   };
 
@@ -75,6 +107,8 @@ export function WaveformCanvas({
       return;
     }
 
+    const ctx = context;
+
     const { width, height } = getCanvasSize(canvas);
     const devicePixelRatio = window.devicePixelRatio || 1;
     const { samples: nextSamples, backgroundColor, glowColor, gridColor, lineColor } = drawConfigRef.current;
@@ -82,17 +116,17 @@ export function WaveformCanvas({
     canvas.width = Math.max(1, Math.round(width * devicePixelRatio));
     canvas.height = Math.max(1, Math.round(height * devicePixelRatio));
 
-    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    context.clearRect(0, 0, width, height);
-    context.fillStyle = backgroundColor;
-    context.fillRect(0, 0, width, height);
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0, 0, width, height);
 
-    context.beginPath();
-    context.strokeStyle = gridColor;
-    context.lineWidth = 1;
-    context.moveTo(0, height / 2);
-    context.lineTo(width, height / 2);
-    context.stroke();
+    ctx.beginPath();
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
 
     if (nextSamples.length === 0) {
       return;
@@ -101,7 +135,7 @@ export function WaveformCanvas({
     const lastSampleIndex = nextSamples.length - 1;
 
     const drawWavePath = () => {
-      context.beginPath();
+      ctx.beginPath();
 
       for (let index = 0; index < nextSamples.length; index += 1) {
         const sample = nextSamples[index] ?? 128;
@@ -109,26 +143,26 @@ export function WaveformCanvas({
         const y = toWaveformY(sample, height);
 
         if (index === 0) {
-          context.moveTo(x, y);
+          ctx.moveTo(x, y);
           continue;
         }
 
-        context.lineTo(x, y);
+        ctx.lineTo(x, y);
       }
     };
 
-    context.save();
-    context.globalAlpha = 0.45;
-    context.strokeStyle = glowColor;
-    context.lineWidth = 3;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 3;
     drawWavePath();
-    context.stroke();
-    context.restore();
+    ctx.stroke();
+    ctx.restore();
 
-    context.strokeStyle = lineColor;
-    context.lineWidth = 1.5;
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 1.5;
     drawWavePath();
-    context.stroke();
+    ctx.stroke();
   }, []);
 
   useEffect(() => {
@@ -139,7 +173,7 @@ export function WaveformCanvas({
     }
 
     drawCanvas(canvas);
-  }, [drawCanvas, samples, backgroundColor, glowColor, gridColor, lineColor]);
+  }, [drawCanvas, samples, resolvedBackground, glowColor, resolvedGrid, lineColor]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

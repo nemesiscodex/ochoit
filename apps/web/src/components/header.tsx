@@ -6,9 +6,8 @@ import {
   SelectTrigger as RetroSelectTrigger,
   SelectValue as RetroSelectValue,
 } from "@ochoit/ui/components/ui/8bitcn/select";
-import { cn } from "@ochoit/ui/lib/utils";
 import { Github, Moon, Sun } from "lucide-react";
-
+import { Label } from "@ochoit/ui/components/ui/8bitcn/label";
 import {
   DEFAULT_RETRO_THEME,
   RETRO_THEMES,
@@ -60,6 +59,14 @@ function ConnectedHeader() {
 function HeaderView({ controls, resolvedMode }: { controls: HeaderControls; resolvedMode: "light" | "dark" }) {
   const isRetro = controls.search.skin === "8bitcn";
 
+  if (isRetro) {
+    return <RetroHeaderView controls={controls} resolvedMode={resolvedMode} />;
+  }
+
+  return <ClassicHeaderView controls={controls} />;
+}
+
+function ClassicHeaderView({ controls }: { controls: HeaderControls }) {
   return (
     <header className="border-b border-white/[0.06] bg-[#07080e]/95 px-4 py-2.5 backdrop-blur-sm md:px-6">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4">
@@ -78,24 +85,12 @@ function HeaderView({ controls, resolvedMode }: { controls: HeaderControls; reso
         </div>
 
         <div className="flex items-center gap-3">
-          {isRetro ? <RetroModeToggle mode={resolvedMode} onClick={controls.onToggleMode} /> : null}
-          {isRetro ? (
-            <RetroThemeSelect
-              activeTheme={controls.search.skin === "8bitcn" ? controls.search.theme : DEFAULT_RETRO_THEME}
-              onThemeChange={controls.onThemeChange}
-            />
-          ) : null}
-          <SkinSelect activeSkin={controls.search.skin} onSkinChange={controls.onSkinChange} retro={isRetro} />
+          <SkinSelect activeSkin={controls.search.skin} onSkinChange={controls.onSkinChange} retro={false} />
           <a
             href="https://github.com/nemesiscodex/ochoit"
             target="_blank"
             rel="noreferrer"
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md border px-3 py-2 transition",
-              isRetro
-                ? "border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground retro text-xs uppercase"
-                : "border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-white/60 hover:border-white/[0.14] hover:bg-white/[0.08] hover:text-white",
-            )}
+            className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-white/60 transition hover:border-white/[0.14] hover:bg-white/[0.08] hover:text-white"
             aria-label="Open GitHub repository"
           >
             <Github className="size-3.5" />
@@ -105,6 +100,50 @@ function HeaderView({ controls, resolvedMode }: { controls: HeaderControls; reso
             <span className="hidden sm:inline">NES-Inspired Sequencer</span>
             <div className="size-1.5 rounded-full bg-[var(--oc-play)]" />
           </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function RetroHeaderView({ controls, resolvedMode }: { controls: HeaderControls; resolvedMode: "light" | "dark" }) {
+  return (
+    <header className="border-b border-border bg-card px-4 py-3 md:px-6">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <img
+            src="/ochoit-logo.png"
+            alt="Ochoit logo"
+            className="size-10 object-contain"
+          />
+          <div>
+            <p className="text-sm leading-tight font-bold text-foreground">Ochoit</p>
+            <p className="text-[7px] uppercase tracking-[0.2em] text-muted-foreground">
+              8-Bit Workstation
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <RetroModeToggle mode={resolvedMode} onClick={controls.onToggleMode} />
+          <RetroThemeSelect
+            activeTheme={controls.search.skin === "8bitcn" ? controls.search.theme : DEFAULT_RETRO_THEME}
+            onThemeChange={controls.onThemeChange}
+          />
+          <SkinSelect activeSkin={controls.search.skin} onSkinChange={controls.onSkinChange} retro />
+          <a
+            href="https://github.com/nemesiscodex/ochoit"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open GitHub repository"
+          >
+            <RetroButton variant="outline" className="gap-2">
+              <Github className="size-3.5" />
+              <span className="hidden sm:inline">GitHub</span>
+            </RetroButton>
+            
+          </a>
+          <Label>NES-Inspired Sequencer</Label>
         </div>
       </div>
     </header>

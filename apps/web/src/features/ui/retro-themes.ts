@@ -56,6 +56,7 @@ export function getRetroThemeCss(theme: RetroTheme) {
   return `
     :root {
       --radius: 0rem;
+      --font-sans: "Press Start 2P", ui-monospace, monospace;
       --background: #f7f4ea;
       --foreground: #171717;
       --card: #fffaf0;

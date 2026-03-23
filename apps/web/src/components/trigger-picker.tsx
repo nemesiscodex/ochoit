@@ -2,6 +2,7 @@ import { cn } from "@ochoit/ui/lib/utils";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { SkinButton } from "@/components/ui/skin-controls";
 import type { NoiseTrack, SerializedSampleAsset } from "@/features/song/song-document";
 import {
   formatPlaybackRateLabel,
@@ -110,9 +111,8 @@ export function NoiseTriggerPicker({
 
   return (
     <>
-      <button
+      <SkinButton
         ref={triggerRef}
-        type="button"
         aria-label={ariaLabel}
         aria-expanded={isOpen}
         disabled={disabled}
@@ -126,7 +126,7 @@ export function NoiseTriggerPicker({
         onClick={openPicker}
       >
         {selectedPreset?.shortLabel ?? "pick"}
-      </button>
+      </SkinButton>
 
       {isOpen ? (
         <PickerFrame
@@ -143,9 +143,8 @@ export function NoiseTriggerPicker({
               const isSelected = preset.id === selectedPresetId;
 
               return (
-                <button
+                <SkinButton
                   key={preset.id}
-                  type="button"
                   aria-label={`Select noise trigger ${preset.label}`}
                   className={cn(
                     "rounded-lg border px-3 py-3 text-left transition-all",
@@ -177,7 +176,7 @@ export function NoiseTriggerPicker({
                     <span>{preset.mode}</span>
                     <span>P{preset.periodIndex}</span>
                   </div>
-                </button>
+                </SkinButton>
               );
             })}
           </div>
@@ -209,9 +208,8 @@ export function SampleTriggerPicker({
 
   return (
     <>
-      <button
+      <SkinButton
         ref={triggerRef}
-        type="button"
         aria-label={ariaLabel}
         aria-expanded={isOpen}
         disabled={pickerDisabled}
@@ -225,7 +223,7 @@ export function SampleTriggerPicker({
         onClick={openPicker}
       >
         <span className="max-w-full truncate">{selectedSample === null ? "assign" : valueLabel}</span>
-      </button>
+      </SkinButton>
 
       {isOpen ? (
         <PickerFrame
@@ -267,9 +265,8 @@ export function SampleTriggerPicker({
                       const isSelectedRate = isSelectedSample && rate === playbackRate;
 
                       return (
-                        <button
+                        <SkinButton
                           key={`${sample.id}-${rate}`}
-                          type="button"
                           aria-label={`Assign ${sample.name} at ${formatPlaybackRateLabel(rate)}`}
                           className={cn(
                             "rounded-md border px-2 py-2 font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.12em] transition-all",
@@ -295,7 +292,7 @@ export function SampleTriggerPicker({
                           }}
                         >
                           {formatPlaybackRateLabel(rate)}
-                        </button>
+                        </SkinButton>
                       );
                     })}
                   </div>
@@ -326,9 +323,8 @@ export function NoiseConfigPicker({
 
   return (
     <>
-      <button
+      <SkinButton
         ref={triggerRef}
-        type="button"
         aria-label={ariaLabel}
         aria-expanded={isOpen}
         disabled={disabled}
@@ -342,7 +338,7 @@ export function NoiseConfigPicker({
         onClick={openPicker}
       >
         {formatNoiseConfigLabel(selectedMode, selectedPeriodIndex)}
-      </button>
+      </SkinButton>
 
       {isOpen ? (
         <PickerFrame
@@ -370,9 +366,8 @@ export function NoiseConfigPicker({
                     const isSelected = mode === selectedMode && periodIndex === selectedPeriodIndex;
 
                     return (
-                      <button
+                      <SkinButton
                         key={`${mode}-${periodIndex}`}
-                        type="button"
                         aria-label={`Select noise config ${formatNoiseConfigLabel(mode, periodIndex)}`}
                         className={cn(
                           "rounded-md border px-2 py-2 text-left transition-all",
@@ -403,7 +398,7 @@ export function NoiseConfigPicker({
                         <div className="mt-1 font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/35">
                           {mode}
                         </div>
-                      </button>
+                      </SkinButton>
                     );
                   })}
                 </div>
@@ -432,9 +427,8 @@ export function PulseDutyPicker({
 
   return (
     <>
-      <button
+      <SkinButton
         ref={triggerRef}
-        type="button"
         aria-label={ariaLabel}
         aria-expanded={isOpen}
         disabled={disabled}
@@ -448,7 +442,7 @@ export function PulseDutyPicker({
         onClick={openPicker}
       >
         {formatPulseDutyLabel(selectedDuty)}
-      </button>
+      </SkinButton>
 
       {isOpen ? (
         <PickerFrame
@@ -465,9 +459,8 @@ export function PulseDutyPicker({
               const isSelected = duty === selectedDuty;
 
               return (
-                <button
+                <SkinButton
                   key={duty}
-                  type="button"
                   aria-label={`Select pulse duty ${formatPulseDutyLabel(duty)}`}
                   className={cn(
                     "rounded-md border px-3 py-3 text-left transition-all",
@@ -498,7 +491,7 @@ export function PulseDutyPicker({
                   <div className="mt-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/35">
                     Pulse width
                   </div>
-                </button>
+                </SkinButton>
               );
             })}
           </div>

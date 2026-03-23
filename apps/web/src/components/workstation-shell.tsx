@@ -1,30 +1,37 @@
 import BorderGlow from "@ochoit/ui/components/BorderGlow";
-import { Input } from "@ochoit/ui/components/input";
-import { Button } from "@ochoit/ui/components/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
+import { Card, CardContent, CardHeader } from "@ochoit/ui/components/ui/8bitcn/card";
+import { Badge } from "@ochoit/ui/components/ui/8bitcn/badge";
+import { Separator } from "@ochoit/ui/components/ui/8bitcn/separator";
 import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import {
+  SkinButton as Button,
+  SkinInput as Input,
+  SkinSlider,
+  SkinTextarea,
+  SkinTooltip as Tooltip,
+  SkinTooltipContent as TooltipContent,
+  SkinTooltipTrigger as TooltipTrigger,
+} from "@/components/ui/skin-controls";
+import { useWorkstationState } from "@/components/use-workstation-state";
 import { type Skin } from "@/features/ui/skin-config";
+import { SkinRuntimeProvider, useActiveSkin } from "@/features/ui/skin-runtime";
 import { useSkinSearch } from "@/features/ui/use-skin-search";
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { NotePicker } from "@/components/note-picker";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
-import { WaveformCanvas } from "@/components/waveform-canvas";
+import { WaveformCanvas, useWaveformCanvasVariant } from "@/components/waveform-canvas";
 import {
   createWaveformFromPcm,
-  useSampleRecorder,
   type SampleRecorderPermissionState,
   type SampleRecorderStatus,
 } from "@/features/audio/sample-recorder";
-import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
+import { type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import {
-  createEmptySongDocument,
-  getOrderedTracks,
   SONG_MAX_SAMPLE_COUNT,
   type SongDocument,
-  type TrackId,
 } from "@/features/song/song-document";
 import {
   type EngineMode,
@@ -33,75 +40,28 @@ import {
   getPcmModeSummary,
   getSampleArrangementHelperCopy,
 } from "@/features/song/pcm-mode";
-import {
-  buildSongShareUrl,
-  parseSongShareText,
-  readSongShareFromHash,
-  serializeSongShareText,
-} from "@/features/song/song-share";
-import { getSongExampleById, songExamples, type SongExample } from "@/features/song/song-examples";
+import { songExamples, type SongExample } from "@/features/song/song-examples";
 import {
   TRACK_VOLUME_PERCENT_RANGE,
   toTrackVolumePercent,
-  updateMasterVolume,
-  updateOldSpeakerMode,
-  updateTrackMute,
-  updateTrackVolume,
 } from "@/features/song/song-mixer";
-import { createSongWavBlob, createSongWavFileName } from "@/features/song/song-wav";
 import {
-  type MelodicStepUpdates,
   type MelodicTrackId,
-  type NoiseStepUpdates,
-  type SampleStepUpdates,
   type TriggerTrackId,
-  isMelodicTrackId,
   noiseTriggerPresets,
-  parseNoiseTrackArrangement,
-  parseSampleTrackArrangement,
-  parseMelodicTrackArrangement,
-  replaceNoiseTrackArrangement,
-  replaceSampleTrackArrangement,
-  replaceMelodicTrackArrangement,
-  replaceSampleTrackSampleReference,
-  serializeNoiseTrackArrangement,
-  serializeSampleTrackArrangement,
-  updateNoiseTrackStep,
-  updateSampleTrackStep,
-  serializeMelodicTrackArrangement,
-  updateMelodicTrackStep,
 } from "@/features/song/song-pattern";
 import {
-  applySampleTrim,
   getTrimmedFrameCount,
   getTrimmedSamplePcm,
-  moveSampleTrimWindow,
-  removeSampleAsset,
-  resizeSampleTrimWindow,
 } from "@/features/song/song-samples";
 import {
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
   SONG_BPM_RANGE,
   SONG_LOOP_LENGTH_RANGE,
-  updateSongTransport,
 } from "@/features/song/song-transport";
 
-type ArrangementEditorState = {
-  trackId: MelodicTrackId | TriggerTrackId;
-  draft: string;
-  error: string | null;
-};
 
-type ShareDslEditorState = {
-  draft: string;
-  error: string | null;
-};
-
-type ShareStatus = {
-  tone: "neutral" | "error";
-  message: string;
-};
 
 type WorkstationShellProps = {
   initialSong?: SongDocument;
@@ -110,10 +70,14 @@ type WorkstationShellProps = {
 
 export function WorkstationShell({ initialSong, skin }: WorkstationShellProps) {
   if (skin !== undefined) {
-    return skin === "8bitcn" ? (
-      <RetroWorkstationView initialSong={initialSong} />
-    ) : (
-      <ClassicWorkstationView initialSong={initialSong} />
+    return (
+      <SkinRuntimeProvider skin={skin}>
+        {skin === "8bitcn" ? (
+          <RetroWorkstationView initialSong={initialSong} />
+        ) : (
+          <ClassicWorkstationView initialSong={initialSong} />
+        )}
+      </SkinRuntimeProvider>
     );
   }
 
@@ -131,610 +95,13 @@ function ConnectedWorkstationShell({ initialSong }: Pick<WorkstationShellProps, 
 }
 
 export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellProps, "initialSong">) {
-  const [song, setSong] = useState(() => initialSong ?? createEmptySongDocument());
-  const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
-  const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
-  const [shareDslEditor, setShareDslEditor] = useState<ShareDslEditorState | null>(null);
-  const [examplesOpen, setExamplesOpen] = useState(false);
-  const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
-  const [isExportingWav, setIsExportingWav] = useState(false);
-  const [showExamplesGlow, setShowExamplesGlow] = useState(false);
-  const deckSampleIdRef = useRef<string | null>(null);
-  const tracks = getOrderedTracks(song);
-  deckSampleIdRef.current = deckSampleId;
-  const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
-    useAudioEngine(song);
-  const {
-    errorMessage: recorderErrorMessage,
-    permissionState: recorderPermissionState,
-    recordingDurationMs,
-    startRecording,
-    status: recorderStatus,
-    stopRecording,
-  } = useSampleRecorder({
-    existingSamples: song.samples,
-    onRecordingComplete: ({ asset }) => {
-      if (song.samples.length >= SONG_MAX_SAMPLE_COUNT) {
-        setShareStatus({
-          tone: "error",
-          message: `Sample limit reached. Delete a clip before recording another one.`,
-        });
-        return;
-      }
-
-      setSong((currentSong) => {
-        const replacedSampleId = deckSampleIdRef.current ?? currentSong.samples.at(-1)?.id ?? null;
-        const recordedSong = {
-          ...currentSong,
-          meta: {
-            ...currentSong.meta,
-            updatedAt: new Date().toISOString(),
-          },
-          samples: [...currentSong.samples, asset],
-        };
-
-        return replaceSampleTrackSampleReference(recordedSong, replacedSampleId, asset.id);
-      });
-      setDeckSampleId(asset.id);
-    },
-  });
-  const audioReady = engineState === "running" || engineState === "suspended";
-  const showAudioGate = !audioReady;
-  const isPlaying = transportState.playbackState === "playing";
-  const deckSample =
-    (deckSampleId === null ? null : song.samples.find((sample) => sample.id === deckSampleId) ?? null) ??
-    song.samples.at(-1) ??
-    null;
-  const deckSampleDurationMs =
-    deckSample === null || deckSample.sampleRate <= 0
-      ? 0
-      : Math.round((getTrimmedFrameCount(deckSample) / deckSample.sampleRate) * 1000);
-
-  const previewDeckSample = async () => {
-    if (deckSample === null) {
-      return;
-    }
-
-    const readyEngine = engine ?? (await initializeAudio());
-
-    readyEngine?.previewSampleTrigger(deckSample.id, 1, Math.max(1, deckSampleDurationMs));
-  };
-
-  const toggleTrackMute = (trackId: TrackId) => {
-    setSong((currentSong) => updateTrackMute(currentSong, trackId));
-  };
-
-  const setTrackVolume = (trackId: TrackId, volume: number) => {
-    setSong((currentSong) => updateTrackVolume(currentSong, trackId, volume));
-  };
-
-  const setMasterSongVolume = (volume: number) => {
-    setSong((currentSong) => updateMasterVolume(currentSong, volume));
-  };
-
-  const setOldSpeakerMode = (enabled: boolean) => {
-    setSong((currentSong) => updateOldSpeakerMode(currentSong, enabled));
-  };
-
-  const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
-    setSong((currentSong) => updateMelodicTrackStep(currentSong, trackId, stepIndex, updates));
-  };
-
-  const updateNoiseStep = (stepIndex: number, updates: NoiseStepUpdates) => {
-    setSong((currentSong) => updateNoiseTrackStep(currentSong, stepIndex, updates));
-  };
-
-  const updateSampleStep = (stepIndex: number, updates: SampleStepUpdates) => {
-    setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
-  };
-
-  const updateEngineMode = (engineMode: EngineMode) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        engineMode,
-        updatedAt: new Date().toISOString(),
-      },
-    }));
-  };
-
-  const updateSongName = (name: string) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        name: name.slice(0, 80),
-        updatedAt: new Date().toISOString(),
-      },
-    }));
-  };
-
-  const updateSongAuthor = (author: string) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        author: author.slice(0, 80),
-        updatedAt: new Date().toISOString(),
-      },
-    }));
-  };
-
-  const moveDeckSampleTrimWindow = (startFrame: number) => {
-    if (deckSample === null) {
-      return;
-    }
-
-    setSong((currentSong) => moveSampleTrimWindow(currentSong, deckSample.id, startFrame));
-  };
-
-  const resizeDeckSampleTrimWindow = (frameCount: number) => {
-    if (deckSample === null) {
-      return;
-    }
-
-    setSong((currentSong) => resizeSampleTrimWindow(currentSong, deckSample.id, frameCount));
-  };
-
-  const applyDeckSampleTrim = () => {
-    if (deckSample === null) {
-      return;
-    }
-
-    setSong((currentSong) => applySampleTrim(currentSong, deckSample.id));
-  };
-
-  const selectDeckSample = (sampleId: string) => {
-    setDeckSampleId(sampleId);
-  };
-
-  const deleteDeckSample = (sampleId: string) => {
-    setSong((currentSong) => removeSampleAsset(currentSong, sampleId));
-    setDeckSampleId((currentSampleId) => (currentSampleId === sampleId ? null : currentSampleId));
-  };
-
-  const updateDeckSampleBaseNote = (baseNote: string) => {
-    if (deckSample === null) {
-      return;
-    }
-
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        updatedAt: new Date().toISOString(),
-      },
-      samples: currentSong.samples.map((sample) =>
-        sample.id === deckSample.id
-          ? {
-              ...sample,
-              baseNote,
-            }
-          : sample,
-      ),
-    }));
-  };
-
-  const applySharedSongFromCurrentUrl = (emptyMessage: string | null) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const result = readSongShareFromHash(window.location.hash);
-
-    if (result.status === "empty") {
-      if (emptyMessage !== null) {
-        setShareStatus({
-          tone: "error",
-          message: emptyMessage,
-        });
-      }
-
-      return;
-    }
-
-    if (result.status === "invalid") {
-      setShareStatus({
-        tone: "error",
-        message: result.error,
-      });
-      return;
-    }
-
-    startTransition(() => {
-      setSong(result.song);
-      setArrangementEditor(null);
-      setDeckSampleId(result.song.samples.at(-1)?.id ?? null);
-    });
-    setShareStatus({
-      tone: "neutral",
-      message: "Loaded shared song from the current link.",
-    });
-  };
-
-  const clearSongShareFromCurrentUrl = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    url.hash = "";
-    window.history.replaceState(window.history.state, "", url.toString());
-  };
-
-  const resetSong = () => {
-    if (typeof window !== "undefined") {
-      const confirmed = window.confirm(
-        "Are you sure? This will clear all notes, recordings, and the current song link.",
-      );
-
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    stopTransport();
-    clearSongShareFromCurrentUrl();
-
-    startTransition(() => {
-      setSong(createEmptySongDocument());
-      setDeckSampleId(null);
-      setArrangementEditor(null);
-      setShareDslEditor(null);
-    });
-    setShareStatus({
-      tone: "neutral",
-      message: "Cleared the current song and removed the shared link.",
-    });
-  };
-
-  const copyShareLink = async () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const shareUrl = buildSongShareUrl(window.location.href, song);
-    window.history.replaceState(window.history.state, "", shareUrl);
-
-    const didCopy = await copyTextToClipboard(shareUrl);
-
-    setShareStatus({
-      tone: "neutral",
-      message: didCopy ? "Share link copied to clipboard." : "Share link is now in the address bar.",
-    });
-  };
-
-  const saveArrangementAsWav = async () => {
-    if (isExportingWav) {
-      return;
-    }
-
-    setIsExportingWav(true);
-
-    try {
-      const wavBlob = createSongWavBlob(song);
-      const fileName = createSongWavFileName(song);
-      downloadBlobFile(wavBlob, fileName);
-      setShareStatus({
-        tone: "neutral",
-        message: "WAV download started.",
-      });
-    } catch (error) {
-      setShareStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Could not export the current arrangement as WAV.",
-      });
-    } finally {
-      setIsExportingWav(false);
-    }
-  };
-
-  const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
-    setExamplesOpen(false);
-    setShareDslEditor(null);
-    setArrangementEditor({
-      trackId,
-      draft: serializeMelodicTrackArrangement(song.tracks[trackId]),
-      error: null,
-    });
-  };
-
-  const openTriggerTrackEditor = (trackId: TriggerTrackId) => {
-    setExamplesOpen(false);
-    setShareDslEditor(null);
-    setArrangementEditor({
-      trackId,
-      draft:
-      trackId === "noise"
-          ? serializeNoiseTrackArrangement(song.tracks.noise)
-          : serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode),
-      error: null,
-    });
-  };
-
-  const closeMelodicTrackEditor = () => {
-    setArrangementEditor(null);
-  };
-
-  const openShareDslEditor = () => {
-    setExamplesOpen(false);
-    setArrangementEditor(null);
-    setShareDslEditor({
-      draft: serializeSongShareText(song),
-      error: null,
-    });
-  };
-
-  const openExamplesDialog = () => {
-    setArrangementEditor(null);
-    setShareDslEditor(null);
-    setExamplesOpen(true);
-  };
-
-  const closeExamplesDialog = () => {
-    setExamplesOpen(false);
-  };
-
-  const loadSongExample = (exampleId: string) => {
-    const example = getSongExampleById(exampleId);
-
-    if (example === null) {
-      setShareStatus({
-        tone: "error",
-        message: "That example is no longer available.",
-      });
-      return;
-    }
-
-    try {
-      const nextSong = parseSongShareText(example.dsl);
-
-      stopTransport();
-      clearSongShareFromCurrentUrl();
-      startTransition(() => {
-        setSong(nextSong);
-        setArrangementEditor(null);
-        setShareDslEditor(null);
-        setExamplesOpen(false);
-        setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
-      });
-      setShareStatus({
-        tone: "neutral",
-        message: `Loaded example: ${example.name}.`,
-      });
-    } catch (error) {
-      setShareStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Could not load the selected example.",
-      });
-    }
-  };
-
-  const closeShareDslEditor = () => {
-    setShareDslEditor(null);
-  };
-
-  const updateShareDslDraft = (draft: string) => {
-    setShareDslEditor((currentEditor) => {
-      if (currentEditor === null) {
-        return null;
-      }
-
-      return {
-        draft,
-        error: null,
-      };
-    });
-  };
-
-  const copyShareDsl = async () => {
-    if (shareDslEditor === null) {
-      return;
-    }
-
-    const didCopy = await copyTextToClipboard(shareDslEditor.draft);
-
-    setShareStatus({
-      tone: "neutral",
-      message: didCopy ? "Share DSL copied to clipboard." : "Share DSL is ready to copy.",
-    });
-  };
-
-  const applyShareDsl = () => {
-    if (shareDslEditor === null) {
-      return;
-    }
-
-    try {
-      const nextSong = parseSongShareText(shareDslEditor.draft);
-
-      startTransition(() => {
-        setSong(nextSong);
-        setArrangementEditor(null);
-        setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
-      });
-      setShareDslEditor(null);
-      setShareStatus({
-        tone: "neutral",
-        message: "Loaded song from share DSL.",
-      });
-    } catch (error) {
-      setShareDslEditor((currentEditor) => {
-        if (currentEditor === null) {
-          return null;
-        }
-
-        return {
-          ...currentEditor,
-          error: error instanceof Error ? error.message : "Could not parse the share DSL.",
-        };
-      });
-    }
-  };
-
-  const updateArrangementDraft = (draft: string) => {
-    setArrangementEditor((currentEditor) => {
-      if (currentEditor === null) {
-        return null;
-      }
-
-      return {
-        ...currentEditor,
-        draft,
-        error: null,
-      };
-    });
-  };
-
-  const applyArrangement = () => {
-    if (arrangementEditor === null) {
-      return;
-    }
-
-    if (arrangementEditor.trackId === "noise") {
-      const parsedArrangement = parseNoiseTrackArrangement(arrangementEditor.draft, song.transport.loopLength);
-
-      if (!parsedArrangement.ok) {
-        setArrangementEditor((currentEditor) => {
-          if (currentEditor === null) {
-            return null;
-          }
-
-          return {
-            ...currentEditor,
-            error: parsedArrangement.error,
-          };
-        });
-        return;
-      }
-
-      setSong((currentSong) => replaceNoiseTrackArrangement(currentSong, parsedArrangement.entries));
-      setArrangementEditor(null);
-      return;
-    }
-
-    if (arrangementEditor.trackId === "sample") {
-      const parsedArrangement = parseSampleTrackArrangement(
-        arrangementEditor.draft,
-        song.transport.loopLength,
-        song.samples,
-      );
-
-      if (!parsedArrangement.ok) {
-        setArrangementEditor((currentEditor) => {
-          if (currentEditor === null) {
-            return null;
-          }
-
-          return {
-            ...currentEditor,
-            error: parsedArrangement.error,
-          };
-        });
-        return;
-      }
-
-      setSong((currentSong) => replaceSampleTrackArrangement(currentSong, parsedArrangement.entries));
-      setArrangementEditor(null);
-      return;
-    }
-
-    if (!isMelodicTrackId(arrangementEditor.trackId)) {
-      return;
-    }
-
-    const melodicTrackId = arrangementEditor.trackId;
-    const parsedArrangement = parseMelodicTrackArrangement(
-      arrangementEditor.draft,
-      song.transport.loopLength,
-      melodicTrackId,
-    );
-
-    if (!parsedArrangement.ok) {
-      setArrangementEditor((currentEditor) => {
-        if (currentEditor === null) {
-          return null;
-        }
-
-        return {
-          ...currentEditor,
-          error: parsedArrangement.error,
-        };
-      });
-      return;
-    }
-
-    setSong((currentSong) =>
-      replaceMelodicTrackArrangement(currentSong, melodicTrackId, parsedArrangement.entries),
-    );
-    setArrangementEditor(null);
-  };
-
-  useEffect(() => {
-    if (arrangementEditor === null && shareDslEditor === null && !examplesOpen) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setArrangementEditor(null);
-        setShareDslEditor(null);
-        setExamplesOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [arrangementEditor, examplesOpen, shareDslEditor]);
-
-  useEffect(() => {
-    setDeckSampleId((currentSampleId) => {
-      if (song.samples.length === 0) {
-        return null;
-      }
-
-      if (currentSampleId !== null && song.samples.some((sample) => sample.id === currentSampleId)) {
-        return currentSampleId;
-      }
-
-      return song.samples.at(-1)?.id ?? null;
-    });
-  }, [song.samples]);
-
-  const prevAudioReadyRef = useRef(audioReady);
-
-  useEffect(() => {
-    if (audioReady && !prevAudioReadyRef.current) {
-      const delayTimer = setTimeout(() => {
-        setShowExamplesGlow(true);
-      }, 200);
-
-      const dismissTimer = setTimeout(() => {
-        setShowExamplesGlow(false);
-      }, 3200);
-
-      return () => {
-        clearTimeout(delayTimer);
-        clearTimeout(dismissTimer);
-      };
-    }
-
-    prevAudioReadyRef.current = audioReady;
-  }, [audioReady]);
-
-  useEffect(() => {
-    applySharedSongFromCurrentUrl(null);
-  }, []);
+  const ws = useWorkstationState(initialSong);
 
   return (
     <main
       data-skin="classic"
       data-testid="classic-workstation-view"
-      className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines"
+      className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-[var(--oc-text)] oc-scanlines"
     >
       {/* Ambient gradient backdrop */}
       <div className="pointer-events-none absolute inset-0">
@@ -745,39 +112,35 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
 
       <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-5 px-4 py-4 md:px-6 lg:px-8">
         {/* ── Transport + Controls Bar ── */}
-        <section className={cn("flex flex-col gap-2.5", showAudioGate ? "relative z-30" : undefined)}>
+        <section className={cn("flex flex-col gap-2.5", ws.showAudioGate ? "relative z-30" : undefined)}>
           {/* Row 1: Transport Strip — the "hardware panel" */}
           <TransportStrip
-            song={song}
-            engineState={engineState}
-            startTransport={startTransport}
-            stopTransport={stopTransport}
-            isPlaying={isPlaying}
-            onMasterVolumeChange={setMasterSongVolume}
-            onOldSpeakerModeChange={setOldSpeakerMode}
-            onBpmChange={(nextBpm) => {
-              setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
-            }}
-            onLoopLengthChange={(nextLoopLength) => {
-              setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
-            }}
+            song={ws.song}
+            engineState={ws.engineState}
+            startTransport={ws.startTransport}
+            stopTransport={ws.stopTransport}
+            isPlaying={ws.isPlaying}
+            onMasterVolumeChange={ws.setMasterSongVolume}
+            onOldSpeakerModeChange={ws.setOldSpeakerMode}
+            onBpmChange={ws.updateBpm}
+            onLoopLengthChange={ws.updateLoopLength}
           />
 
           {/* Row 2: Actions Bar — distinct from transport */}
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.04] bg-[var(--oc-surface)]/60 px-3 py-2 backdrop-blur-sm">
             {/* Primary: Audio gate */}
             <AudioInitButton
-              engineState={engineState}
-              audioReady={audioReady}
-              initializeAudio={initializeAudio}
-              showAudioGate={showAudioGate}
+              engineState={ws.engineState}
+              audioReady={ws.audioReady}
+              initializeAudio={ws.initializeAudio}
+              showAudioGate={ws.showAudioGate}
             />
 
             <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
 
             {/* Featured: Examples — the star of the show */}
             <BorderGlow
-              animated={showExamplesGlow}
+              animated={ws.showExamplesGlow}
               backgroundColor="rgba(13, 15, 24, 0.85)"
               borderRadius={8}
               glowRadius={16}
@@ -793,8 +156,8 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
                 className="h-10 rounded-lg border-0 bg-transparent px-4 font-[var(--oc-mono)] text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--oc-accent)]/80 hover:bg-[var(--oc-accent)]/10 hover:text-[var(--oc-accent)]"
                 aria-label="Open examples"
                 onClick={() => {
-                  setShowExamplesGlow(false);
-                  openExamplesDialog();
+                  ws.setShowExamplesGlow(false);
+                  ws.openExamplesDialog();
                 }}
               >
                 <Sparkles className="mr-1.5 size-3.5" />
@@ -811,9 +174,9 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
                   render={
                     <Button
                       variant="outline"
-                      className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      className="h-9 rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text-dim)]"
                       aria-label="Edit share DSL"
-                      onClick={openShareDslEditor}
+                      onClick={ws.openShareDslEditor}
                     />
                   }
                 >
@@ -826,17 +189,17 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
                   render={
                     <Button
                       variant="outline"
-                      className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      className="h-9 rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text-dim)]"
                       aria-label="Download arrangement as WAV file"
-                      disabled={isExportingWav}
+                      disabled={ws.isExportingWav}
                       onClick={() => {
-                        void saveArrangementAsWav();
+                        void ws.saveArrangementAsWav();
                       }}
                     />
                   }
                 >
                   <Download className="mr-1 size-3" />
-                  <span className="hidden sm:inline">{isExportingWav ? "Saving…" : "WAV"}</span>
+                  <span className="hidden sm:inline">{ws.isExportingWav ? "Saving…" : "WAV"}</span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Download as WAV file</TooltipContent>
               </Tooltip>
@@ -846,10 +209,10 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
                     <Button
                       variant="outline"
                       size="icon"
-                      className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      className="size-9 border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text-dim)]"
                       aria-label="Copy shareable link to clipboard"
                       onClick={() => {
-                        void copyShareLink();
+                        void ws.copyShareLink();
                       }}
                     />
                   }
@@ -864,10 +227,10 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
                     <Button
                       variant="outline"
                       size="icon"
-                      className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      className="size-9 border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text-dim)]"
                       aria-label="Load song from current URL"
                       onClick={() => {
-                        applySharedSongFromCurrentUrl("No shared song was found in the current link.");
+                        ws.applySharedSongFromCurrentUrl("No shared song was found in the current link.");
                       }}
                     />
                   }
@@ -890,7 +253,7 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
                     variant="outline"
                     className="h-9 rounded-md border-[var(--oc-noise)]/15 bg-[var(--oc-noise)]/[0.04] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-noise)]/60 hover:border-[var(--oc-noise)]/30 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
                     aria-label="Clear song"
-                    onClick={resetSong}
+                    onClick={ws.resetSong}
                   />
                 }
               >
@@ -901,22 +264,22 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
             </Tooltip>
           </div>
 
-          {shareStatus !== null ? (
+          {ws.shareStatus !== null ? (
             <div
               className={cn(
                 "rounded-md px-3 py-2 font-[var(--oc-mono)] text-xs",
-                shareStatus.tone === "error"
+                ws.shareStatus.tone === "error"
                   ? "border border-[var(--oc-noise)]/30 bg-[var(--oc-noise)]/[0.06] text-[var(--oc-noise)]"
                   : "border border-[var(--oc-play)]/25 bg-[var(--oc-play)]/10 text-[var(--oc-play)]",
               )}
             >
-              {shareStatus.message}
+              {ws.shareStatus.message}
             </div>
           ) : null}
 
-          {errorMessage !== null ? (
+          {ws.errorMessage !== null ? (
             <div className="rounded-md border border-[var(--oc-noise)]/30 bg-[var(--oc-noise)]/[0.06] px-3 py-2 font-[var(--oc-mono)] text-xs text-[var(--oc-noise)]">
-              {errorMessage}
+              {ws.errorMessage}
             </div>
           ) : null}
         </section>
@@ -926,96 +289,370 @@ export function ClassicWorkstationView({ initialSong }: Pick<WorkstationShellPro
           {/* Sequencer Matrix */}
           <div className="min-w-0">
             <SequencerMatrix
-              defaultSampleId={deckSample?.id ?? null}
-              engine={engine}
-              onOpenMelodicTrackEditor={openMelodicTrackEditor}
-              onOpenTriggerTrackEditor={openTriggerTrackEditor}
-              onToggleTrackMute={toggleTrackMute}
-              onUpdateTrackVolume={setTrackVolume}
-              onUpdateMelodicStep={updateMelodicStep}
-              onUpdateNoiseStep={updateNoiseStep}
-              onUpdateSampleStep={updateSampleStep}
-              song={song}
-              playbackState={transportState.playbackState}
-              nextStep={transportState.nextStep}
+              defaultSampleId={ws.deckSample?.id ?? null}
+              engine={ws.engine}
+              onOpenMelodicTrackEditor={ws.openMelodicTrackEditor}
+              onOpenTriggerTrackEditor={ws.openTriggerTrackEditor}
+              onToggleTrackMute={ws.toggleTrackMute}
+              onUpdateTrackVolume={ws.setTrackVolume}
+              onUpdateMelodicStep={ws.updateMelodicStep}
+              onUpdateNoiseStep={ws.updateNoiseStep}
+              onUpdateSampleStep={ws.updateSampleStep}
+              song={ws.song}
+              playbackState={ws.transportState.playbackState}
+              nextStep={ws.transportState.nextStep}
             />
           </div>
 
           {/* Sample Deck Sidebar */}
           <aside className="flex flex-col gap-3">
             <SampleDeck
-              engineMode={song.meta.engineMode}
-              samples={song.samples}
-              sample={deckSample}
-              selectedSampleId={deckSample?.id ?? null}
-              recorderErrorMessage={recorderErrorMessage}
-              recorderPermissionState={recorderPermissionState}
-              recorderStatus={recorderStatus}
-              recordingDurationMs={recordingDurationMs}
-              onDeleteSample={deleteDeckSample}
-              onApplyTrim={applyDeckSampleTrim}
-              onPreviewSample={previewDeckSample}
-              onMoveTrimWindow={moveDeckSampleTrimWindow}
-              onResizeTrimWindow={resizeDeckSampleTrimWindow}
-              onSetSampleBaseNote={updateDeckSampleBaseNote}
-              onSelectSample={selectDeckSample}
-              onStartRecording={startRecording}
-              onStopRecording={stopRecording}
+              engineMode={ws.song.meta.engineMode}
+              samples={ws.song.samples}
+              sample={ws.deckSample}
+              selectedSampleId={ws.deckSample?.id ?? null}
+              recorderErrorMessage={ws.recorderErrorMessage}
+              recorderPermissionState={ws.recorderPermissionState}
+              recorderStatus={ws.recorderStatus}
+              recordingDurationMs={ws.recordingDurationMs}
+              onDeleteSample={ws.deleteDeckSample}
+              onApplyTrim={ws.applyDeckSampleTrim}
+              onPreviewSample={ws.previewDeckSample}
+              onMoveTrimWindow={ws.moveDeckSampleTrimWindow}
+              onResizeTrimWindow={ws.resizeDeckSampleTrimWindow}
+              onSetSampleBaseNote={ws.updateDeckSampleBaseNote}
+              onSelectSample={ws.selectDeckSample}
+              onStartRecording={ws.startRecording}
+              onStopRecording={ws.stopRecording}
             />
             <SongMeta
-              engineState={engineState}
-              onUpdateEngineMode={updateEngineMode}
-              onUpdateSongAuthor={updateSongAuthor}
-              onUpdateSongName={updateSongName}
-              song={song}
-              trackCount={tracks.length}
+              engineState={ws.engineState}
+              onUpdateEngineMode={ws.updateEngineMode}
+              onUpdateSongAuthor={ws.updateSongAuthor}
+              onUpdateSongName={ws.updateSongName}
+              song={ws.song}
+              trackCount={ws.tracks.length}
             />
           </aside>
         </section>
       </div>
 
-      {showAudioGate ? (
+      {ws.showAudioGate ? (
         <div
           aria-hidden="true"
           className="absolute inset-0 z-20 bg-[#04050b]/72 backdrop-blur-[4px] backdrop-saturate-125"
         />
       ) : null}
 
-      {arrangementEditor !== null ? (
+      {ws.arrangementEditor !== null ? (
         <TrackArrangementEditor
-          engineMode={song.meta.engineMode}
-          trackId={arrangementEditor.trackId}
-          loopLength={song.transport.loopLength}
-          draft={arrangementEditor.draft}
-          error={arrangementEditor.error}
-          samples={song.samples}
-          onChangeDraft={updateArrangementDraft}
-          onClose={closeMelodicTrackEditor}
-          onApply={applyArrangement}
+          engineMode={ws.song.meta.engineMode}
+          trackId={ws.arrangementEditor.trackId}
+          loopLength={ws.song.transport.loopLength}
+          draft={ws.arrangementEditor.draft}
+          error={ws.arrangementEditor.error}
+          samples={ws.song.samples}
+          onChangeDraft={ws.updateArrangementDraft}
+          onClose={ws.closeMelodicTrackEditor}
+          onApply={ws.applyArrangement}
         />
       ) : null}
-      {shareDslEditor !== null ? (
+      {ws.shareDslEditor !== null ? (
         <ShareDslEditor
-          draft={shareDslEditor.draft}
-          error={shareDslEditor.error}
-          onApply={applyShareDsl}
-          onChangeDraft={updateShareDslDraft}
-          onClose={closeShareDslEditor}
-          onCopy={copyShareDsl}
+          draft={ws.shareDslEditor.draft}
+          error={ws.shareDslEditor.error}
+          onApply={ws.applyShareDsl}
+          onChangeDraft={ws.updateShareDslDraft}
+          onClose={ws.closeShareDslEditor}
+          onCopy={ws.copyShareDsl}
         />
       ) : null}
-      {examplesOpen ? (
-        <ExamplesDialog examples={songExamples} onClose={closeExamplesDialog} onLoadExample={loadSongExample} />
+      {ws.examplesOpen ? (
+        <ExamplesDialog examples={songExamples} onClose={ws.closeExamplesDialog} onLoadExample={ws.loadSongExample} />
       ) : null}
     </main>
   );
 }
 
 export function RetroWorkstationView({ initialSong }: Pick<WorkstationShellProps, "initialSong">) {
+  const ws = useWorkstationState(initialSong);
+
   return (
-    <div data-skin="8bitcn" data-testid="retro-workstation-view" className="retro">
-      <ClassicWorkstationView initialSong={initialSong} />
-    </div>
+    <main
+      data-skin="8bitcn"
+      data-testid="retro-workstation-view"
+      className="retro relative min-h-full bg-background text-foreground"
+    >
+      <div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
+        {/* ── Transport + Controls ── */}
+        <Card className={cn("overflow-visible", ws.showAudioGate ? "relative z-30" : undefined)}>
+          <CardHeader className="border-b">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              {/* Playback controls */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  className={cn(
+                    "h-10 px-5 text-xs font-semibold uppercase tracking-wider",
+                    ws.isPlaying
+                      ? "bg-[var(--oc-play)]/25 text-[var(--oc-play)] hover:bg-[var(--oc-play)]/35"
+                      : "bg-[var(--oc-play)] text-[var(--oc-bg)] hover:bg-[var(--oc-play)]/90",
+                  )}
+                  onClick={() => {
+                    void ws.startTransport();
+                  }}
+                >
+                  {ws.isPlaying ? <Pause className="mr-1.5 size-3.5" /> : <Play className="mr-1.5 size-3.5" />}
+                  {ws.isPlaying ? "Playing" : "Play"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-10 px-3 text-xs uppercase tracking-wider"
+                  disabled={!ws.isPlaying}
+                  onClick={() => {
+                    ws.stopTransport();
+                  }}
+                >
+                  <Square className="mr-1.5 size-3.5" />
+                  Stop
+                </Button>
+              </div>
+
+              <Separator orientation="vertical" className="hidden h-6 md:block" />
+
+              {/* Tempo & length */}
+              <div className="flex items-center gap-2">
+                <TransportField
+                  label="BPM"
+                  value={ws.song.transport.bpm}
+                  min={SONG_BPM_RANGE.min}
+                  max={SONG_BPM_RANGE.max}
+                  step={1}
+                  onChange={ws.updateBpm}
+                  parseValue={(rawValue) => resolveSongBpmInput(rawValue, ws.song.transport.bpm)}
+                />
+                <TransportField
+                  label="Loop"
+                  value={ws.song.transport.loopLength}
+                  min={SONG_LOOP_LENGTH_RANGE.min}
+                  max={SONG_LOOP_LENGTH_RANGE.max}
+                  step={SONG_LOOP_LENGTH_RANGE.step}
+                  onChange={ws.updateLoopLength}
+                  parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, ws.song.transport.loopLength)}
+                  suffix="st"
+                />
+              </div>
+
+              <Separator orientation="vertical" className="hidden h-6 md:block" />
+
+              {/* Master output */}
+              <MasterVolumeField
+                value={ws.song.mixer.masterVolume}
+                oldSpeakerMode={ws.song.mixer.oldSpeakerMode}
+                onChange={ws.setMasterSongVolume}
+                onOldSpeakerModeChange={ws.setOldSpeakerMode}
+              />
+
+              <div className="hidden flex-1 lg:block" />
+
+              {/* Status badges */}
+              <div className="flex items-center gap-2">
+                <Badge variant={ws.engineState === "running" ? "default" : "outline"}>
+                  Audio: {ws.engineState}
+                </Badge>
+                <Badge variant={ws.isPlaying ? "default" : "outline"}>
+                  {ws.isPlaying ? "Playing" : "Stopped"}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-2">
+              <AudioInitButton
+                engineState={ws.engineState}
+                audioReady={ws.audioReady}
+                initializeAudio={ws.initializeAudio}
+                showAudioGate={ws.showAudioGate}
+              />
+
+              <Separator orientation="vertical" className="hidden h-5 sm:block" />
+
+              <Button
+                variant="outline"
+                className="h-9 px-3 text-xs uppercase tracking-wider"
+                aria-label="Open examples"
+                onClick={() => {
+                  ws.setShowExamplesGlow(false);
+                  ws.openExamplesDialog();
+                }}
+              >
+                <Sparkles className="mr-1.5 size-3.5" />
+                Examples
+              </Button>
+
+              <Separator orientation="vertical" className="hidden h-5 sm:block" />
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  className="h-9 px-2.5 text-xs uppercase"
+                  aria-label="Edit share DSL"
+                  onClick={ws.openShareDslEditor}
+                >
+                  DSL
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-9 px-2.5 text-xs uppercase"
+                  aria-label="Download arrangement as WAV file"
+                  disabled={ws.isExportingWav}
+                  onClick={() => {
+                    void ws.saveArrangementAsWav();
+                  }}
+                >
+                  <Download className="mr-1 size-3" />
+                  <span className="hidden sm:inline">{ws.isExportingWav ? "Saving…" : "WAV"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9"
+                  aria-label="Copy shareable link to clipboard"
+                  onClick={() => {
+                    void ws.copyShareLink();
+                  }}
+                >
+                  <Link className="size-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9"
+                  aria-label="Load song from current URL"
+                  onClick={() => {
+                    ws.applySharedSongFromCurrentUrl("No shared song was found in the current link.");
+                  }}
+                >
+                  <Upload className="size-3.5" />
+                </Button>
+              </div>
+
+              <div className="hidden flex-1 lg:block" />
+
+              <Button
+                type="button"
+                variant="destructive"
+                className="h-9 px-2.5 text-xs uppercase"
+                aria-label="Clear song"
+                onClick={ws.resetSong}
+              >
+                <Trash2 className="mr-1 size-3" />
+                <span className="hidden sm:inline">Clear</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {ws.shareStatus !== null ? (
+          <Card size="sm" className={ws.shareStatus.tone === "error" ? "border-destructive" : "border-primary"}>
+            <CardContent className="text-sm">
+              {ws.shareStatus.message}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {ws.errorMessage !== null ? (
+          <Card size="sm" className="border-destructive">
+            <CardContent className="text-sm text-destructive">
+              {ws.errorMessage}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* ── Grid: Sequencer (left) + Sample Deck (right) ── */}
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0">
+            <SequencerMatrix
+              defaultSampleId={ws.deckSample?.id ?? null}
+              engine={ws.engine}
+              onOpenMelodicTrackEditor={ws.openMelodicTrackEditor}
+              onOpenTriggerTrackEditor={ws.openTriggerTrackEditor}
+              onToggleTrackMute={ws.toggleTrackMute}
+              onUpdateTrackVolume={ws.setTrackVolume}
+              onUpdateMelodicStep={ws.updateMelodicStep}
+              onUpdateNoiseStep={ws.updateNoiseStep}
+              onUpdateSampleStep={ws.updateSampleStep}
+              song={ws.song}
+              playbackState={ws.transportState.playbackState}
+              nextStep={ws.transportState.nextStep}
+            />
+          </div>
+
+          <aside className="flex flex-col gap-3">
+            <SampleDeck
+              engineMode={ws.song.meta.engineMode}
+              samples={ws.song.samples}
+              sample={ws.deckSample}
+              selectedSampleId={ws.deckSample?.id ?? null}
+              recorderErrorMessage={ws.recorderErrorMessage}
+              recorderPermissionState={ws.recorderPermissionState}
+              recorderStatus={ws.recorderStatus}
+              recordingDurationMs={ws.recordingDurationMs}
+              onDeleteSample={ws.deleteDeckSample}
+              onApplyTrim={ws.applyDeckSampleTrim}
+              onPreviewSample={ws.previewDeckSample}
+              onMoveTrimWindow={ws.moveDeckSampleTrimWindow}
+              onResizeTrimWindow={ws.resizeDeckSampleTrimWindow}
+              onSetSampleBaseNote={ws.updateDeckSampleBaseNote}
+              onSelectSample={ws.selectDeckSample}
+              onStartRecording={ws.startRecording}
+              onStopRecording={ws.stopRecording}
+            />
+            <SongMeta
+              engineState={ws.engineState}
+              onUpdateEngineMode={ws.updateEngineMode}
+              onUpdateSongAuthor={ws.updateSongAuthor}
+              onUpdateSongName={ws.updateSongName}
+              song={ws.song}
+              trackCount={ws.tracks.length}
+            />
+          </aside>
+        </section>
+      </div>
+
+      {ws.showAudioGate ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-20 bg-background/80 backdrop-blur-[4px]"
+        />
+      ) : null}
+
+      {ws.arrangementEditor !== null ? (
+        <TrackArrangementEditor
+          engineMode={ws.song.meta.engineMode}
+          trackId={ws.arrangementEditor.trackId}
+          loopLength={ws.song.transport.loopLength}
+          draft={ws.arrangementEditor.draft}
+          error={ws.arrangementEditor.error}
+          samples={ws.song.samples}
+          onChangeDraft={ws.updateArrangementDraft}
+          onClose={ws.closeMelodicTrackEditor}
+          onApply={ws.applyArrangement}
+        />
+      ) : null}
+      {ws.shareDslEditor !== null ? (
+        <ShareDslEditor
+          draft={ws.shareDslEditor.draft}
+          error={ws.shareDslEditor.error}
+          onApply={ws.applyShareDsl}
+          onChangeDraft={ws.updateShareDslDraft}
+          onClose={ws.closeShareDslEditor}
+          onCopy={ws.copyShareDsl}
+        />
+      ) : null}
+      {ws.examplesOpen ? (
+        <ExamplesDialog examples={songExamples} onClose={ws.closeExamplesDialog} onLoadExample={ws.loadSongExample} />
+      ) : null}
+    </main>
   );
 }
 
@@ -1043,7 +680,7 @@ function TransportStrip({
   onLoopLengthChange: (value: number) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-gradient-to-b from-[#0e1019] to-[#0a0c14] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.3)]">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[var(--oc-panel-border)] bg-gradient-to-b from-[var(--oc-surface-raised)] to-[var(--oc-surface)] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.3)]">
       {/* ── Playback controls ── */}
       <div className="flex items-center gap-1.5">
         <Button
@@ -1051,7 +688,7 @@ function TransportStrip({
             "oc-btn-play h-10 rounded-lg px-5 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.12em]",
             isPlaying
               ? "bg-[var(--oc-play)]/20 text-[var(--oc-play)] hover:bg-[var(--oc-play)]/30"
-              : "bg-[var(--oc-play)] text-[#07080e] shadow-[0_0_12px_rgba(61,220,132,0.2)] hover:bg-[var(--oc-play)]/90 hover:shadow-[0_0_20px_rgba(61,220,132,0.35)]",
+              : "bg-[var(--oc-play)] text-[var(--oc-bg)] shadow-[0_0_12px_rgba(61,220,132,0.2)] hover:bg-[var(--oc-play)]/90 hover:shadow-[0_0_20px_rgba(61,220,132,0.35)]",
           )}
           onClick={() => {
             void startTransport();
@@ -1062,7 +699,7 @@ function TransportStrip({
         </Button>
         <Button
           variant="outline"
-          className="oc-btn-stop h-10 rounded-lg border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-xs uppercase tracking-[0.12em] text-white/55 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+          className="oc-btn-stop h-10 rounded-lg border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] px-3 font-[var(--oc-mono)] text-xs uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
           disabled={!isPlaying}
           onClick={() => {
             stopTransport();
@@ -1136,27 +773,26 @@ function MasterVolumeField({
   const percentValue = toTrackVolumePercent(value);
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-black/25 px-3 py-1.5">
+    <div className="flex items-center gap-2 rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-3 py-1.5">
       <label
         htmlFor="transport-master-volume"
-        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/35"
+        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-[var(--oc-text-faint)]"
       >
         Master
       </label>
-      <input
-        id="transport-master-volume"
+      <SkinSlider
         aria-label="Global Volume"
-        type="range"
-        min={TRACK_VOLUME_PERCENT_RANGE.min}
+        className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-[var(--oc-panel-border)] accent-[var(--oc-play)]"
+        id="transport-master-volume"
         max={TRACK_VOLUME_PERCENT_RANGE.max}
+        min={TRACK_VOLUME_PERCENT_RANGE.min}
         step={TRACK_VOLUME_PERCENT_RANGE.step}
         value={percentValue}
-        className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-play)]"
-        onChange={(event) => {
-          onChange(Number(event.currentTarget.value) / 100);
+        onValueChange={(nextValue) => {
+          onChange(nextValue / 100);
         }}
       />
-      <span className="w-8 text-right font-[var(--oc-mono)] text-[9px] tabular-nums text-white/35">{percentValue}%</span>
+      <span className="w-8 text-right font-[var(--oc-mono)] text-[9px] tabular-nums text-[var(--oc-text-faint)]">{percentValue}%</span>
       <Tooltip>
         <TooltipTrigger
           render={
@@ -1169,7 +805,7 @@ function MasterVolumeField({
                 "h-7 rounded-md border px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
                 oldSpeakerMode
                   ? "border-[var(--oc-noise)]/35 bg-[var(--oc-noise)]/12 text-[var(--oc-noise)] hover:bg-[var(--oc-noise)]/18"
-                  : "border-white/[0.06] bg-white/[0.02] text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+                  : "border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text-dim)]",
               )}
               onClick={() => {
                 onOldSpeakerModeChange(!oldSpeakerMode);
@@ -1224,10 +860,10 @@ function TransportField({
   }, [draft, onChange, parseValue]);
 
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-1.5">
+    <div className="flex items-center gap-1.5 rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2.5 py-1.5">
       <label
         htmlFor={inputId}
-        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/35"
+        className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-[var(--oc-text-faint)]"
       >
         {label}
       </label>
@@ -1239,7 +875,7 @@ function TransportField({
         aria-label={label === "Loop" ? "Loop Length" : label}
         aria-valuemin={min}
         aria-valuemax={max}
-        className="h-7 w-14 border-0 bg-transparent px-0 text-center font-[var(--oc-mono)] text-sm font-semibold tabular-nums text-white focus-visible:ring-0"
+        className="h-7 w-14 border-0 bg-transparent px-0 text-center font-[var(--oc-mono)] text-sm font-semibold tabular-nums text-[var(--oc-text)] focus-visible:ring-0"
         onFocus={(event) => {
           setIsFocused(true);
           event.currentTarget.select();
@@ -1268,7 +904,7 @@ function TransportField({
         }}
       />
       {suffix ? (
-        <span className="font-[var(--oc-mono)] text-[9px] uppercase text-white/30">{suffix}</span>
+        <span className="font-[var(--oc-mono)] text-[9px] uppercase text-[var(--oc-text-faint)]">{suffix}</span>
       ) : null}
     </div>
   );
@@ -1287,6 +923,8 @@ function AudioInitButton({
   initializeAudio: () => Promise<unknown>;
   showAudioGate: boolean;
 }) {
+  const activeSkin = useActiveSkin();
+  const isRetro = activeSkin === "8bitcn";
   const promptId = "audio-init-prompt";
   const showRetryCopy = engineState === "error";
 
@@ -1298,7 +936,7 @@ function AudioInitButton({
           "h-10 rounded-md px-4 font-[var(--oc-mono)] text-xs font-semibold uppercase tracking-[0.1em] transition-all",
           audioReady
             ? "bg-[var(--oc-accent)]/15 text-[var(--oc-accent)] hover:bg-[var(--oc-accent)]/25"
-            : "bg-[var(--oc-accent)] text-white hover:bg-[var(--oc-accent)]/90",
+            : "bg-[var(--oc-accent)] text-[var(--oc-bg)] hover:bg-[var(--oc-accent)]/90",
           showAudioGate
             ? "oc-audio-init-hotspot h-12 rounded-lg border border-[var(--oc-accent)]/70 px-5 text-sm shadow-[0_0_0_1px_rgba(167,139,250,0.25),0_18px_40px_rgba(10,10,18,0.55)]"
             : undefined,
@@ -1314,23 +952,50 @@ function AudioInitButton({
       {showAudioGate ? (
         <div
           id={promptId}
-          className="oc-audio-gate absolute top-full left-0 mt-3 w-[min(24rem,calc(100vw-2rem))] rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(18,21,34,0.96),rgba(9,11,18,0.98))] p-4 shadow-[0_28px_80px_rgba(3,4,10,0.65)]"
+          data-skin-variant={activeSkin}
+          className={cn(
+            "oc-audio-gate absolute top-full left-0 mt-3",
+            isRetro ? "w-[min(19rem,calc(100vw-2rem))] rounded-[18px] p-3.5" : "w-[min(24rem,calc(100vw-2rem))] rounded-2xl p-4",
+          )}
         >
-          <div className="absolute top-0 left-6 h-4 w-4 -translate-y-1/2 rotate-45 border-t border-l border-white/10 bg-[var(--oc-surface-raised)]" />
+          <div
+            data-skin-variant={activeSkin}
+            className="oc-audio-gate-caret absolute top-0 left-6 h-4 w-4 -translate-y-1/2 rotate-45"
+          />
           <div className="mb-2 flex items-center gap-2">
-            <span className="rounded-full border border-[var(--oc-accent)]/35 bg-[var(--oc-accent)]/12 px-2 py-1 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-accent)]">
+            <span
+              className={cn(
+                "border px-2 py-1 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-accent)]",
+                isRetro
+                  ? "rounded-[20px] border-[color-mix(in_srgb,var(--oc-accent)_35%,white_12%)] bg-[color-mix(in_srgb,var(--oc-accent)_16%,white_70%)]"
+                  : "rounded-full border-[var(--oc-accent)]/35 bg-[color-mix(in_srgb,var(--oc-accent)_14%,transparent)]",
+              )}
+            >
               First step
             </span>
-            <span className="font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-white/30">
+            <span className="font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-[var(--oc-text-faint)]">
               Browser audio unlock
             </span>
           </div>
-          <p className="font-[var(--oc-display)] text-xl leading-tight text-white">
-            Click <span className="text-[var(--oc-accent)]">Start Audio</span> before using the sequencer.
-          </p>
-          <p className="mt-2 max-w-[32ch] font-[var(--oc-mono)] text-[11px] leading-5 text-white/55">
-            Your browser blocks sound until you interact once. This unlocks playback, sample preview, and recording.
-          </p>
+          {isRetro ? (
+            <>
+              <p className="font-[var(--oc-display)] text-[1.05rem] leading-[1.6] text-[var(--oc-text)]">
+                Click <span className="text-[var(--oc-accent)]">Start Audio</span>
+              </p>
+              <p className="mt-2 max-w-[24ch] font-[var(--oc-mono)] text-[10px] leading-6 text-[var(--oc-text-dim)]">
+                Unlock playback, sample preview, and recording with one browser tap.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-[var(--oc-display)] text-xl leading-tight text-[var(--oc-text)]">
+                Click <span className="text-[var(--oc-accent)]">Start Audio</span> before using the sequencer.
+              </p>
+              <p className="mt-2 max-w-[32ch] font-[var(--oc-mono)] text-[11px] leading-5 text-[var(--oc-text-dim)]">
+                Your browser blocks sound until you interact once. This unlocks playback, sample preview, and recording.
+              </p>
+            </>
+          )}
           {showRetryCopy ? (
             <p className="mt-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-[var(--oc-noise)]">
               Audio did not start. Click again to retry.
@@ -1346,18 +1011,18 @@ function AudioInitButton({
 
 function StatusChip({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-white/[0.05] bg-black/25 px-2 py-1.5">
+    <div className="flex items-center gap-1.5 rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2 py-1.5">
       <span
         className={cn(
           "size-1.5 rounded-full",
           active
             ? "bg-[var(--oc-play)] shadow-[0_0_4px_rgba(61,220,132,0.6)]"
-            : "bg-white/20",
+            : "bg-[var(--oc-text-ghost)]",
         )}
         aria-hidden="true"
       />
-      <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/30">{label}</span>
-      <span className="font-[var(--oc-mono)] text-[10px] font-medium uppercase tracking-[0.12em] text-white/70">
+      <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-faint)]">{label}</span>
+      <span className="font-[var(--oc-mono)] text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--oc-text-dim)]">
         {value}
       </span>
     </div>
@@ -1428,6 +1093,7 @@ function SampleDeck({
               ? "Ready to capture"
               : `Latest clip ${formatSampleDurationLabel(sampleDurationMs)}`;
   const permissionLabel = getPermissionLabel(recorderPermissionState);
+  const waveformVariant = useWaveformCanvasVariant();
 
   return (
     <div className="rounded-lg border border-[var(--oc-sample)]/20 bg-[var(--oc-surface)] p-4">
@@ -1438,7 +1104,7 @@ function SampleDeck({
         <Mic className="size-4 text-[var(--oc-sample)]/60" />
       </div>
 
-      <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-white/35">
+      <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-[var(--oc-text-faint)]">
         Capture up to 2s from the microphone. Store up to {SONG_MAX_SAMPLE_COUNT} clips, then trim and swap
         between them from the deck.
       </p>
@@ -1446,7 +1112,7 @@ function SampleDeck({
       <div className="mb-3 grid grid-cols-2 gap-2">
         <Button
           type="button"
-          className="h-8 rounded-md bg-[var(--oc-sample)] font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[#07080e] hover:bg-[var(--oc-sample)]/85"
+          className="h-8 rounded-md bg-[var(--oc-sample)] font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--oc-bg)] hover:bg-[var(--oc-sample)]/85"
           disabled={recorderPermissionState === "unsupported" || isBusy || (!isRecording && sampleLimitReached)}
           onClick={() => {
             if (isRecording) {
@@ -1463,7 +1129,7 @@ function SampleDeck({
         <Button
           type="button"
           variant="outline"
-          className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.07] hover:text-white"
+          className="h-8 rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
           disabled={sample === null || isBusy || isRecording}
           onClick={() => {
             void onPreviewSample();
@@ -1474,13 +1140,13 @@ function SampleDeck({
       </div>
 
       <div className="mb-3 grid grid-cols-2 gap-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]">
-        <div className="rounded-md border border-white/[0.06] bg-black/25 px-2.5 py-2 text-white/45">
-          <span className="block text-white/25">Mic</span>
-          <span className="mt-1 block text-white/65">{permissionLabel}</span>
+        <div className="rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2.5 py-2 text-[var(--oc-text-muted)]">
+          <span className="block text-[var(--oc-text-ghost)]">Mic</span>
+          <span className="mt-1 block text-[var(--oc-text-dim)]">{permissionLabel}</span>
         </div>
-        <div className="rounded-md border border-white/[0.06] bg-black/25 px-2.5 py-2 text-white/45">
-          <span className="block text-white/25">Recorder</span>
-          <span className="mt-1 block text-white/65">{statusLabel}</span>
+        <div className="rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2.5 py-2 text-[var(--oc-text-muted)]">
+          <span className="block text-[var(--oc-text-ghost)]">Recorder</span>
+          <span className="mt-1 block text-[var(--oc-text-dim)]">{statusLabel}</span>
         </div>
       </div>
       {sampleLimitReached ? (
@@ -1489,8 +1155,8 @@ function SampleDeck({
         </div>
       ) : null}
 
-      <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
-        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
+      <div className="rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] p-2.5">
+        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-[var(--oc-text-faint)]">
           <span>Trim</span>
           <span>{sample?.name ?? "No Sample"}</span>
         </div>
@@ -1499,7 +1165,7 @@ function SampleDeck({
             ariaLabel="PCM trim preview waveform"
             samples={waveform}
             className="h-12 w-full"
-            backgroundColor="rgba(7, 8, 14, 0.9)"
+            variant={waveformVariant}
             glowColor={waveformGlowColorByTrackId.sample}
             lineColor={waveformLineColorByTrackId.sample}
           />
@@ -1527,20 +1193,20 @@ function SampleDeck({
           <Button
             type="button"
             variant="outline"
-            className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            className="h-8 rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             disabled={!hasPendingTrim || isRecording || isBusy}
             onClick={onApplyTrim}
           >
             Apply Trim
           </Button>
         </div>
-        <div className="mt-3 grid gap-2 rounded-md border border-white/[0.06] bg-black/20 p-2.5">
-          <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
+        <div className="mt-3 grid gap-2 rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] p-2.5">
+          <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-faint)]">
             <span>Pitch Map</span>
             <span>{engineMode === "inspired" ? "Chromatic" : "Trigger"}</span>
           </div>
           {sample === null ? (
-            <div className="font-[var(--oc-mono)] text-[10px] text-white/32">Load a sample to assign its base note.</div>
+            <div className="font-[var(--oc-mono)] text-[10px] text-[var(--oc-text-faint)]">Load a sample to assign its base note.</div>
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-2">
@@ -1555,32 +1221,31 @@ function SampleDeck({
                     }}
                   />
                 </div>
-                <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/36">
+                <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-[var(--oc-text-faint)]">
                   Base note
                 </span>
                 {sample.detectedBaseNote !== null ? (
-                  <button
-                    type="button"
+                  <Button
                     className="rounded-sm border border-[var(--oc-sample)]/20 bg-[var(--oc-sample)]/10 px-2 py-1 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--oc-sample)] transition hover:bg-[var(--oc-sample)]/18"
                     onClick={() => {
                       onSetSampleBaseNote(sample.detectedBaseNote ?? sample.baseNote);
                     }}
                   >
                     Suggested {sample.detectedBaseNote}
-                  </button>
+                  </Button>
                 ) : (
-                  <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/28">
+                  <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-[var(--oc-text-ghost)]">
                     No stable note detected
                   </span>
                 )}
               </div>
-              <p className="font-[var(--oc-mono)] text-[10px] leading-5 text-white/40">
+              <p className="font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-text-muted)]">
                 Inspired mode transposes from this base note. Authentic mode still plays the clip as a one-shot trigger.
               </p>
             </>
           )}
         </div>
-        <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">
+        <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-faint)]">
           <span>
             {sample === null
               ? "No clip loaded"
@@ -1590,14 +1255,14 @@ function SampleDeck({
         </div>
       </div>
 
-      <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
-        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
+      <div className="rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] p-2.5">
+        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-[var(--oc-text-faint)]">
           <span>Recorded Clips</span>
           <span>{samples.length}</span>
         </div>
         <div className="grid gap-2">
           {samples.length === 0 ? (
-            <div className="rounded-md border border-dashed border-white/[0.08] bg-black/20 px-3 py-4 text-center font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/28">
+            <div className="rounded-md border border-dashed border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-3 py-4 text-center font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-[var(--oc-text-ghost)]">
               Record something to build your PCM clip list.
             </div>
           ) : (
@@ -1614,19 +1279,18 @@ function SampleDeck({
                     "grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md border p-2 transition-colors",
                     isSelected
                       ? "border-[var(--oc-sample)]/50 bg-[var(--oc-sample)]/10"
-                      : "border-white/[0.06] bg-black/20",
+                      : "border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)]",
                   )}
                 >
-                  <button
-                    type="button"
+                  <Button
                     aria-label={`Load sample ${entry.name}`}
-                    className="min-w-0 text-left"
+                    className="min-w-0 justify-start border-0 bg-transparent px-0 py-0 text-left shadow-none ring-0 hover:bg-transparent"
                     onClick={() => {
                       onSelectSample(entry.id);
                     }}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                      <span className="truncate font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--oc-text)]">
                         {entry.name}
                       </span>
                       {isSelected ? (
@@ -1635,26 +1299,26 @@ function SampleDeck({
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-1 font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/34">
+                    <div className="mt-1 font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-[var(--oc-text-faint)]">
                       {entry.id} · {formatSampleDurationLabel(trimmedDurationMs)}
                     </div>
-                    <div className="mt-2 rounded-sm border border-white/[0.05] bg-[#07080e]/80">
+                    <div className="mt-2 rounded-sm border border-[var(--oc-panel-border)] bg-[var(--oc-bg)]/80">
                       <WaveformCanvas
                         ariaLabel={`${entry.name} waveform`}
                         samples={waveform}
                         className="h-8 w-full"
-                        backgroundColor="rgba(7, 8, 14, 0.82)"
+                        variant={waveformVariant}
                         glowColor={waveformGlowColorByTrackId.sample}
                         lineColor={waveformLineColorByTrackId.sample}
                       />
                     </div>
-                  </button>
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     aria-label={`Delete sample ${entry.name}`}
-                    className="size-8 self-start border-white/[0.08] bg-white/[0.03] text-white/45 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+                    className="size-8 self-start border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
                     onClick={() => {
                       onDeleteSample(entry.id);
                     }}
@@ -1690,22 +1354,21 @@ function SampleTrimControl({
 }) {
   return (
     <div className="grid gap-1.5">
-      <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
+      <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-[var(--oc-text-faint)]">
         <label htmlFor={labelId}>{label}</label>
         <span>{value} fr</span>
       </div>
-      <input
-        id={labelId}
+      <SkinSlider
         aria-label={`Sample trim ${label.toLowerCase()}`}
-        type="range"
-        min={min}
+        disabled={disabled}
+        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[var(--oc-panel-border)] accent-[var(--oc-sample)] disabled:cursor-not-allowed disabled:opacity-40"
+        id={labelId}
         max={max}
+        min={min}
         step={1}
         value={Math.max(min, Math.min(value, max))}
-        disabled={disabled}
-        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-sample)] disabled:cursor-not-allowed disabled:opacity-40"
-        onChange={(event) => {
-          onChange(Number(event.currentTarget.value));
+        onValueChange={(nextValue) => {
+          onChange(nextValue);
         }}
       />
       <Input
@@ -1716,7 +1379,7 @@ function SampleTrimControl({
         step={1}
         value={Math.max(min, Math.min(value, max))}
         disabled={disabled}
-        className="h-7 border-white/[0.08] bg-black/30 px-2 font-[var(--oc-mono)] text-[10px] text-white"
+        className="h-7 border-[var(--oc-panel-border)] bg-[var(--oc-input-bg)] px-2 font-[var(--oc-mono)] text-[10px] text-[var(--oc-text)]"
         onChange={(event) => {
           onChange(Number(event.currentTarget.value));
         }}
@@ -1742,35 +1405,7 @@ function formatSampleDurationLabel(durationMs: number) {
   return `${(Math.max(0, durationMs) / 1000).toFixed(2)}s`;
 }
 
-async function copyTextToClipboard(value: string) {
-  if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
-    return false;
-  }
 
-  try {
-    await navigator.clipboard.writeText(value);
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function downloadBlobFile(blob: Blob, fileName: string) {
-  if (typeof document === "undefined" || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
-    throw new Error("This browser cannot download WAV files.");
-  }
-
-  const objectUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = fileName;
-  link.rel = "noopener";
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(objectUrl);
-}
 
 /* ─────────── Song Metadata ─────────── */
 
@@ -1790,14 +1425,14 @@ function SongMeta({
   trackCount: number;
 }) {
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-4">
-      <h2 className="mb-3 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">
+    <div className="rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-surface)] p-4">
+      <h2 className="mb-3 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-text-muted)]">
         Song Info
       </h2>
       <div className="mb-3 grid gap-1.5">
         <label
           htmlFor="song-name"
-          className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35"
+          className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--oc-text-faint)]"
         >
           Song Name
         </label>
@@ -1806,7 +1441,7 @@ function SongMeta({
           aria-label="Song Name"
           maxLength={80}
           value={song.meta.name}
-          className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
+          className="h-8 border-[var(--oc-panel-border)] bg-[var(--oc-input-bg)] px-2.5 font-[var(--oc-mono)] text-[11px] text-[var(--oc-text)] placeholder:text-[var(--oc-text-ghost)]"
           onChange={(event) => {
             onUpdateSongName(event.currentTarget.value);
           }}
@@ -1815,7 +1450,7 @@ function SongMeta({
       <div className="mb-3 grid gap-1.5">
         <label
           htmlFor="song-author"
-          className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35"
+          className="font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--oc-text-faint)]"
         >
           Author
         </label>
@@ -1824,7 +1459,7 @@ function SongMeta({
           aria-label="Author"
           maxLength={80}
           value={song.meta.author}
-          className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
+          className="h-8 border-[var(--oc-panel-border)] bg-[var(--oc-input-bg)] px-2.5 font-[var(--oc-mono)] text-[11px] text-[var(--oc-text)] placeholder:text-[var(--oc-text-ghost)]"
           onChange={(event) => {
             onUpdateSongAuthor(event.currentTarget.value);
           }}
@@ -1851,8 +1486,8 @@ function SongMeta({
               className={cn(
                 "h-8 rounded-md border font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.16em] transition-all",
                 isSelected
-                  ? "border-[var(--oc-accent)]/45 bg-[var(--oc-accent)]/12 text-white"
-                  : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.08] hover:text-white",
+                  ? "border-[var(--oc-accent)]/45 bg-[var(--oc-accent)]/12 text-[var(--oc-text)]"
+                  : "border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]",
               )}
               onClick={() => {
                 onUpdateEngineMode(engineMode);
@@ -1865,12 +1500,12 @@ function SongMeta({
       </div>
       <div
         aria-label="PCM mode summary"
-        className="mt-3 rounded-md border border-white/[0.06] bg-black/20 px-3 py-2 font-[var(--oc-mono)]"
+        className="mt-3 rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-3 py-2 font-[var(--oc-mono)]"
       >
-        <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">
+        <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-[var(--oc-text-faint)]">
           {getPcmModeLabel(song.meta.engineMode)}
         </div>
-        <p className="mt-1 text-[10px] leading-5 text-white/55">{getPcmModeSummary(song.meta.engineMode)}</p>
+        <p className="mt-1 text-[10px] leading-5 text-[var(--oc-text-muted)]">{getPcmModeSummary(song.meta.engineMode)}</p>
       </div>
     </div>
   );
@@ -1878,9 +1513,9 @@ function SongMeta({
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0">
-      <span className="uppercase tracking-[0.18em] text-white/30">{label}</span>
-      <span className="font-medium text-white/70">{value}</span>
+    <div className="flex items-center justify-between gap-2 border-b border-[var(--oc-panel-border)] pb-1.5 last:border-0 last:pb-0">
+      <span className="uppercase tracking-[0.18em] text-[var(--oc-text-faint)]">{label}</span>
+      <span className="font-medium text-[var(--oc-text-dim)]">{value}</span>
     </div>
   );
 }
@@ -1901,40 +1536,40 @@ function ShareDslEditor({
   onCopy: () => Promise<void>;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/72 px-4 py-10 backdrop-blur-sm">
-      <div className="w-full max-w-4xl rounded-xl border border-white/[0.08] bg-[var(--oc-surface)] p-5 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-[var(--oc-bg)]/72 px-4 py-10 backdrop-blur-sm">
+      <div className="w-full max-w-4xl rounded-xl border border-[var(--oc-panel-border)] bg-[var(--oc-surface)] p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-[var(--oc-mono)] text-sm font-semibold uppercase tracking-[0.18em] text-white">
+            <h2 className="font-[var(--oc-mono)] text-sm font-semibold uppercase tracking-[0.18em] text-[var(--oc-text)]">
               Share DSL
             </h2>
-            <p className="mt-2 max-w-3xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/45">
+            <p className="mt-2 max-w-3xl font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-text-muted)]">
               Full compact song DSL for share links. Copy it as plain text or paste an edited DSL and apply it to replace the current song.
             </p>
           </div>
           <Button
             type="button"
             variant="outline"
-            className="border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            className="border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={onClose}
           >
             Close
           </Button>
         </div>
 
-        <div className="mt-4 rounded-lg border border-white/[0.06] bg-black/30 p-3">
+        <div className="mt-4 rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] p-3">
           <label
             htmlFor="share-dsl-textarea"
-            className="mb-2 block font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35"
+            className="mb-2 block font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-[var(--oc-text-faint)]"
           >
             Share DSL Text
           </label>
-          <textarea
+          <SkinTextarea
             id="share-dsl-textarea"
             aria-label="Share DSL text"
             value={draft}
             spellCheck={false}
-            className="h-[360px] w-full resize-none rounded-md border border-white/[0.08] bg-[#07080e] px-3 py-3 font-[var(--oc-mono)] text-[11px] leading-6 text-white outline-none focus:border-[var(--oc-accent)]/45"
+            className="h-[360px] w-full resize-none rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-bg)] px-3 py-3 font-[var(--oc-mono)] text-[11px] leading-6 text-[var(--oc-text)] outline-none focus:border-[var(--oc-accent)]/45"
             onChange={(event) => {
               onChangeDraft(event.currentTarget.value);
             }}
@@ -1951,7 +1586,7 @@ function ShareDslEditor({
           <Button
             type="button"
             variant="outline"
-            className="border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            className="border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={() => {
               void onCopy();
             }}
@@ -1960,7 +1595,7 @@ function ShareDslEditor({
           </Button>
           <Button
             type="button"
-            className="bg-[var(--oc-accent)] px-4 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-[var(--oc-accent)]/85"
+            className="bg-[var(--oc-accent)] px-4 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--oc-text)] hover:bg-[var(--oc-accent)]/85"
             onClick={onApply}
           >
             Apply DSL
@@ -1981,14 +1616,14 @@ function ExamplesDialog({
   onLoadExample: (exampleId: string) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/72 px-4 py-10 backdrop-blur-sm">
-      <div className="w-full max-w-3xl rounded-xl border border-white/[0.08] bg-[var(--oc-surface)] p-5 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-[var(--oc-bg)]/72 px-4 py-10 backdrop-blur-sm">
+      <div className="w-full max-w-3xl rounded-xl border border-[var(--oc-panel-border)] bg-[var(--oc-surface)] p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-[var(--oc-mono)] text-sm font-semibold uppercase tracking-[0.18em] text-white">
+            <h2 className="font-[var(--oc-mono)] text-sm font-semibold uppercase tracking-[0.18em] text-[var(--oc-text)]">
               Examples
             </h2>
-            <p className="mt-2 max-w-2xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/45">
+            <p className="mt-2 max-w-2xl font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-text-muted)]">
               Load a built-in song into the editor. This replaces the current song and clears any stale share hash
               until you copy a new link.
             </p>
@@ -1996,7 +1631,7 @@ function ExamplesDialog({
           <Button
             type="button"
             variant="outline"
-            className="border-white/[0.08] bg-white/[0.03] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
+            className="border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] px-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={onClose}
           >
             Close
@@ -2007,24 +1642,24 @@ function ExamplesDialog({
           {examples.map((example) => (
             <div
               key={example.id}
-              className="rounded-lg border border-white/[0.08] bg-black/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+              className="rounded-lg border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
-                  <div className="font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-white/35">
+                  <div className="font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.18em] text-[var(--oc-text-faint)]">
                     Built-in Example
                   </div>
-                  <h3 className="mt-1 font-[var(--oc-display)] text-2xl leading-none text-white">{example.name}</h3>
+                  <h3 className="mt-1 font-[var(--oc-display)] text-2xl leading-none text-[var(--oc-text)]">{example.name}</h3>
                   <div className="mt-2 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.14em] text-[var(--oc-accent)]">
                     by {example.author}
                   </div>
-                  <p className="mt-3 max-w-[58ch] font-[var(--oc-mono)] text-[10px] leading-5 text-white/50">
+                  <p className="mt-3 max-w-[58ch] font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-text-muted)]">
                     {example.summary}
                   </p>
                 </div>
                 <Button
                   type="button"
-                  className="shrink-0 bg-[var(--oc-accent)] px-4 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-white hover:bg-[var(--oc-accent)]/85"
+                  className="shrink-0 bg-[var(--oc-accent)] px-4 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--oc-text)] hover:bg-[var(--oc-accent)]/85"
                   aria-label={`Load example ${example.name}`}
                   onClick={() => {
                     onLoadExample(example.id);
@@ -2079,16 +1714,15 @@ function TrackArrangementEditor({
 
   return (
     <div className="fixed inset-0 z-[260] flex items-center justify-center p-4">
-      <button
-        type="button"
+      <Button
         aria-label="Close arrangement editor"
-        className="absolute inset-0 bg-black/70 backdrop-blur-[2px]"
+        className="absolute inset-0 h-auto w-auto border-0 bg-[var(--oc-bg)]/70 p-0 shadow-none ring-0 backdrop-blur-[2px] hover:bg-[var(--oc-bg)]/70"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-2xl rounded-2xl border border-white/[0.08] bg-[#090b14] p-5 shadow-2xl shadow-black/60">
+      <div className="relative w-full max-w-2xl rounded-2xl border border-[var(--oc-panel-border)] bg-[var(--oc-surface)] p-5 shadow-2xl shadow-[var(--oc-bg)]/60">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/35">
+            <p className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-text-faint)]">
               {editorTitle}
             </p>
             <h2
@@ -2097,7 +1731,7 @@ function TrackArrangementEditor({
             >
               {trackLabel}
             </h2>
-            <p className="mt-2 max-w-xl font-[var(--oc-mono)] text-[10px] leading-5 text-white/50">
+            <p className="mt-2 max-w-xl font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-text-muted)]">
               {helperCopy}
             </p>
           </div>
@@ -2105,7 +1739,7 @@ function TrackArrangementEditor({
             type="button"
             variant="ghost"
             size="sm"
-            className="rounded-md border border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            className="rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={onClose}
           >
             Close
@@ -2114,17 +1748,17 @@ function TrackArrangementEditor({
 
         <label
           htmlFor={`arrangement-${trackId}`}
-          className="mb-2 block font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.2em] text-white/40"
+          className="mb-2 block font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.2em] text-[var(--oc-text-muted)]"
         >
           {trackLabel} {trackId === "noise" || trackId === "sample" ? "Trigger Text" : "Arrangement Text"}
         </label>
-        <textarea
+        <SkinTextarea
           id={`arrangement-${trackId}`}
           aria-label={`${trackLabel} ${labelSuffix}`}
           value={draft}
           autoFocus
           spellCheck={false}
-          className="min-h-[360px] w-full rounded-xl border border-white/[0.08] bg-black/35 px-4 py-3 font-[var(--oc-mono)] text-sm leading-6 text-white outline-none transition focus:border-white/20"
+          className="min-h-[360px] w-full rounded-xl border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-4 py-3 font-[var(--oc-mono)] text-sm leading-6 text-[var(--oc-text)] outline-none transition focus:border-[var(--oc-border-bright)]"
           onChange={(event) => {
             onChangeDraft(event.currentTarget.value);
           }}
@@ -2140,14 +1774,14 @@ function TrackArrangementEditor({
           <Button
             type="button"
             variant="outline"
-            className="rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            className="rounded-md border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={onClose}
           >
             Cancel
           </Button>
           <Button
             type="button"
-            className="rounded-md font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.16em] text-[#07080e]"
+            className="rounded-md font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--oc-bg)]"
             style={{ backgroundColor: accentColor }}
             onClick={onApply}
           >

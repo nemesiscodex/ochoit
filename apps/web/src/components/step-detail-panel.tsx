@@ -1,8 +1,8 @@
-import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { SkinButton as Button, SkinSlider } from "@/components/ui/skin-controls";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import type { EngineMode } from "@/features/song/pcm-mode";
@@ -180,17 +180,16 @@ function MelodicStepDetail({
                 const isSelected = pulseStep.duty === duty;
 
                 return (
-                  <button
+                  <Button
                     key={duty}
-                    type="button"
                     aria-label={`Set duty ${formatPulseDutyLabel(duty)}`}
                     aria-pressed={isSelected}
                     disabled={!step.enabled}
                     className={cn(
                       "rounded-md border px-2 py-1 font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.1em] transition-all",
                       isSelected
-                        ? "text-white"
-                        : "border-white/[0.06] bg-white/[0.02] text-white/50 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+                        ? "text-[var(--oc-text)]"
+                        : "border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:border-[var(--oc-border-bright)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]",
                       !step.enabled && "cursor-not-allowed opacity-30",
                     )}
                     style={
@@ -206,7 +205,7 @@ function MelodicStepDetail({
                     }}
                   >
                     {formatPulseDutyLabel(duty)}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -221,7 +220,7 @@ function MelodicStepDetail({
               size="sm"
               aria-label={`Shorten ${trackLabel} step ${stepIndex + 1} duration`}
               disabled={!step.enabled || step.length <= 1}
-              className="h-6 min-w-0 rounded-md px-2 font-[var(--oc-mono)] text-xs font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
+              className="h-6 min-w-0 rounded-md px-2 font-[var(--oc-mono)] text-xs font-semibold text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
               onClick={() => {
                 onUpdate({ length: Math.max(1, step.length - 1) });
               }}
@@ -230,7 +229,7 @@ function MelodicStepDetail({
             </Button>
             <div
               aria-label={`${trackLabel} step ${stepIndex + 1} duration`}
-              className="min-w-[3rem] rounded-md border border-white/[0.06] bg-black/25 px-2 py-1 text-center font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.1em] text-white/60"
+              className="min-w-[3rem] rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2 py-1 text-center font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--oc-text-muted)]"
             >
               {step.enabled ? `${step.length} st` : "--"}
             </div>
@@ -240,7 +239,7 @@ function MelodicStepDetail({
               size="sm"
               aria-label={`Extend ${trackLabel} step ${stepIndex + 1} duration`}
               disabled={!step.enabled || step.length >= maxLength}
-              className="h-6 min-w-0 rounded-md px-2 font-[var(--oc-mono)] text-xs font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
+              className="h-6 min-w-0 rounded-md px-2 font-[var(--oc-mono)] text-xs font-semibold text-[var(--oc-text-muted)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
               onClick={() => {
                 onUpdate({ length: Math.min(maxLength, step.length + 1) });
               }}
@@ -304,9 +303,8 @@ function NoiseStepDetail({
               const isSelected = currentPreset?.id === preset.id;
 
               return (
-                <button
+                <Button
                   key={preset.id}
-                  type="button"
                   aria-label={`Select noise trigger ${preset.label}`}
                   aria-pressed={isSelected}
                   disabled={!step.enabled}
@@ -330,7 +328,7 @@ function NoiseStepDetail({
                   }}
                 >
                   {preset.shortLabel}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -342,9 +340,8 @@ function NoiseStepDetail({
               const isSelected = step.mode === mode;
 
               return (
-                <button
+                <Button
                   key={mode}
-                  type="button"
                   aria-label={`Set noise mode ${mode}`}
                   aria-pressed={isSelected}
                   disabled={!step.enabled}
@@ -368,7 +365,7 @@ function NoiseStepDetail({
                   }}
                 >
                   {mode}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -376,24 +373,21 @@ function NoiseStepDetail({
 
         <DetailField label="Period">
           <div className="flex items-center gap-2">
-            <input
-              type="range"
-              min={noisePeriodRange.min}
-              max={noisePeriodRange.max}
-              step={1}
-              value={step.periodIndex}
-              disabled={!step.enabled}
+            <SkinSlider
               aria-label={`${trackLabel} step ${stepIndex + 1} noise period`}
               className="oc-track-volume w-24"
+              disabled={!step.enabled}
+              max={noisePeriodRange.max}
+              min={noisePeriodRange.min}
               style={{ ["--oc-track-accent" as string]: accentColor }}
-              onChange={(event) => {
-                const periodIndex = Number(event.currentTarget.value);
+              value={step.periodIndex}
+              onValueChange={(periodIndex) => {
                 engine?.previewNoiseConfig(step.mode, periodIndex);
                 onUpdate({ periodIndex });
               }}
             />
             <span
-              className="min-w-[3rem] rounded-md border border-white/[0.06] bg-black/25 px-2 py-1 text-center font-[var(--oc-mono)] text-[10px] font-semibold uppercase text-white/60"
+              className="min-w-[3rem] rounded-md border border-[var(--oc-panel-border)] bg-[var(--oc-panel-bg)] px-2 py-1 text-center font-[var(--oc-mono)] text-[10px] font-semibold uppercase text-[var(--oc-text-muted)]"
               aria-label={`${trackLabel} step ${stepIndex + 1} noise settings`}
             >
               {formatNoiseConfigLabel(step.mode, step.periodIndex)}
@@ -480,7 +474,7 @@ function SampleStepDetail({
       trackLabel={trackLabel}
     >
       {samples.length === 0 ? (
-        <p className="font-[var(--oc-mono)] text-[10px] text-white/35">
+        <p className="font-[var(--oc-mono)] text-[10px] text-[var(--oc-text-faint)]">
           Record a sample to assign triggers.
         </p>
       ) : (
@@ -491,17 +485,16 @@ function SampleStepDetail({
                 const isSelected = step.sampleId === sample.id;
 
                 return (
-                  <button
+                  <Button
                     key={sample.id}
-                    type="button"
                     aria-label={`Assign ${sample.name}`}
                     aria-pressed={isSelected}
                     disabled={!step.enabled}
                     className={cn(
                       "rounded-md border px-2 py-1 font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.1em] transition-all",
                       isSelected
-                        ? "text-white"
-                        : "border-white/[0.06] bg-white/[0.02] text-white/50 hover:border-white/[0.14] hover:bg-white/[0.05] hover:text-white",
+                        ? "text-[var(--oc-text)]"
+                        : "border-[var(--oc-panel-border)] bg-[var(--oc-btn-subtle-bg)] text-[var(--oc-text-muted)] hover:border-[var(--oc-border-bright)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]",
                       !step.enabled && "cursor-not-allowed opacity-30",
                     )}
                     style={
@@ -522,7 +515,7 @@ function SampleStepDetail({
                     }}
                   >
                     {sample.name}
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -554,9 +547,8 @@ function SampleStepDetail({
                   const isSelected = step.playbackRate === rate;
 
                   return (
-                    <button
+                    <Button
                       key={rate}
-                      type="button"
                       aria-label={`Set rate ${formatPlaybackRateLabel(rate)}`}
                       aria-pressed={isSelected}
                       disabled={!step.enabled}
@@ -582,7 +574,7 @@ function SampleStepDetail({
                       }}
                     >
                       {formatPlaybackRateLabel(rate)}
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
@@ -602,7 +594,7 @@ function SampleStepDetail({
           </DetailField>
 
           {selectedSample !== null ? (
-            <div className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/30">
+            <div className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-[var(--oc-text-faint)]">
               {engineMode === "inspired"
                 ? `${selectedSample.name} ${selectedSample.baseNote} → ${step.note}`
                 : `${selectedSample.name} ${formatPlaybackRateLabel(step.playbackRate)}`}
@@ -645,10 +637,10 @@ function DetailPanelFrame({
             className="inline-block size-2 rounded-full"
             style={{ backgroundColor: accentColor }}
           />
-          <span className="font-[var(--oc-mono)] text-[11px] font-bold uppercase tracking-[0.12em] text-white">
+          <span className="font-[var(--oc-mono)] text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--oc-text)]">
             Step {stepIndex + 1}
           </span>
-          <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/35">
+          <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-[var(--oc-text-faint)]">
             {trackLabel}
           </span>
         </div>
@@ -662,8 +654,8 @@ function DetailPanelFrame({
             className={cn(
               "h-6 rounded-md px-2 font-[var(--oc-mono)] text-[9px] font-semibold uppercase tracking-[0.12em]",
               enabled
-                ? "bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white"
-                : "text-white/35 hover:bg-white/[0.08] hover:text-white/60",
+                ? "bg-[var(--oc-btn-subtle-hover)] text-[var(--oc-text-dim)] hover:bg-[var(--oc-border-bright)] hover:text-[var(--oc-text)]"
+                : "text-[var(--oc-text-faint)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text-muted)]",
             )}
             onClick={onToggleEnabled}
           >
@@ -674,7 +666,7 @@ function DetailPanelFrame({
             variant="ghost"
             size="icon"
             aria-label="Close step editor"
-            className="size-6 text-white/30 hover:bg-white/[0.08] hover:text-white"
+            className="size-6 text-[var(--oc-text-faint)] hover:bg-[var(--oc-btn-subtle-hover)] hover:text-[var(--oc-text)]"
             onClick={onClose}
           >
             <X className="size-3" />
@@ -689,7 +681,7 @@ function DetailPanelFrame({
 function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.2em] text-white/30">
+      <span className="font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.2em] text-[var(--oc-text-faint)]">
         {label}
       </span>
       {children}
@@ -714,21 +706,19 @@ function StepVolumeSlider({
 
   return (
     <div className="flex items-center gap-2">
-      <input
-        type="range"
-        min={0}
-        max={STEP_VOLUME_PERCENT_MAX}
-        step={1}
-        value={percent}
-        disabled={disabled}
+      <SkinSlider
         aria-label={ariaLabel}
         className="oc-track-volume w-20"
+        disabled={disabled}
+        max={STEP_VOLUME_PERCENT_MAX}
+        min={0}
         style={{ ["--oc-track-accent" as string]: accentColor }}
-        onChange={(event) => {
-          onChange(Number(event.currentTarget.value) / STEP_VOLUME_PERCENT_MAX);
+        value={percent}
+        onValueChange={(nextValue) => {
+          onChange(nextValue / STEP_VOLUME_PERCENT_MAX);
         }}
       />
-      <span className="w-8 text-right font-[var(--oc-mono)] text-[9px] text-white/50">{percent}%</span>
+      <span className="w-8 text-right font-[var(--oc-mono)] text-[9px] text-[var(--oc-text-muted)]">{percent}%</span>
     </div>
   );
 }

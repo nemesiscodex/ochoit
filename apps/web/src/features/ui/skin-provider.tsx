@@ -2,6 +2,7 @@ import { ThemeProvider, useTheme } from "next-themes";
 import { type ReactNode, useEffect, useMemo } from "react";
 
 import { getRetroThemeCss } from "@/features/ui/retro-themes";
+import { SkinRuntimeProvider } from "@/features/ui/skin-runtime";
 import { useSkinSearch } from "@/features/ui/use-skin-search";
 
 export function AppSkinProvider({ children }: { children: ReactNode }) {
@@ -58,7 +59,7 @@ function SkinProviderBridge({ children }: { children: ReactNode }) {
   return (
     <>
       {retroThemeCode === null ? null : <style data-ochoit-retro-theme>{retroThemeCode}</style>}
-      {children}
+      <SkinRuntimeProvider skin={normalizedSearch.skin}>{children}</SkinRuntimeProvider>
     </>
   );
 }
