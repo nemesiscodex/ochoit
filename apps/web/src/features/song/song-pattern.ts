@@ -117,6 +117,18 @@ export type SampleArrangementEntry = {
   playbackRate: number;
 };
 
+type MelodicTrackEntryWithVolume = MelodicArrangementEntry & {
+  volume: number;
+};
+
+type NoiseTrackEntryWithVolume = NoiseArrangementEntry & {
+  volume: number;
+};
+
+type SampleTrackEntryWithVolume = SampleArrangementEntry & {
+  volume: number;
+};
+
 export type ParseMelodicArrangementResult =
   | {
       ok: true;
@@ -219,6 +231,57 @@ export function getMelodicArrangementEntries(track: MelodicTrack): MelodicArrang
       },
     ];
   });
+}
+
+function getMelodicTrackEntriesWithVolume(track: MelodicTrack): MelodicTrackEntryWithVolume[] {
+  return track.steps.flatMap((step, index) => {
+    if (!step.enabled) {
+      return [];
+    }
+
+    const pulseStep = track.kind === "pulse" ? track.steps[index] : null;
+
+    return [
+      {
+        stepIndex: index,
+        note: step.note as NoteValue,
+        length: clampMelodicStepLength(step.length, index, track.steps.length),
+        volume: step.volume,
+        ...(pulseStep === null ? {} : { duty: pulseStep.duty }),
+      },
+    ];
+  });
+}
+
+function getNoiseTrackEntries(track: NoiseTrack): NoiseTrackEntryWithVolume[] {
+  return track.steps.flatMap((step, index) =>
+    step.enabled
+      ? [
+          {
+            stepIndex: index,
+            mode: step.mode,
+            periodIndex: step.periodIndex,
+            volume: step.volume,
+          },
+        ]
+      : [],
+  );
+}
+
+function getSampleTrackEntries(track: SampleTrack): SampleTrackEntryWithVolume[] {
+  return track.steps.flatMap((step, index) =>
+    step.enabled && step.sampleId !== null
+      ? [
+          {
+            stepIndex: index,
+            sampleId: step.sampleId,
+            note: step.note as NoteValue,
+            playbackRate: step.playbackRate,
+            volume: step.volume,
+          },
+        ]
+      : [],
+  );
 }
 
 export function getMelodicStepState(track: MelodicTrack, stepIndex: number): MelodicStepState {
@@ -354,6 +417,99 @@ export function updateSampleTrackStep(song: SongDocument, stepIndex: number, upd
           };
         }),
       },
+    },
+  };
+}
+
+export function moveMelodicTrackEntries(
+  song: SongDocument,
+  trackId: MelodicTrackId,
+  selectedStepIndexes: number[],
+  delta: number,
+): SongDocument {
+  if (delta === 0) {
+    return song;
+  }
+
+  const track = song.tracks[trackId];
+  const entries = getMelodicTrackEntriesWithVolume(track);
+  const selectedEntries = selectEntriesByStepIndex(entries, selectedStepIndexes);
+
+  if (selectedEntries === null) {
+    return song;
+  }
+
+  const untouchedEntries = entries.filter((entry) => !selectedEntries.some((selectedEntry) => selectedEntry.stepIndex === entry.stepIndex));
+  const movedEntries = selectedEntries.map((entry) => ({
+    ...entry,
+    stepIndex: entry.stepIndex + delta,
+  }));
+
+  if (!areMovedMelodicEntriesValid(movedEntries, untouchedEntries, track.steps.length)) {
+    return song;
+  }
+
+  return replaceMelodicTrack(trackId, song, buildMelodicTrack(track, [...untouchedEntries, ...movedEntries]));
+}
+
+export function moveNoiseTrackEntries(song: SongDocument, selectedStepIndexes: number[], delta: number): SongDocument {
+  if (delta === 0) {
+    return song;
+  }
+
+  const entries = getNoiseTrackEntries(song.tracks.noise);
+  const selectedEntries = selectEntriesByStepIndex(entries, selectedStepIndexes);
+
+  if (selectedEntries === null) {
+    return song;
+  }
+
+  const untouchedEntries = entries.filter((entry) => !selectedEntries.some((selectedEntry) => selectedEntry.stepIndex === entry.stepIndex));
+  const movedEntries = selectedEntries.map((entry) => ({
+    ...entry,
+    stepIndex: entry.stepIndex + delta,
+  }));
+
+  if (!areMovedTriggerEntriesValid(movedEntries, untouchedEntries, song.tracks.noise.steps.length)) {
+    return song;
+  }
+
+  return {
+    ...song,
+    tracks: {
+      ...song.tracks,
+      noise: buildNoiseTrack(song.tracks.noise, [...untouchedEntries, ...movedEntries]),
+    },
+  };
+}
+
+export function moveSampleTrackEntries(song: SongDocument, selectedStepIndexes: number[], delta: number): SongDocument {
+  if (delta === 0) {
+    return song;
+  }
+
+  const entries = getSampleTrackEntries(song.tracks.sample);
+  const selectedEntries = selectEntriesByStepIndex(entries, selectedStepIndexes);
+
+  if (selectedEntries === null) {
+    return song;
+  }
+
+  const untouchedEntries = entries.filter((entry) => !selectedEntries.some((selectedEntry) => selectedEntry.stepIndex === entry.stepIndex));
+  const movedEntries = selectedEntries.map((entry) => ({
+    ...entry,
+    stepIndex: entry.stepIndex + delta,
+  }));
+
+  if (!areMovedTriggerEntriesValid(movedEntries, untouchedEntries, song.tracks.sample.steps.length)) {
+    return song;
+  }
+
+  return {
+    ...song,
+    tracks: {
+      ...song.tracks,
+      sample: buildSampleTrack(song.tracks.sample, [...untouchedEntries, ...movedEntries]),
     },
   };
 }
@@ -823,7 +979,7 @@ function updateMelodicTrack<TTrack extends MelodicTrack>(
 
 function buildMelodicTrack<TTrack extends MelodicTrack>(
   track: TTrack,
-  entries: readonly MelodicArrangementEntry[],
+  entries: readonly (MelodicArrangementEntry | MelodicTrackEntryWithVolume)[],
   options?: { normalizePulseDuty?: boolean },
 ) {
   const dedupedEntriesByStep = new Map(entries.map((entry) => [entry.stepIndex, entry]));
@@ -858,6 +1014,7 @@ function buildMelodicTrack<TTrack extends MelodicTrack>(
       enabled: true,
       note: entry.note,
       length: entry.length,
+      ...("volume" in entry ? { volume: entry.volume } : {}),
       ...(track.kind === "pulse" ? { duty: entry.duty ?? DEFAULT_PULSE_DUTY } : {}),
     };
   });
@@ -914,6 +1071,145 @@ function applyStepVolumeUpdate<TTrack extends MelodicTrack>(
       index === stepIndex ? { ...entry, volume } : entry,
     ),
   };
+}
+
+function buildNoiseTrack(track: NoiseTrack, entries: readonly NoiseTrackEntryWithVolume[]): NoiseTrack {
+  const entriesByStepIndex = new Map(entries.map((entry) => [entry.stepIndex, entry]));
+
+  return {
+    ...track,
+    steps: track.steps.map((step, index) => {
+      const entry = entriesByStepIndex.get(index);
+
+      if (entry === undefined) {
+        return {
+          ...step,
+          enabled: false,
+        };
+      }
+
+      return {
+        ...step,
+        enabled: true,
+        mode: entry.mode,
+        periodIndex: entry.periodIndex,
+        volume: entry.volume,
+      };
+    }),
+  };
+}
+
+function buildSampleTrack(track: SampleTrack, entries: readonly SampleTrackEntryWithVolume[]): SampleTrack {
+  const entriesByStepIndex = new Map(entries.map((entry) => [entry.stepIndex, entry]));
+
+  return {
+    ...track,
+    steps: track.steps.map((step, index) => {
+      const entry = entriesByStepIndex.get(index);
+
+      if (entry === undefined) {
+        return {
+          ...step,
+          enabled: false,
+          sampleId: null,
+        };
+      }
+
+      return {
+        ...step,
+        enabled: true,
+        sampleId: entry.sampleId,
+        note: entry.note,
+        playbackRate: entry.playbackRate,
+        volume: entry.volume,
+      };
+    }),
+  };
+}
+
+function replaceMelodicTrack<TTrack extends MelodicTrackId>(trackId: TTrack, song: SongDocument, nextTrack: SongDocument["tracks"][TTrack]) {
+  return {
+    ...song,
+    tracks: {
+      ...song.tracks,
+      [trackId]: nextTrack,
+    },
+  };
+}
+
+function selectEntriesByStepIndex<TEntry extends { stepIndex: number }>(
+  entries: readonly TEntry[],
+  selectedStepIndexes: number[],
+): TEntry[] | null {
+  if (selectedStepIndexes.length === 0) {
+    return null;
+  }
+
+  const normalizedIndexes = Array.from(new Set(selectedStepIndexes)).sort((left, right) => left - right);
+
+  if (normalizedIndexes.length !== selectedStepIndexes.length) {
+    return null;
+  }
+
+  const entriesByStepIndex = new Map(entries.map((entry) => [entry.stepIndex, entry]));
+  const selectedEntries = normalizedIndexes.map((stepIndex) => entriesByStepIndex.get(stepIndex) ?? null);
+
+  if (selectedEntries.some((entry) => entry === null)) {
+    return null;
+  }
+
+  return selectedEntries as TEntry[];
+}
+
+function areMovedMelodicEntriesValid(
+  movedEntries: readonly MelodicTrackEntryWithVolume[],
+  untouchedEntries: readonly MelodicTrackEntryWithVolume[],
+  loopLength: number,
+) {
+  const normalizedMovedEntries = [...movedEntries].sort((left, right) => left.stepIndex - right.stepIndex);
+
+  if (
+    normalizedMovedEntries.some(
+      (entry) => entry.stepIndex < 0 || entry.stepIndex >= loopLength || entry.stepIndex + entry.length > loopLength,
+    )
+  ) {
+    return false;
+  }
+
+  return !hasMelodicOverlap([...untouchedEntries, ...normalizedMovedEntries]);
+}
+
+function areMovedTriggerEntriesValid<TEntry extends { stepIndex: number }>(
+  movedEntries: readonly TEntry[],
+  untouchedEntries: readonly TEntry[],
+  loopLength: number,
+) {
+  const allEntries = [...untouchedEntries, ...movedEntries];
+
+  if (movedEntries.some((entry) => entry.stepIndex < 0 || entry.stepIndex >= loopLength)) {
+    return false;
+  }
+
+  return new Set(allEntries.map((entry) => entry.stepIndex)).size === allEntries.length;
+}
+
+function hasMelodicOverlap(entries: readonly Pick<MelodicTrackEntryWithVolume, "stepIndex" | "length">[]) {
+  const sortedEntries = [...entries].sort((left, right) => left.stepIndex - right.stepIndex);
+
+  for (let index = 0; index < sortedEntries.length - 1; index += 1) {
+    const currentEntry = sortedEntries[index];
+    const nextEntry = sortedEntries[index + 1];
+
+    if (currentEntry === undefined || nextEntry === undefined) {
+      continue;
+    }
+
+    if (currentEntry.stepIndex + currentEntry.length > nextEntry.stepIndex) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function normalizeArrangementNote(rawNote: string): NoteValue | null {

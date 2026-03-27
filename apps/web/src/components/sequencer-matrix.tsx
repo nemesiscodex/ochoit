@@ -1,7 +1,7 @@
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Volume2, VolumeX } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
@@ -17,6 +17,9 @@ import {
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
 import {
   getDefaultSampleTrigger,
+  moveMelodicTrackEntries,
+  moveNoiseTrackEntries,
+  moveSampleTrackEntries,
   getMelodicStepState,
   getNoiseTriggerPresetForStep,
   type MelodicStepUpdates,
@@ -35,8 +38,27 @@ import {
   waveformGlowColorByTrackId,
   waveformLineColorByTrackId,
 } from "@/components/sequencer-theme";
-import { StepDetailPanel, type StepSelection } from "@/components/step-detail-panel";
+import { StepDetailPanel } from "@/components/step-detail-panel";
 import { WaveformCanvas } from "@/components/waveform-canvas";
+
+type StepSelectionState = {
+  trackId: TrackId;
+  anchorStepIndex: number;
+  selectedStepIndexes: number[];
+};
+
+type DragState = {
+  trackId: TrackId;
+  pointerStartX: number;
+  stepWidth: number;
+  initialSelectedStepIndexes: number[];
+  delta: number;
+  isActive: boolean;
+  isValid: boolean;
+};
+
+const dragActivationDistancePx = 8;
+const fallbackStepWidthPx = 40;
 
 export function SequencerMatrix({
   defaultSampleId,
@@ -49,6 +71,9 @@ export function SequencerMatrix({
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
   onUpdateMelodicStep,
+  onMoveMelodicSelection,
+  onMoveNoiseSelection,
+  onMoveSampleSelection,
   onUpdateNoiseStep,
   onUpdateSampleStep,
 }: {
@@ -62,18 +87,110 @@ export function SequencerMatrix({
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
+  onMoveMelodicSelection: (trackId: MelodicTrackId, selectedStepIndexes: number[], delta: number) => void;
+  onMoveNoiseSelection: (selectedStepIndexes: number[], delta: number) => void;
+  onMoveSampleSelection: (selectedStepIndexes: number[], delta: number) => void;
   onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
 }) {
-  const [selectedStep, setSelectedStep] = useState<StepSelection | null>(null);
+  const [selectionState, setSelectionState] = useState<StepSelectionState | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const suppressClickRef = useRef(false);
+  const dragStateRef = useRef<DragState | null>(null);
+  const songRef = useRef(song);
+  const moveMelodicSelectionRef = useRef(onMoveMelodicSelection);
+  const moveNoiseSelectionRef = useRef(onMoveNoiseSelection);
+  const moveSampleSelectionRef = useRef(onMoveSampleSelection);
   const tracks = getOrderedTracks(song);
+  songRef.current = song;
+  moveMelodicSelectionRef.current = onMoveMelodicSelection;
+  moveNoiseSelectionRef.current = onMoveNoiseSelection;
+  moveSampleSelectionRef.current = onMoveSampleSelection;
 
   const handleDeselectStep = () => {
-    setSelectedStep(null);
+    setSelectionState(null);
+  };
+
+  const updateDragPreview = (clientX: number) => {
+    const currentDragState = dragStateRef.current;
+
+    if (currentDragState === null) {
+      return;
+    }
+
+    const dragTrack = songRef.current.tracks[currentDragState.trackId];
+    const deltaX = clientX - currentDragState.pointerStartX;
+    const shouldActivate = currentDragState.isActive || Math.abs(deltaX) >= dragActivationDistancePx;
+
+    if (!shouldActivate) {
+      return;
+    }
+
+    const delta = Math.round(deltaX / currentDragState.stepWidth);
+    const isValid =
+      delta !== 0 && validateMovePreview(songRef.current, dragTrack, currentDragState.initialSelectedStepIndexes, delta);
+
+    if (currentDragState.delta === delta && currentDragState.isActive === true && currentDragState.isValid === isValid) {
+      return;
+    }
+
+    const nextDragState = {
+      ...currentDragState,
+      delta,
+      isActive: true,
+      isValid,
+    };
+
+    dragStateRef.current = nextDragState;
+    setDragState(nextDragState);
+  };
+
+  const finishDrag = () => {
+    const currentDragState = dragStateRef.current;
+
+    if (currentDragState === null) {
+      return;
+    }
+
+    const dragTrack = songRef.current.tracks[currentDragState.trackId];
+
+    if (currentDragState.isActive) {
+      suppressClickRef.current = true;
+
+      if (currentDragState.isValid && currentDragState.delta !== 0) {
+        switch (dragTrack.kind) {
+          case "pulse":
+          case "triangle":
+            moveMelodicSelectionRef.current(
+              dragTrack.id,
+              currentDragState.initialSelectedStepIndexes,
+              currentDragState.delta,
+            );
+            break;
+          case "noise":
+            moveNoiseSelectionRef.current(currentDragState.initialSelectedStepIndexes, currentDragState.delta);
+            break;
+          case "sample":
+            moveSampleSelectionRef.current(currentDragState.initialSelectedStepIndexes, currentDragState.delta);
+            break;
+        }
+
+        setSelectionState({
+          trackId: currentDragState.trackId,
+          anchorStepIndex: currentDragState.initialSelectedStepIndexes[0] + currentDragState.delta,
+          selectedStepIndexes: currentDragState.initialSelectedStepIndexes.map(
+            (stepIndex) => stepIndex + currentDragState.delta,
+          ),
+        });
+      }
+    }
+
+    dragStateRef.current = null;
+    setDragState(null);
   };
 
   useEffect(() => {
-    if (selectedStep === null) {
+    if (selectionState === null) {
       return;
     }
 
@@ -90,38 +207,53 @@ export function SequencerMatrix({
 
       switch (event.key) {
         case "Escape":
-          setSelectedStep(null);
+          setSelectionState(null);
           event.preventDefault();
           break;
         case "ArrowLeft":
-          setSelectedStep((prev) => {
+          setSelectionState((prev) => {
             if (prev === null) return null;
-            return { ...prev, stepIndex: Math.max(0, prev.stepIndex - 1) };
+            const nextStepIndex = Math.max(0, prev.anchorStepIndex - 1);
+            return {
+              ...prev,
+              anchorStepIndex: nextStepIndex,
+              selectedStepIndexes: [nextStepIndex],
+            };
           });
           event.preventDefault();
           break;
         case "ArrowRight":
-          setSelectedStep((prev) => {
+          setSelectionState((prev) => {
             if (prev === null) return null;
+            const nextStepIndex = Math.min(song.transport.loopLength - 1, prev.anchorStepIndex + 1);
             return {
               ...prev,
-              stepIndex: Math.min(song.transport.loopLength - 1, prev.stepIndex + 1),
+              anchorStepIndex: nextStepIndex,
+              selectedStepIndexes: [nextStepIndex],
             };
           });
           event.preventDefault();
           break;
         case "ArrowUp": {
-          const currentIndex = trackOrder.indexOf(selectedStep.trackId);
+          const currentIndex = trackOrder.indexOf(selectionState.trackId);
           if (currentIndex > 0) {
-            setSelectedStep({ trackId: trackOrder[currentIndex - 1], stepIndex: selectedStep.stepIndex });
+            setSelectionState({
+              trackId: trackOrder[currentIndex - 1],
+              anchorStepIndex: selectionState.anchorStepIndex,
+              selectedStepIndexes: [selectionState.anchorStepIndex],
+            });
           }
           event.preventDefault();
           break;
         }
         case "ArrowDown": {
-          const currentIndex = trackOrder.indexOf(selectedStep.trackId);
+          const currentIndex = trackOrder.indexOf(selectionState.trackId);
           if (currentIndex < trackOrder.length - 1) {
-            setSelectedStep({ trackId: trackOrder[currentIndex + 1], stepIndex: selectedStep.stepIndex });
+            setSelectionState({
+              trackId: trackOrder[currentIndex + 1],
+              anchorStepIndex: selectionState.anchorStepIndex,
+              selectedStepIndexes: [selectionState.anchorStepIndex],
+            });
           }
           event.preventDefault();
           break;
@@ -134,13 +266,35 @@ export function SequencerMatrix({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectedStep, song.transport.loopLength]);
+  }, [selectionState, song.transport.loopLength]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      updateDragPreview(event.clientX);
+    };
+
+    const handlePointerEnd = () => {
+      finishDrag();
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
+    };
+  }, []);
 
   return (
     <div className="flex flex-col gap-2">
       <StepRuler loopLength={song.transport.loopLength} nextStep={nextStep} playbackState={playbackState} />
       {tracks.map((track) => {
-        const selectedStepIndex = selectedStep?.trackId === track.id ? selectedStep.stepIndex : null;
+        const selectedStepIndex = selectionState?.trackId === track.id ? selectionState.anchorStepIndex : null;
+        const selectedStepIndexes = selectionState?.trackId === track.id ? selectionState.selectedStepIndexes : [];
+        const currentDragState = dragState?.trackId === track.id ? dragState : null;
 
         return (
           <SequencerRow
@@ -151,8 +305,72 @@ export function SequencerMatrix({
             onDeselectStep={handleDeselectStep}
             onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
             onOpenTriggerTrackEditor={onOpenTriggerTrackEditor}
-            onSelectStep={(stepIndex) => {
-              setSelectedStep({ trackId: track.id, stepIndex });
+            onDragPointerMove={updateDragPreview}
+            onDragPointerEnd={finishDrag}
+            dragState={currentDragState}
+            onSelectStep={(stepIndex, options) => {
+              const resolvedStepIndex = resolveTrackOriginStepIndex(track, stepIndex);
+              const isSelectable = isTrackOriginSelectable(track, resolvedStepIndex);
+
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+
+              if (
+                options.shiftKey &&
+                selectionState !== null &&
+                selectionState.trackId === track.id &&
+                isSelectable
+              ) {
+                const nextSelectedStepIndexes = getTrackSelectableStepIndexes(track).filter(
+                  (candidateStepIndex) =>
+                    Math.min(selectionState.anchorStepIndex, resolvedStepIndex) <= candidateStepIndex &&
+                    candidateStepIndex <= Math.max(selectionState.anchorStepIndex, resolvedStepIndex),
+                );
+
+                setSelectionState({
+                  trackId: track.id,
+                  anchorStepIndex: selectionState.anchorStepIndex,
+                  selectedStepIndexes: nextSelectedStepIndexes,
+                });
+                return;
+              }
+
+              setSelectionState({
+                trackId: track.id,
+                anchorStepIndex: resolvedStepIndex,
+                selectedStepIndexes: [resolvedStepIndex],
+              });
+            }}
+            onStartDrag={(stepIndex, pointerStartX, stepWidth, shiftKey) => {
+              const resolvedStepIndex = resolveTrackOriginStepIndex(track, stepIndex);
+
+              if (shiftKey || !isTrackOriginSelectable(track, resolvedStepIndex)) {
+                return;
+              }
+
+              const nextSelectedStepIndexes =
+                selectionState?.trackId === track.id && selectionState.selectedStepIndexes.includes(resolvedStepIndex)
+                  ? selectionState.selectedStepIndexes
+                  : [resolvedStepIndex];
+
+              setSelectionState({
+                trackId: track.id,
+                anchorStepIndex: nextSelectedStepIndexes[0] ?? resolvedStepIndex,
+                selectedStepIndexes: nextSelectedStepIndexes,
+              });
+              const nextDragState = {
+                trackId: track.id,
+                pointerStartX,
+                stepWidth,
+                initialSelectedStepIndexes: nextSelectedStepIndexes,
+                delta: 0,
+                isActive: false,
+                isValid: false,
+              };
+              dragStateRef.current = nextDragState;
+              setDragState(nextDragState);
             }}
             onToggleTrackMute={onToggleTrackMute}
             onUpdateTrackVolume={onUpdateTrackVolume}
@@ -162,6 +380,7 @@ export function SequencerMatrix({
             playbackState={playbackState}
             samples={song.samples}
             selectedStepIndex={selectedStepIndex}
+            selectedStepIndexes={selectedStepIndexes}
             song={song}
             track={track}
           />
@@ -169,6 +388,64 @@ export function SequencerMatrix({
       })}
     </div>
   );
+}
+
+function resolveTrackOriginStepIndex(track: Track, stepIndex: number) {
+  if (track.kind === "pulse" || track.kind === "triangle") {
+    const melodicState = getMelodicStepState(track, stepIndex);
+    return melodicState.kind === "hold" ? melodicState.startIndex : stepIndex;
+  }
+
+  return stepIndex;
+}
+
+function isTrackOriginSelectable(track: Track, stepIndex: number) {
+  if (track.kind === "pulse" || track.kind === "triangle") {
+    return track.steps[stepIndex]?.enabled ?? false;
+  }
+
+  return track.steps[stepIndex]?.enabled ?? false;
+}
+
+function getTrackSelectableStepIndexes(track: Track) {
+  if (track.kind === "pulse" || track.kind === "triangle") {
+    return track.steps.flatMap((step, index) => (step.enabled ? [index] : []));
+  }
+
+  return track.steps.flatMap((step, index) => (step.enabled ? [index] : []));
+}
+
+function getCoveredStepIndexes(track: Track, stepIndexes: number[]) {
+  const coveredStepIndexes = new Set<number>();
+
+  for (const stepIndex of stepIndexes) {
+    if (track.kind === "pulse" || track.kind === "triangle") {
+      const step = track.steps[stepIndex];
+      const stepLength = step?.enabled ? step.length : 1;
+
+      for (let coveredIndex = stepIndex; coveredIndex < stepIndex + stepLength; coveredIndex += 1) {
+        coveredStepIndexes.add(coveredIndex);
+      }
+
+      continue;
+    }
+
+    coveredStepIndexes.add(stepIndex);
+  }
+
+  return coveredStepIndexes;
+}
+
+function validateMovePreview(song: SongDocument, track: Track, selectedStepIndexes: number[], delta: number) {
+  switch (track.kind) {
+    case "pulse":
+    case "triangle":
+      return moveMelodicTrackEntries(song, track.id, selectedStepIndexes, delta) !== song;
+    case "noise":
+      return moveNoiseTrackEntries(song, selectedStepIndexes, delta) !== song;
+    case "sample":
+      return moveSampleTrackEntries(song, selectedStepIndexes, delta) !== song;
+  }
 }
 
 /* ─────────── Step Ruler ─────────── */
@@ -219,12 +496,16 @@ function StepRuler({
 
 function SequencerRow({
   defaultSampleId,
+  dragState,
   engine,
   nextStep,
   onDeselectStep,
+  onDragPointerEnd,
+  onDragPointerMove,
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
   onSelectStep,
+  onStartDrag,
   onToggleTrackMute,
   onUpdateTrackVolume,
   onUpdateMelodicStep,
@@ -233,16 +514,21 @@ function SequencerRow({
   playbackState,
   samples,
   selectedStepIndex,
+  selectedStepIndexes,
   song,
   track,
 }: {
   defaultSampleId: string | null;
+  dragState: DragState | null;
   engine: AudioEngine | null;
   nextStep: number;
   onDeselectStep: () => void;
+  onDragPointerEnd: () => void;
+  onDragPointerMove: (clientX: number) => void;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
-  onSelectStep: (stepIndex: number) => void;
+  onSelectStep: (stepIndex: number, options: { shiftKey: boolean }) => void;
+  onStartDrag: (stepIndex: number, pointerStartX: number, stepWidth: number, shiftKey: boolean) => void;
   onToggleTrackMute: (trackId: TrackId) => void;
   onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
@@ -251,35 +537,17 @@ function SequencerRow({
   playbackState: "stopped" | "playing";
   samples: SongDocument["samples"];
   selectedStepIndex: number | null;
+  selectedStepIndexes: number[];
   song: SongDocument;
   track: Track;
 }) {
   const defaultSampleTrigger = getDefaultSampleTrigger(samples, defaultSampleId);
 
-  const handleStepClick = (stepIndex: number) => {
-    // For hold steps, redirect to the origin note
-    if (track.kind === "pulse" || track.kind === "triangle") {
-      const melodicState = getMelodicStepState(track, stepIndex);
+  const handleStepClick = (stepIndex: number, shiftKey: boolean) => {
+    const resolvedStepIndex = resolveTrackOriginStepIndex(track, stepIndex);
+    const isEnabledOrigin = isTrackOriginSelectable(track, resolvedStepIndex);
 
-      if (melodicState.kind === "hold") {
-        if (selectedStepIndex === melodicState.startIndex) {
-          onDeselectStep();
-        } else {
-          onSelectStep(melodicState.startIndex);
-        }
-
-        return;
-      }
-    }
-
-    // Toggle selection
-    if (selectedStepIndex === stepIndex) {
-      onDeselectStep();
-      return;
-    }
-
-    // Enable step if disabled, then select
-    if (!track.steps[stepIndex].enabled) {
+    if (!isEnabledOrigin) {
       switch (track.kind) {
         case "pulse":
         case "triangle":
@@ -301,7 +569,7 @@ function SequencerRow({
       }
     }
 
-    onSelectStep(stepIndex);
+    onSelectStep(resolvedStepIndex, { shiftKey: shiftKey && isEnabledOrigin });
   };
 
   const handleStepHover = (stepIndex: number) => {
@@ -454,13 +722,19 @@ function SequencerRow({
         <CompactStepGrid
           accentClassName={accentByTrackId[track.id]}
           accentColor={waveformLineColorByTrackId[track.id]}
+          dragDelta={dragState?.isActive ? dragState.delta : 0}
+          dragSelectedStepIndexes={dragState?.initialSelectedStepIndexes ?? []}
+          dragValid={dragState?.isActive ? dragState.isValid : false}
           engineMode={song.meta.engineMode}
           nextStep={nextStep}
           onStepHover={handleStepHover}
           onStepClick={handleStepClick}
+          onStepPointerMove={onDragPointerMove}
+          onStepPointerUp={onDragPointerEnd}
+          onStepPointerDown={onStartDrag}
           playbackState={playbackState}
           samples={samples}
-          selectedStepIndex={selectedStepIndex}
+          selectedStepIndexes={selectedStepIndexes}
           track={track}
         />
         {selectedStepIndex !== null ? (
@@ -572,8 +846,10 @@ function getCompactCellData(
   engineMode: SongDocument["meta"]["engineMode"],
   stepIndex: number,
   samples: SongDocument["samples"],
-  selectedStepIndex: number | null,
+  selectedStepIndexes: number[],
 ): CompactCellData {
+  const selectedCoveredStepIndexes = getCoveredStepIndexes(track, selectedStepIndexes);
+
   switch (track.kind) {
     case "pulse":
     case "triangle": {
@@ -587,7 +863,7 @@ function getCompactCellData(
           holdNote: melodicState.note,
           label: melodicState.note,
           volume: step.volume,
-          isPartOfSelectedNote: selectedStepIndex === melodicState.startIndex,
+          isPartOfSelectedNote: selectedCoveredStepIndexes.has(stepIndex),
         };
       }
 
@@ -639,32 +915,49 @@ function getCompactCellData(
 function CompactStepGrid({
   accentClassName,
   accentColor,
+  dragDelta,
+  dragSelectedStepIndexes,
+  dragValid,
   engineMode,
   nextStep,
   onStepHover,
   onStepClick,
+  onStepPointerDown,
+  onStepPointerMove,
+  onStepPointerUp,
   playbackState,
   samples,
-  selectedStepIndex,
+  selectedStepIndexes,
   track,
 }: {
   accentClassName: string;
   accentColor: string;
+  dragDelta: number;
+  dragSelectedStepIndexes: number[];
+  dragValid: boolean;
   engineMode: SongDocument["meta"]["engineMode"];
   nextStep: number;
   onStepHover: (stepIndex: number) => void;
-  onStepClick: (stepIndex: number) => void;
+  onStepClick: (stepIndex: number, shiftKey: boolean) => void;
+  onStepPointerDown: (stepIndex: number, pointerStartX: number, stepWidth: number, shiftKey: boolean) => void;
+  onStepPointerMove: (clientX: number) => void;
+  onStepPointerUp: () => void;
   playbackState: "stopped" | "playing";
   samples: SongDocument["samples"];
-  selectedStepIndex: number | null;
+  selectedStepIndexes: number[];
   track: Track;
 }) {
+  const dragPreviewOriginIndexes =
+    dragDelta === 0 ? [] : dragSelectedStepIndexes.map((stepIndex) => stepIndex + dragDelta);
+  const dragPreviewCoveredStepIndexes =
+    dragDelta === 0 ? new Set<number>() : getCoveredStepIndexes(track, dragPreviewOriginIndexes);
+
   return (
     <div className="grid grid-cols-8 gap-1 md:grid-cols-16" role="row">
       {track.steps.map((_, index) => {
         const isActive = playbackState === "playing" && nextStep === index;
-        const isSelected = selectedStepIndex === index;
-        const cellData = getCompactCellData(track, engineMode, index, samples, selectedStepIndex);
+        const isSelected = selectedStepIndexes.includes(index);
+        const cellData = getCompactCellData(track, engineMode, index, samples, selectedStepIndexes);
 
         return (
           <CompactStepCell
@@ -676,6 +969,8 @@ function CompactStepGrid({
             holdNote={cellData.holdNote}
             index={index}
             isActive={isActive}
+            isDragPreview={dragPreviewOriginIndexes.includes(index) || dragPreviewCoveredStepIndexes.has(index)}
+            isDragPreviewInvalid={dragDelta !== 0 && !dragValid}
             isHold={cellData.isHold}
             isPartOfSelectedNote={cellData.isPartOfSelectedNote}
             isSelected={isSelected}
@@ -684,8 +979,22 @@ function CompactStepGrid({
             onHover={() => {
               onStepHover(index);
             }}
-            onClick={() => {
-              onStepClick(index);
+            onClick={(event) => {
+              onStepClick(index, event.shiftKey);
+            }}
+            onPointerDown={(event) => {
+              onStepPointerDown(
+                index,
+                event.clientX,
+                event.currentTarget.getBoundingClientRect().width || fallbackStepWidthPx,
+                event.shiftKey,
+              );
+            }}
+            onPointerMove={(event) => {
+              onStepPointerMove(event.clientX);
+            }}
+            onPointerUp={() => {
+              onStepPointerUp();
             }}
           />
         );
@@ -704,6 +1013,8 @@ function CompactStepCell({
   holdNote,
   index,
   isActive,
+  isDragPreview,
+  isDragPreviewInvalid,
   isHold,
   isPartOfSelectedNote,
   isSelected,
@@ -711,6 +1022,9 @@ function CompactStepCell({
   volume,
   onHover,
   onClick,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
 }: {
   accentClassName: string;
   accentColor: string;
@@ -719,13 +1033,18 @@ function CompactStepCell({
   holdNote: string | null;
   index: number;
   isActive: boolean;
+  isDragPreview: boolean;
+  isDragPreviewInvalid: boolean;
   isHold: boolean;
   isPartOfSelectedNote: boolean;
   isSelected: boolean;
   label: string;
   volume: number;
   onHover: () => void;
-  onClick: () => void;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onPointerUp: () => void;
 }) {
   const isQuarterBoundary = index % 4 === 0;
 
@@ -746,12 +1065,23 @@ function CompactStepCell({
             : isQuarterBoundary
               ? "border-white/[0.08] bg-white/[0.04] text-white/30"
               : "border-white/[0.05] bg-white/[0.02] text-white/20",
+        isDragPreview && (isDragPreviewInvalid ? "border-red-400/80 bg-red-500/10" : "border-white/30 bg-white/10"),
         isActive && "oc-playhead-active border-[var(--oc-play)]/60 bg-[var(--oc-play)]/10 text-white",
         isSelected && "ring-2 ring-offset-0",
       )}
       style={isSelected ? { ["--tw-ring-color" as string]: accentColor } : undefined}
       onMouseEnter={onHover}
       onClick={onClick}
+      onMouseDown={(event) => {
+        onPointerDown(event as unknown as ReactPointerEvent<HTMLButtonElement>);
+      }}
+      onMouseMove={(event) => {
+        onPointerMove(event as unknown as ReactPointerEvent<HTMLButtonElement>);
+      }}
+      onMouseUp={onPointerUp}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
     >
       <span className="text-[8px] leading-none text-white/30">{index + 1}</span>
       <span

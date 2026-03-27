@@ -1,9 +1,27 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import { createDefaultSongDocument } from "@/features/song/song-document";
+
+function setCellWidth(element: HTMLElement, width: number) {
+  Object.defineProperty(element, "getBoundingClientRect", {
+    configurable: true,
+    value: () =>
+      ({
+        width,
+        height: 48,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 48,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) satisfies DOMRect,
+  });
+}
 
 function renderMatrix(overrides: Record<string, unknown> = {}) {
   const props = {
@@ -11,6 +29,9 @@ function renderMatrix(overrides: Record<string, unknown> = {}) {
     engine: null,
     onOpenMelodicTrackEditor: vi.fn(),
     onOpenTriggerTrackEditor: vi.fn(),
+    onMoveMelodicSelection: vi.fn(),
+    onMoveNoiseSelection: vi.fn(),
+    onMoveSampleSelection: vi.fn(),
     onToggleTrackMute: vi.fn(),
     onUpdateTrackVolume: vi.fn(),
     onUpdateMelodicStep: vi.fn(),
@@ -334,5 +355,158 @@ describe("sequencer-matrix", () => {
     fireEvent.keyDown(document, { key: "ArrowUp" });
 
     expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
+  });
+
+  it("shift-click selects enabled origin entries between the anchor and target", () => {
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
+    song.tracks.pulse1.steps[8] = { ...song.tracks.pulse1.steps[8], enabled: true, length: 1 };
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 9"), { shiftKey: true });
+
+    expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Pulse I step 9").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("does not arm drag from an unselected step before shift-click range selection", () => {
+    const onMoveMelodicSelection = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
+    renderMatrix({ song, onMoveMelodicSelection });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.mouseDown(screen.getByLabelText("Pulse I step 5"), { clientX: 0, shiftKey: true });
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
+
+    expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe("true");
+    expect(onMoveMelodicSelection).not.toHaveBeenCalled();
+  });
+
+  it("shift-click on a hold cell resolves to the origin step", () => {
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"), { shiftKey: true });
+
+    expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("shift-click on another row collapses to a single selection on that row", () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
+    fireEvent.click(screen.getByLabelText("Triangle step 1"), { shiftKey: true });
+
+    expect(screen.getByLabelText("Triangle step 1").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe(null);
+  });
+
+  it("drags a selected melodic note and calls the move callback with the computed delta", async () => {
+    const onMoveMelodicSelection = vi.fn();
+    const song = createDefaultSongDocument();
+
+    renderMatrix({ song, onMoveMelodicSelection });
+
+    const cell = screen.getByLabelText("Pulse I step 1");
+    setCellWidth(cell, 20);
+
+    fireEvent.mouseDown(cell, { clientX: 0 });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
+    });
+    fireEvent.mouseMove(cell, { clientX: 45 });
+    fireEvent.mouseUp(cell, { clientX: 45 });
+
+    expect(onMoveMelodicSelection).toHaveBeenCalledWith("pulse1", [0], 2);
+    expect(cell.getAttribute("aria-selected")).toBe(null);
+    expect(screen.getByLabelText("Pulse I step 3").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("drags a multi-selection once with all selected origin indexes", async () => {
+    const onMoveMelodicSelection = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true };
+
+    renderMatrix({ song, onMoveMelodicSelection });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
+
+    const cell = screen.getByLabelText("Pulse I step 1");
+    setCellWidth(cell, 20);
+
+    fireEvent.mouseDown(cell, { clientX: 0 });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
+    });
+    fireEvent.mouseMove(cell, { clientX: 45 });
+    fireEvent.mouseUp(cell, { clientX: 45 });
+
+    expect(onMoveMelodicSelection).toHaveBeenCalledTimes(1);
+    expect(onMoveMelodicSelection).toHaveBeenCalledWith("pulse1", [0, 4], 2);
+  });
+
+  it("does not call move callbacks for invalid drags", () => {
+    const onMoveMelodicSelection = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
+
+    renderMatrix({ song, onMoveMelodicSelection });
+
+    const cell = screen.getByLabelText("Pulse I step 1");
+    setCellWidth(cell, 20);
+
+    fireEvent.pointerDown(cell, { clientX: 0 });
+    fireEvent.pointerMove(window, { clientX: 80 });
+    fireEvent.pointerUp(window, { clientX: 80 });
+
+    expect(onMoveMelodicSelection).not.toHaveBeenCalled();
+  });
+
+  it("collapses multi-selection to the anchor before arrow navigation", () => {
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true };
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "ArrowRight" });
+
+    expect(screen.getByLabelText("Pulse I step 2 editor")).toBeTruthy();
+    expect(screen.getByLabelText("Pulse I step 2").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe(null);
+  });
+
+  it("clears multi-selection on Escape", () => {
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true };
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByLabelText("Pulse I step 1 editor")).toBeNull();
+    expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe(null);
+    expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe(null);
   });
 });

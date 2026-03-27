@@ -48,6 +48,9 @@ import {
 } from "@/features/song/song-mixer";
 import { createSongWavBlob, createSongWavFileName } from "@/features/song/song-wav";
 import {
+  moveMelodicTrackEntries,
+  moveNoiseTrackEntries,
+  moveSampleTrackEntries,
   type MelodicStepUpdates,
   type MelodicTrackId,
   type NoiseStepUpdates,
@@ -201,6 +204,18 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
 
   const updateSampleStep = (stepIndex: number, updates: SampleStepUpdates) => {
     setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
+  };
+
+  const moveMelodicSelection = (trackId: MelodicTrackId, selectedStepIndexes: number[], delta: number) => {
+    setSong((currentSong) => moveMelodicTrackEntries(currentSong, trackId, selectedStepIndexes, delta));
+  };
+
+  const moveNoiseSelection = (selectedStepIndexes: number[], delta: number) => {
+    setSong((currentSong) => moveNoiseTrackEntries(currentSong, selectedStepIndexes, delta));
+  };
+
+  const moveSampleSelection = (selectedStepIndexes: number[], delta: number) => {
+    setSong((currentSong) => moveSampleTrackEntries(currentSong, selectedStepIndexes, delta));
   };
 
   const updateEngineMode = (engineMode: EngineMode) => {
@@ -904,6 +919,9 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               onToggleTrackMute={toggleTrackMute}
               onUpdateTrackVolume={setTrackVolume}
               onUpdateMelodicStep={updateMelodicStep}
+              onMoveMelodicSelection={moveMelodicSelection}
+              onMoveNoiseSelection={moveNoiseSelection}
+              onMoveSampleSelection={moveSampleSelection}
               onUpdateNoiseStep={updateNoiseStep}
               onUpdateSampleStep={updateSampleStep}
               song={song}

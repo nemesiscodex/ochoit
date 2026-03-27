@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createDefaultSongDocument, DEFAULT_PULSE_DUTY } from "@/features/song/song-document";
+import { createDefaultSongDocument, createEmptySongDocument, DEFAULT_PULSE_DUTY } from "@/features/song/song-document";
 import {
   getMelodicStepState,
+  moveMelodicTrackEntries,
+  moveNoiseTrackEntries,
+  moveSampleTrackEntries,
   noteEntryOptions,
   parseMelodicTrackArrangement,
   parseNoiseTrackArrangement,
@@ -115,6 +118,138 @@ describe("song-pattern", () => {
       playbackRate: 1.5,
     });
     expect(sampleSong.tracks.noise).toEqual(song.tracks.noise);
+  });
+
+  it("moves a single melodic note right and preserves note, length, duty, and volume", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[0] = {
+      ...song.tracks.pulse1.steps[0],
+      enabled: true,
+      note: "A4",
+      length: 3,
+      duty: 0.75,
+      volume: 0.61,
+    };
+
+    const movedSong = moveMelodicTrackEntries(song, "pulse1", [0], 2);
+
+    expect(movedSong.tracks.pulse1.steps[2]).toMatchObject({
+      enabled: true,
+      note: "A4",
+      length: 3,
+      duty: 0.75,
+      volume: 0.61,
+    });
+    expect(movedSong.tracks.pulse1.steps[0].enabled).toBe(false);
+  });
+
+  it("moves multiple melodic notes together and preserves their spacing", () => {
+    const song = replaceMelodicTrackArrangement(createEmptySongDocument(), "triangle", [
+      { stepIndex: 0, note: "C3", length: 2 },
+      { stepIndex: 4, note: "E3", length: 3 },
+      { stepIndex: 8, note: "G3", length: 1 },
+    ]);
+
+    const movedSong = moveMelodicTrackEntries(song, "triangle", [0, 4], 1);
+
+    expect(movedSong.tracks.triangle.steps[1]).toMatchObject({ enabled: true, note: "C3", length: 2 });
+    expect(movedSong.tracks.triangle.steps[5]).toMatchObject({ enabled: true, note: "E3", length: 3 });
+    expect(movedSong.tracks.triangle.steps[8]).toMatchObject({ enabled: true, note: "G3", length: 1 });
+  });
+
+  it("rejects melodic moves that collide with untouched notes or exceed the loop length", () => {
+    const collisionSong = replaceMelodicTrackArrangement(createEmptySongDocument(), "triangle", [
+      { stepIndex: 0, note: "C3", length: 2 },
+      { stepIndex: 4, note: "E3", length: 2 },
+    ]);
+    const boundarySong = replaceMelodicTrackArrangement(createEmptySongDocument(), "triangle", [
+      { stepIndex: 14, note: "C3", length: 2 },
+    ]);
+
+    expect(moveMelodicTrackEntries(collisionSong, "triangle", [0], 3)).toBe(collisionSong);
+    expect(moveMelodicTrackEntries(boundarySong, "triangle", [14], 1)).toBe(boundarySong);
+  });
+
+  it("moves noise triggers together and preserves config and volume", () => {
+    const song = createEmptySongDocument();
+    song.tracks.noise.steps[0] = { ...song.tracks.noise.steps[0], enabled: true, mode: "short", periodIndex: 1, volume: 0.3 };
+    song.tracks.noise.steps[4] = { ...song.tracks.noise.steps[4], enabled: true, mode: "long", periodIndex: 9, volume: 0.7 };
+    song.tracks.noise.steps[8] = { ...song.tracks.noise.steps[8], enabled: true, mode: "short", periodIndex: 3, volume: 0.9 };
+
+    const movedSong = moveNoiseTrackEntries(song, [0, 4], 2);
+
+    expect(movedSong.tracks.noise.steps[2]).toMatchObject({ enabled: true, mode: "short", periodIndex: 1, volume: 0.3 });
+    expect(movedSong.tracks.noise.steps[6]).toMatchObject({ enabled: true, mode: "long", periodIndex: 9, volume: 0.7 });
+    expect(movedSong.tracks.noise.steps[8]).toMatchObject({ enabled: true, mode: "short", periodIndex: 3, volume: 0.9 });
+  });
+
+  it("rejects invalid noise and sample moves", () => {
+    const noiseSong = replaceNoiseTrackArrangement(createEmptySongDocument(), [
+      { stepIndex: 0, mode: "short", periodIndex: 1 },
+      { stepIndex: 2, mode: "long", periodIndex: 12 },
+    ]);
+    const sampleSong = replaceSampleTrackArrangement(
+      {
+        ...createEmptySongDocument(),
+        samples: createDefaultSongDocument().samples,
+      },
+      [
+      { stepIndex: 1, sampleId: "mic-001", note: "D4", playbackRate: 0.75 },
+      { stepIndex: 3, sampleId: "mic-001", note: "F4", playbackRate: 1.5 },
+      ],
+    );
+
+    expect(moveNoiseTrackEntries(noiseSong, [0], 2)).toBe(noiseSong);
+    expect(moveSampleTrackEntries(sampleSong, [3], 20)).toBe(sampleSong);
+  });
+
+  it("moves sample triggers and preserves sample metadata and volume", () => {
+    const song = {
+      ...createEmptySongDocument(),
+      samples: createDefaultSongDocument().samples,
+    };
+    song.tracks.sample.steps[1] = {
+      ...song.tracks.sample.steps[1],
+      enabled: true,
+      sampleId: "mic-001",
+      note: "D4",
+      playbackRate: 0.75,
+      volume: 0.4,
+    };
+    song.tracks.sample.steps[5] = {
+      ...song.tracks.sample.steps[5],
+      enabled: true,
+      sampleId: "mic-001",
+      note: "G4",
+      playbackRate: 1.5,
+      volume: 0.9,
+    };
+
+    const movedSong = moveSampleTrackEntries(song, [1, 5], 2);
+
+    expect(movedSong.tracks.sample.steps[3]).toMatchObject({
+      enabled: true,
+      sampleId: "mic-001",
+      note: "D4",
+      playbackRate: 0.75,
+      volume: 0.4,
+    });
+    expect(movedSong.tracks.sample.steps[7]).toMatchObject({
+      enabled: true,
+      sampleId: "mic-001",
+      note: "G4",
+      playbackRate: 1.5,
+      volume: 0.9,
+    });
+  });
+
+  it("returns the original song for empty, duplicate, invalid, or disabled selections", () => {
+    const song = createDefaultSongDocument();
+
+    expect(moveMelodicTrackEntries(song, "pulse1", [], 1)).toBe(song);
+    expect(moveMelodicTrackEntries(song, "pulse1", [0, 0], 1)).toBe(song);
+    expect(moveNoiseTrackEntries(song, [999], 1)).toBe(song);
+    expect(moveSampleTrackEntries(song, [0], 1)).toBe(song);
   });
 
   it("ignores melodic step updates outside the loop length", () => {
