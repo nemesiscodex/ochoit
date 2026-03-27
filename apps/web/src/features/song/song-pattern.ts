@@ -452,6 +452,64 @@ export function moveMelodicTrackEntries(
   return replaceMelodicTrack(trackId, song, buildMelodicTrack(track, [...untouchedEntries, ...movedEntries]));
 }
 
+export function resizeMelodicTrackStep(
+  song: SongDocument,
+  trackId: MelodicTrackId,
+  stepIndex: number,
+  nextStartStepIndex: number,
+  nextLength: number,
+): SongDocument {
+  if (stepIndex < 0 || stepIndex >= song.transport.loopLength) {
+    return song;
+  }
+
+  const track = song.tracks[trackId];
+  const entries = getMelodicTrackEntriesWithVolume(track);
+  const entryIndex = entries.findIndex((entry) => entry.stepIndex === stepIndex);
+
+  if (entryIndex === -1) {
+    return song;
+  }
+
+  const currentEntry = entries[entryIndex];
+
+  if (currentEntry === undefined) {
+    return song;
+  }
+
+  const previousEntry = entryIndex > 0 ? entries[entryIndex - 1] : null;
+  const nextEntry = entryIndex < entries.length - 1 ? entries[entryIndex + 1] : null;
+  const requestedStart = Math.round(nextStartStepIndex);
+  const requestedLength = Math.max(minMelodicStepLength, Math.round(nextLength));
+  const requestedEndExclusive = requestedStart + requestedLength;
+  const currentEndExclusive = currentEntry.stepIndex + currentEntry.length;
+  const minimumStart = previousEntry === null ? 0 : previousEntry.stepIndex + previousEntry.length;
+  const maximumEndExclusive = nextEntry === null ? track.steps.length : nextEntry.stepIndex;
+  const clampedStart = Math.max(
+    minimumStart,
+    Math.min(requestedStart, Math.min(currentEndExclusive - minMelodicStepLength, track.steps.length - 1)),
+  );
+  const clampedEndExclusive = Math.max(
+    clampedStart + minMelodicStepLength,
+    Math.min(requestedEndExclusive, maximumEndExclusive, track.steps.length),
+  );
+  const resizedEntry: MelodicTrackEntryWithVolume = {
+    ...currentEntry,
+    stepIndex: clampedStart,
+    length: clampedEndExclusive - clampedStart,
+  };
+
+  if (
+    resizedEntry.stepIndex === currentEntry.stepIndex &&
+    resizedEntry.length === currentEntry.length
+  ) {
+    return song;
+  }
+
+  const nextEntries = entries.filter((_, index) => index !== entryIndex);
+  return replaceMelodicTrack(trackId, song, buildMelodicTrack(track, [...nextEntries, resizedEntry]));
+}
+
 export function moveNoiseTrackEntries(song: SongDocument, selectedStepIndexes: number[], delta: number): SongDocument {
   if (delta === 0) {
     return song;

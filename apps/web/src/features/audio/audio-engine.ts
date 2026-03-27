@@ -219,18 +219,18 @@ export class AudioEngine {
    * Play a short preview tone at the given note.
    * Used for hover-preview in the note picker grid.
    */
-  previewNote(trackId: MelodicTrackId, note: NoteValue, durationMs = 120, duty: PulseDutyValue = 0.5) {
+  previewNote(trackId: MelodicTrackId, note: NoteValue, durationMs = 120, duty: PulseDutyValue = 0.5, volume = 0.25) {
     if (this.context.state !== "running") {
       return;
     }
 
     if (trackId === "pulse1") {
-      this.pulseVoice1.previewNote(note, duty, durationMs);
+      this.pulseVoice1.previewNote(note, duty, durationMs, volume);
       return;
     }
 
     if (trackId === "pulse2") {
-      this.pulseVoice2.previewNote(note, duty, durationMs);
+      this.pulseVoice2.previewNote(note, duty, durationMs, volume);
       return;
     }
 
@@ -238,8 +238,6 @@ export class AudioEngine {
     const durationSec = durationMs / 1000;
     const attackSec = 0.003;
     const releaseSec = 0.025;
-    const volume = 0.25;
-
     const oscillator = this.context.createOscillator();
     const gain = this.context.createGain();
 

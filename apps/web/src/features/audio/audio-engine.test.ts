@@ -413,8 +413,8 @@ describe("audio-engine", () => {
 
     mockContext.state = "running";
 
-    engine.previewNote("triangle", "C4", 180);
-    engine.previewNote("pulse1", "E4", 120, 0.25);
+    engine.previewNote("triangle", "C4", 180, 0.5, 0.33);
+    engine.previewNote("pulse1", "E4", 120, 0.25, 0.61);
 
     const trianglePreviewGain = mockContext.createdGains.at(-1);
 
@@ -425,7 +425,7 @@ describe("audio-engine", () => {
     expect(mockContext.createdOscillators[0]?.start).toHaveBeenCalledWith(mockContext.currentTime);
     expect(mockContext.createdOscillators[0]?.stop).toHaveBeenCalledWith(mockContext.currentTime + 0.19);
     expect(trianglePreviewGain?.connect).toHaveBeenCalledWith(engine.voices.triangle.input);
-    expect(audioEngineMocks.pulsePreviewNote).toHaveBeenCalledWith("E4", 0.25, 120, undefined);
+    expect(audioEngineMocks.pulsePreviewNote).toHaveBeenCalledWith("E4", 0.25, 120, 0.61);
   });
 
   it("delegates noise and PCM hover previews to their voice implementations", async () => {

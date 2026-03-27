@@ -538,10 +538,6 @@ describe("workstation-shell", () => {
 
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("3 st");
 
-    // Hold cells should show the note name
-    expect(screen.getByLabelText("Pulse I step 2").textContent).toContain("E4");
-    expect(screen.getByLabelText("Pulse I step 3").textContent).toContain("E4");
-
     // Deselect, then select step 5
     fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(screen.getByLabelText("Pulse I step 5"));
@@ -850,12 +846,10 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Extend Pulse I step 1 duration" }));
 
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("2 st");
-    expect(screen.getByLabelText("Pulse I step 2").textContent).toContain("C5");
 
     fireEvent.click(screen.getByRole("button", { name: "Shorten Pulse I step 1 duration" }));
 
     expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("1 st");
-    expect(screen.getByLabelText("Pulse I step 2").textContent).toContain("\u00b7");
   });
 
   it("updates the noise trigger controls from the detail panel", () => {

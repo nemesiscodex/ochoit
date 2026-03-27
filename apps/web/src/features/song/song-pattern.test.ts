@@ -17,6 +17,7 @@ import {
   serializeMelodicTrackArrangement,
   serializeNoiseTrackArrangement,
   serializeSampleTrackArrangement,
+  resizeMelodicTrackStep,
   updateMelodicTrackStep,
   updateNoiseTrackStep,
   updateSampleTrackStep,
@@ -170,6 +171,95 @@ describe("song-pattern", () => {
     expect(moveMelodicTrackEntries(boundarySong, "triangle", [14], 1)).toBe(boundarySong);
   });
 
+  it("resizes a melodic note right and preserves note, duty, and volume", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[4] = {
+      ...song.tracks.pulse1.steps[4],
+      enabled: true,
+      note: "A4",
+      length: 2,
+      duty: 0.75,
+      volume: 0.61,
+    };
+
+    const resizedSong = resizeMelodicTrackStep(song, "pulse1", 4, 4, 4);
+
+    expect(resizedSong.tracks.pulse1.steps[4]).toMatchObject({
+      enabled: true,
+      note: "A4",
+      length: 4,
+      duty: 0.75,
+      volume: 0.61,
+    });
+  });
+
+  it("resizes a melodic note left and preserves the right edge", () => {
+    const song = createEmptySongDocument();
+    song.tracks.triangle.steps[6] = {
+      ...song.tracks.triangle.steps[6],
+      enabled: true,
+      note: "C3",
+      length: 3,
+      volume: 0.5,
+    };
+
+    const resizedSong = resizeMelodicTrackStep(song, "triangle", 6, 4, 5);
+
+    expect(resizedSong.tracks.triangle.steps[4]).toMatchObject({
+      enabled: true,
+      note: "C3",
+      length: 5,
+      volume: 0.5,
+    });
+    expect(resizedSong.tracks.triangle.steps[6].enabled).toBe(false);
+  });
+
+  it("clamps melodic resize at loop end", () => {
+    const song = createEmptySongDocument();
+    song.tracks.triangle.steps[14] = {
+      ...song.tracks.triangle.steps[14],
+      enabled: true,
+      note: "C3",
+      length: 1,
+    };
+
+    const resizedSong = resizeMelodicTrackStep(song, "triangle", 14, 14, 8);
+
+    expect(resizedSong.tracks.triangle.steps[14]).toMatchObject({
+      enabled: true,
+      length: 2,
+    });
+  });
+
+  it("clamps melodic resize before the next enabled note", () => {
+    const song = replaceMelodicTrackArrangement(createEmptySongDocument(), "triangle", [
+      { stepIndex: 4, note: "C3", length: 2 },
+      { stepIndex: 9, note: "E3", length: 2 },
+    ]);
+
+    const resizedSong = resizeMelodicTrackStep(song, "triangle", 4, 4, 8);
+
+    expect(resizedSong.tracks.triangle.steps[4]).toMatchObject({
+      enabled: true,
+      length: 5,
+    });
+  });
+
+  it("clamps melodic left resize after the previous enabled note", () => {
+    const song = replaceMelodicTrackArrangement(createEmptySongDocument(), "triangle", [
+      { stepIndex: 2, note: "C3", length: 2 },
+      { stepIndex: 7, note: "E3", length: 3 },
+    ]);
+
+    const resizedSong = resizeMelodicTrackStep(song, "triangle", 7, 1, 9);
+
+    expect(resizedSong.tracks.triangle.steps[4]).toMatchObject({
+      enabled: true,
+      note: "E3",
+      length: 6,
+    });
+  });
+
   it("moves noise triggers together and preserves config and volume", () => {
     const song = createEmptySongDocument();
     song.tracks.noise.steps[0] = { ...song.tracks.noise.steps[0], enabled: true, mode: "short", periodIndex: 1, volume: 0.3 };
@@ -257,6 +347,14 @@ describe("song-pattern", () => {
 
     expect(updateMelodicTrackStep(song, "pulse1", -1, { enabled: false })).toBe(song);
     expect(updateMelodicTrackStep(song, "pulse1", song.transport.loopLength, { enabled: false })).toBe(song);
+  });
+
+  it("ignores invalid melodic resize requests", () => {
+    const song = createDefaultSongDocument();
+
+    expect(resizeMelodicTrackStep(song, "pulse1", -1, 0, 2)).toBe(song);
+    expect(resizeMelodicTrackStep(song, "pulse1", song.transport.loopLength, 0, 2)).toBe(song);
+    expect(resizeMelodicTrackStep(song, "pulse1", 1, 0, 2)).toBe(song);
   });
 
   it("ignores non-melodic step updates outside the loop length", () => {

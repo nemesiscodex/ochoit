@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import type { AudioEngine } from "@/features/audio/audio-engine";
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
 
 function setCellWidth(element: HTMLElement, width: number) {
   Object.defineProperty(element, "getBoundingClientRect", {
@@ -23,6 +23,24 @@ function setCellWidth(element: HTMLElement, width: number) {
   });
 }
 
+function setCellRect(element: HTMLElement, left: number, top: number, width: number, height = 48) {
+  Object.defineProperty(element, "getBoundingClientRect", {
+    configurable: true,
+    value: () =>
+      ({
+        width,
+        height,
+        top,
+        left,
+        right: left + width,
+        bottom: top + height,
+        x: left,
+        y: top,
+        toJSON: () => ({}),
+      }) satisfies DOMRect,
+  });
+}
+
 function renderMatrix(overrides: Record<string, unknown> = {}) {
   const props = {
     defaultSampleId: null,
@@ -30,6 +48,7 @@ function renderMatrix(overrides: Record<string, unknown> = {}) {
     onOpenMelodicTrackEditor: vi.fn(),
     onOpenTriggerTrackEditor: vi.fn(),
     onMoveMelodicSelection: vi.fn(),
+    onResizeMelodicStep: vi.fn(),
     onMoveNoiseSelection: vi.fn(),
     onMoveSampleSelection: vi.fn(),
     onToggleTrackMute: vi.fn(),
@@ -167,7 +186,7 @@ describe("sequencer-matrix", () => {
 
     renderMatrix({ song });
 
-    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
 
     expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
   });
@@ -185,7 +204,7 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByLabelText("Triangle step 1 note"));
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Select note D3" }));
 
-    expect(previewNote).toHaveBeenCalledWith("triangle", "D3");
+    expect(previewNote).toHaveBeenCalledWith("triangle", "D3", expect.any(Number), 0.5, 0.72);
   });
 
   it("passes hovered pulse duty to the audio preview via the detail panel", () => {
@@ -200,7 +219,7 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Set duty 75%" }));
 
-    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", 120, 0.75);
+    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", expect.any(Number), 0.75, 0.84);
   });
 
   it("opens the text editor for a melodic voice", () => {
@@ -266,15 +285,31 @@ describe("sequencer-matrix", () => {
 
     renderMatrix({ engine, song });
 
-    fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 1"));
     fireEvent.mouseEnter(screen.getByLabelText("Noise step 1"));
     fireEvent.mouseEnter(screen.getByLabelText("PCM step 8"));
     fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 4"));
 
-    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", 120, 0.125);
+    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", expect.any(Number), 0.125, 0.84);
     expect(previewNoiseConfig).toHaveBeenCalledWith("short", 3);
     expect(previewSampleNote).toHaveBeenCalledWith("mic-001", "C4", "C4");
     expect(previewNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders sustained melodic notes as continuous note blocks", () => {
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = {
+      ...song.tracks.pulse1.steps[0],
+      enabled: true,
+      length: 4,
+      note: "C5",
+    };
+
+    const { container } = renderMatrix({ song });
+    const noteBlock = screen.getByLabelText("Pulse I step 1");
+
+    expect(noteBlock.textContent).toContain("C5");
+    expect(container.querySelector('[data-note-origin-step="0"]')).toBeTruthy();
   });
 
   it("uses playback-rate preview for authentic PCM hover previews", () => {
@@ -397,7 +432,7 @@ describe("sequencer-matrix", () => {
     renderMatrix({ song });
 
     fireEvent.click(screen.getByLabelText("Pulse I step 5"));
-    fireEvent.click(screen.getByLabelText("Pulse I step 2"), { shiftKey: true });
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"), { shiftKey: true });
 
     expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe("true");
@@ -418,17 +453,23 @@ describe("sequencer-matrix", () => {
     const onMoveMelodicSelection = vi.fn();
     const song = createDefaultSongDocument();
 
-    renderMatrix({ song, onMoveMelodicSelection });
+    const { container } = renderMatrix({ song, onMoveMelodicSelection });
 
     const cell = screen.getByLabelText("Pulse I step 1");
-    setCellWidth(cell, 20);
+    const gridCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
 
-    fireEvent.mouseDown(cell, { clientX: 0 });
+    if (gridCell === null) {
+      throw new Error("Expected step cell");
+    }
+
+    setCellWidth(gridCell, 20);
+
+    fireEvent.mouseDown(cell, { clientX: 0, clientY: 0 });
     await waitFor(() => {
       expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
     });
-    fireEvent.mouseMove(cell, { clientX: 45 });
-    fireEvent.mouseUp(cell, { clientX: 45 });
+    fireEvent.mouseMove(window, { clientX: 45, clientY: 0 });
+    fireEvent.mouseUp(window, { clientX: 45, clientY: 0 });
 
     expect(onMoveMelodicSelection).toHaveBeenCalledWith("pulse1", [0], 2);
     expect(cell.getAttribute("aria-selected")).toBe(null);
@@ -441,20 +482,26 @@ describe("sequencer-matrix", () => {
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true };
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true };
 
-    renderMatrix({ song, onMoveMelodicSelection });
+    const { container } = renderMatrix({ song, onMoveMelodicSelection });
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
 
     const cell = screen.getByLabelText("Pulse I step 1");
-    setCellWidth(cell, 20);
+    const gridCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
 
-    fireEvent.mouseDown(cell, { clientX: 0 });
+    if (gridCell === null) {
+      throw new Error("Expected step cell");
+    }
+
+    setCellWidth(gridCell, 20);
+
+    fireEvent.mouseDown(cell, { clientX: 0, clientY: 0 });
     await waitFor(() => {
       expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
     });
-    fireEvent.mouseMove(cell, { clientX: 45 });
-    fireEvent.mouseUp(cell, { clientX: 45 });
+    fireEvent.mouseMove(window, { clientX: 45, clientY: 0 });
+    fireEvent.mouseUp(window, { clientX: 45, clientY: 0 });
 
     expect(onMoveMelodicSelection).toHaveBeenCalledTimes(1);
     expect(onMoveMelodicSelection).toHaveBeenCalledWith("pulse1", [0, 4], 2);
@@ -466,16 +513,123 @@ describe("sequencer-matrix", () => {
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
 
-    renderMatrix({ song, onMoveMelodicSelection });
+    const { container } = renderMatrix({ song, onMoveMelodicSelection });
 
     const cell = screen.getByLabelText("Pulse I step 1");
-    setCellWidth(cell, 20);
+    const gridCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
+
+    if (gridCell === null) {
+      throw new Error("Expected step cell");
+    }
+
+    setCellWidth(gridCell, 20);
 
     fireEvent.pointerDown(cell, { clientX: 0 });
     fireEvent.pointerMove(window, { clientX: 80 });
     fireEvent.pointerUp(window, { clientX: 80 });
 
     expect(onMoveMelodicSelection).not.toHaveBeenCalled();
+  });
+
+  it("drags the right edge to resize a melodic note", () => {
+    const onResizeMelodicStep = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 2 };
+    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const firstCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
+
+    if (firstCell === null) {
+      throw new Error("Expected first step cell");
+    }
+
+    setCellWidth(firstCell, 20);
+
+    fireEvent.mouseDown(screen.getByLabelText("Resize end of Pulse I step 1"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(window, { clientX: 40, clientY: 0 });
+    fireEvent.mouseUp(window, { clientX: 40, clientY: 0 });
+
+    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 0, 0, 4);
+  });
+
+  it("drags the left edge to resize a melodic note", () => {
+    const onResizeMelodicStep = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 3 };
+    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const firstCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
+
+    if (firstCell === null) {
+      throw new Error("Expected first step cell");
+    }
+
+    setCellWidth(firstCell, 20);
+
+    fireEvent.mouseDown(screen.getByLabelText("Resize start of Pulse I step 5"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(window, { clientX: -40, clientY: 0 });
+    fireEvent.mouseUp(window, { clientX: -40, clientY: 0 });
+
+    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 4, 2, 5);
+  });
+
+  it("resizes across a wrapped row boundary", () => {
+    const originalMatchMedia = window.matchMedia;
+    const matchMedia = vi.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: matchMedia,
+    });
+
+    const onResizeMelodicStep = vi.fn();
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[7] = { ...song.tracks.pulse1.steps[7], enabled: true, length: 1 };
+    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const step0 = container.querySelector<HTMLElement>('[data-step-index="0"]');
+    const step1 = container.querySelector<HTMLElement>('[data-step-index="1"]');
+    const step8 = container.querySelector<HTMLElement>('[data-step-index="8"]');
+
+    if (step0 === null || step1 === null || step8 === null) {
+      throw new Error("Expected grid cells");
+    }
+
+    setCellRect(step0, 0, 0, 20);
+    setCellRect(step1, 24, 0, 20);
+    setCellRect(step8, 0, 52, 20);
+
+    fireEvent.mouseDown(screen.getByLabelText("Resize end of Pulse I step 8"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(window, { clientX: -144, clientY: 52 });
+    fireEvent.mouseUp(window, { clientX: -144, clientY: 52 });
+
+    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 7, 7, 3);
+
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: originalMatchMedia,
+    });
+  });
+
+  it("clamps resize before the next melodic note", () => {
+    const onResizeMelodicStep = vi.fn();
+    const song = createDefaultSongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 2 };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
+    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const firstCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
+
+    if (firstCell === null) {
+      throw new Error("Expected first step cell");
+    }
+
+    setCellWidth(firstCell, 20);
+
+    fireEvent.mouseDown(screen.getByLabelText("Resize end of Pulse I step 1"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(window, { clientX: 100, clientY: 0 });
+    fireEvent.mouseUp(window, { clientX: 100, clientY: 0 });
+
+    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 0, 0, 4);
   });
 
   it("collapses multi-selection to the anchor before arrow navigation", () => {

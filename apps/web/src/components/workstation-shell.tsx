@@ -65,6 +65,7 @@ import {
   replaceSampleTrackArrangement,
   replaceMelodicTrackArrangement,
   replaceSampleTrackSampleReference,
+  resizeMelodicTrackStep,
   serializeNoiseTrackArrangement,
   serializeSampleTrackArrangement,
   updateNoiseTrackStep,
@@ -208,6 +209,17 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
 
   const moveMelodicSelection = (trackId: MelodicTrackId, selectedStepIndexes: number[], delta: number) => {
     setSong((currentSong) => moveMelodicTrackEntries(currentSong, trackId, selectedStepIndexes, delta));
+  };
+
+  const resizeMelodicStep = (
+    trackId: MelodicTrackId,
+    stepIndex: number,
+    nextStartStepIndex: number,
+    nextLength: number,
+  ) => {
+    setSong((currentSong) =>
+      resizeMelodicTrackStep(currentSong, trackId, stepIndex, nextStartStepIndex, nextLength),
+    );
   };
 
   const moveNoiseSelection = (selectedStepIndexes: number[], delta: number) => {
@@ -919,6 +931,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               onToggleTrackMute={toggleTrackMute}
               onUpdateTrackVolume={setTrackVolume}
               onUpdateMelodicStep={updateMelodicStep}
+              onResizeMelodicStep={resizeMelodicStep}
               onMoveMelodicSelection={moveMelodicSelection}
               onMoveNoiseSelection={moveNoiseSelection}
               onMoveSampleSelection={moveSampleSelection}

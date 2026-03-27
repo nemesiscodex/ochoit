@@ -78,6 +78,7 @@ export function StepDetailPanel({
         engine={engine}
         onDeselect={onDeselect}
         onUpdate={(updates) => onUpdateMelodicStep(melodicTrackId, selection.stepIndex, updates)}
+        song={song}
         stepIndex={selection.stepIndex}
         track={melodicTrack}
         trackLabel={trackLabel}
@@ -126,6 +127,7 @@ function MelodicStepDetail({
   engine,
   onDeselect,
   onUpdate,
+  song,
   stepIndex,
   track,
   trackLabel,
@@ -134,6 +136,7 @@ function MelodicStepDetail({
   engine: AudioEngine | null;
   onDeselect: () => void;
   onUpdate: (updates: MelodicStepUpdates) => void;
+  song: SongDocument;
   stepIndex: number;
   track: PulseTrack | TriangleTrack;
   trackLabel: string;
@@ -143,6 +146,8 @@ function MelodicStepDetail({
   const maxLength = melodicState.kind === "start" ? getMelodicTrackMaxLength(track, stepIndex) : 1;
   const isPulse = track.kind === "pulse";
   const pulseStep = isPulse ? track.steps[stepIndex] : null;
+  const previewDurationMs = (60_000 / song.transport.bpm / song.transport.stepsPerBeat) * Math.max(step.length, 1);
+  const previewVolume = step.volume;
 
   return (
     <DetailPanelFrame
@@ -161,7 +166,7 @@ function MelodicStepDetail({
             disabled={!step.enabled}
             selectedNote={step.note}
             onHoverNote={(note) => {
-              engine?.previewNote(track.id, note);
+              engine?.previewNote(track.id, note, previewDurationMs, pulseStep?.duty ?? 0.5, previewVolume);
             }}
             onSelectNote={(note) => {
               onUpdate({ note });
@@ -199,7 +204,7 @@ function MelodicStepDetail({
                         : undefined
                     }
                     onMouseEnter={() => {
-                      engine?.previewNote(track.id, step.note as NoteValue, 120, duty);
+                      engine?.previewNote(track.id, step.note as NoteValue, previewDurationMs, duty, previewVolume);
                     }}
                     onClick={() => {
                       onUpdate({ duty });
