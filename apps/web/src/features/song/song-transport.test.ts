@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
 import {
   clampSongBpm,
   clampSongLoopLength,
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
+  songLoopLengthWouldTrimContent,
   updateSongTransport,
 } from "@/features/song/song-transport";
 
@@ -53,5 +54,28 @@ describe("song-transport", () => {
       note: "C4",
       playbackRate: 1,
     });
+  });
+
+  it("detects when shrinking the loop would remove or shorten existing content", () => {
+    const song = createDefaultSongDocument();
+
+    song.tracks.pulse1.steps[10] = {
+      ...song.tracks.pulse1.steps[10],
+      enabled: true,
+      length: 4,
+    };
+
+    expect(songLoopLengthWouldTrimContent(song, 12)).toBe(true);
+  });
+
+  it("ignores safe loop reductions that keep all existing content intact", () => {
+    const song = createEmptySongDocument();
+
+    song.tracks.noise.steps[7] = {
+      ...song.tracks.noise.steps[7],
+      enabled: true,
+    };
+
+    expect(songLoopLengthWouldTrimContent(song, 12)).toBe(false);
   });
 });

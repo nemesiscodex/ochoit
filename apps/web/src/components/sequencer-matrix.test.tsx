@@ -47,6 +47,7 @@ function renderMatrix(overrides: Record<string, unknown> = {}) {
     engine: null,
     onOpenMelodicTrackEditor: vi.fn(),
     onOpenTriggerTrackEditor: vi.fn(),
+    onRequestLoopLengthChange: vi.fn(),
     onMoveMelodicSelection: vi.fn(),
     onResizeMelodicStep: vi.fn(),
     onMoveNoiseSelection: vi.fn(),
@@ -82,6 +83,12 @@ describe("sequencer-matrix", () => {
     expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(6);
     expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-current")).toBe("step");
     expect(screen.getByLabelText("PCM step 5").getAttribute("aria-current")).toBe("step");
+  });
+
+  it("shows the empty-step creation hint in the pattern ruler", () => {
+    renderMatrix();
+
+    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
   it("calls the mute toggle callback for a specific voice", () => {
@@ -336,15 +343,39 @@ describe("sequencer-matrix", () => {
     expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001", 1.5);
   });
 
-  it("enables a disabled step on click and selects it", () => {
+  it("selects a disabled step on click without enabling it", () => {
     const onUpdateMelodicStep = vi.fn();
 
     renderMatrix({ onUpdateMelodicStep });
 
     fireEvent.click(screen.getByLabelText("Pulse I step 2"));
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 1, { enabled: true });
+    expect(onUpdateMelodicStep).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Pulse I step 2 editor")).toBeTruthy();
+    expect(screen.getByText("Empty step selected. Press Enter to create a note or trigger here.")).toBeTruthy();
+  });
+
+  it("enables a selected disabled step on Enter", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 1, { enabled: true });
+  });
+
+  it("requests loop-length changes from the ruler controls in four-step increments", () => {
+    const onRequestLoopLengthChange = vi.fn();
+
+    renderMatrix({ onRequestLoopLengthChange });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add 4 steps" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
+
+    expect(onRequestLoopLengthChange).toHaveBeenNthCalledWith(1, 20);
+    expect(onRequestLoopLengthChange).toHaveBeenNthCalledWith(2, 12);
   });
 
   it("deselects a step on Escape key", () => {

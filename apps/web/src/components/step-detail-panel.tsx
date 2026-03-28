@@ -686,6 +686,11 @@ function DetailPanelFrame({
           </Button>
         </div>
       </div>
+      {!enabled ? (
+        <p className="mb-3 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/40">
+          Empty step selected. Press Enter to create a note or trigger here.
+        </p>
+      ) : null}
       {children}
     </div>
   );

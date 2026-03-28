@@ -31,6 +31,7 @@ import {
   type SampleStepUpdates,
   type TriggerTrackId,
 } from "@/features/song/song-pattern";
+import { SONG_LOOP_LENGTH_RANGE } from "@/features/song/song-transport";
 
 import {
   accentByTrackId,
@@ -151,6 +152,7 @@ export function SequencerMatrix({
   playbackState,
   nextStep,
   onToggleTrackMute,
+  onRequestLoopLengthChange,
   onUpdateTrackVolume,
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
@@ -168,6 +170,7 @@ export function SequencerMatrix({
   playbackState: "stopped" | "playing";
   nextStep: number;
   onToggleTrackMute: (trackId: TrackId) => void;
+  onRequestLoopLengthChange: (nextLoopLength: number) => void;
   onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
@@ -203,6 +206,39 @@ export function SequencerMatrix({
 
   const handleDeselectStep = () => {
     setSelectionState(null);
+  };
+
+  const enableStepAtSelection = (trackId: TrackId, stepIndex: number) => {
+    const selectedTrack = song.tracks[trackId];
+
+    switch (selectedTrack.kind) {
+      case "pulse":
+      case "triangle":
+        if (!selectedTrack.steps[stepIndex]?.enabled) {
+          onUpdateMelodicStep(selectedTrack.id, stepIndex, { enabled: true });
+        }
+        return;
+      case "noise":
+        if (!selectedTrack.steps[stepIndex]?.enabled) {
+          onUpdateNoiseStep(stepIndex, { enabled: true });
+        }
+        return;
+      case "sample": {
+        const selectedStep = selectedTrack.steps[stepIndex];
+
+        if (selectedStep?.enabled) {
+          return;
+        }
+
+        const defaultSampleTrigger = getDefaultSampleTrigger(song.samples, defaultSampleId);
+        onUpdateSampleStep(stepIndex, {
+          enabled: true,
+          sampleId: selectedStep.sampleId ?? defaultSampleTrigger.sampleId,
+          note: (selectedStep.note as NoteValue) ?? defaultSampleTrigger.note,
+          playbackRate: selectedStep.playbackRate ?? defaultSampleTrigger.playbackRate,
+        });
+      }
+    }
   };
 
   const copySelection = () => {
@@ -604,6 +640,16 @@ export function SequencerMatrix({
           event.preventDefault();
           break;
         }
+        case "Enter": {
+          const selectedTrack = song.tracks[selectionState.trackId];
+          const selectedStep = selectedTrack.steps[selectionState.anchorStepIndex];
+
+          if (!selectedStep?.enabled) {
+            enableStepAtSelection(selectionState.trackId, selectionState.anchorStepIndex);
+            event.preventDefault();
+          }
+          break;
+        }
         case "ArrowLeft":
           setSelectionState((prev) => {
             if (prev === null) return null;
@@ -662,6 +708,7 @@ export function SequencerMatrix({
     };
   }, [
     clipboardState,
+    defaultSampleId,
     onUpdateMelodicStep,
     onUpdateNoiseStep,
     onUpdateSampleStep,
@@ -702,7 +749,12 @@ export function SequencerMatrix({
 
   return (
     <div className="flex flex-col gap-2">
-      <StepRuler loopLength={song.transport.loopLength} nextStep={nextStep} playbackState={playbackState} />
+      <StepRuler
+        loopLength={song.transport.loopLength}
+        nextStep={nextStep}
+        onRequestLoopLengthChange={onRequestLoopLengthChange}
+        playbackState={playbackState}
+      />
       {tracks.map((track) => {
         const selectedStepIndex = selectionState?.trackId === track.id ? selectionState.anchorStepIndex : null;
         const selectedStepIndexes = selectionState?.trackId === track.id ? selectionState.selectedStepIndexes : [];
@@ -867,17 +919,54 @@ function validateMovePreview(song: SongDocument, track: Track, selectedStepIndex
 function StepRuler({
   loopLength,
   nextStep,
+  onRequestLoopLengthChange,
   playbackState,
 }: {
   loopLength: number;
   nextStep: number;
+  onRequestLoopLengthChange: (nextLoopLength: number) => void;
   playbackState: "stopped" | "playing";
 }) {
+  const canDecrease = loopLength > SONG_LOOP_LENGTH_RANGE.min;
+  const canIncrease = loopLength < SONG_LOOP_LENGTH_RANGE.max;
+
   return (
     <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-2 backdrop-blur">
-      <div className="mb-2 flex items-center justify-between px-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">
-        <span>Pattern Ruler</span>
-        <span>{loopLength} step loop</span>
+      <div className="mb-2 flex items-start justify-between gap-3 px-1">
+        <div>
+          <div className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">Pattern Ruler</div>
+          <div className="mt-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/38">
+            {loopLength} step loop. Select empty steps, then press Enter to add.
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Remove 4 steps"
+            disabled={!canDecrease}
+            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            onClick={() => {
+              onRequestLoopLengthChange(loopLength - SONG_LOOP_LENGTH_RANGE.step);
+            }}
+          >
+            -4
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Add 4 steps"
+            disabled={!canIncrease}
+            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+            onClick={() => {
+              onRequestLoopLengthChange(loopLength + SONG_LOOP_LENGTH_RANGE.step);
+            }}
+          >
+            +4
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
         {Array.from({ length: loopLength }, (_, index) => {
@@ -957,33 +1046,9 @@ function SequencerRow({
   song: SongDocument;
   track: Track;
 }) {
-  const defaultSampleTrigger = getDefaultSampleTrigger(samples, defaultSampleId);
-
   const handleStepClick = (stepIndex: number, shiftKey: boolean) => {
     const resolvedStepIndex = resolveTrackOriginStepIndex(track, stepIndex);
     const isEnabledOrigin = isTrackOriginSelectable(track, resolvedStepIndex);
-
-    if (!isEnabledOrigin) {
-      switch (track.kind) {
-        case "pulse":
-        case "triangle":
-          onUpdateMelodicStep(track.id, stepIndex, { enabled: true });
-          break;
-        case "noise":
-          onUpdateNoiseStep(stepIndex, { enabled: true });
-          break;
-        case "sample": {
-          const sampleStep = track.steps[stepIndex];
-          onUpdateSampleStep(stepIndex, {
-            enabled: true,
-            sampleId: sampleStep.sampleId ?? defaultSampleTrigger.sampleId,
-            note: (sampleStep.note as NoteValue) ?? defaultSampleTrigger.note,
-            playbackRate: sampleStep.playbackRate ?? defaultSampleTrigger.playbackRate,
-          });
-          break;
-        }
-      }
-    }
 
     onSelectStep(resolvedStepIndex, { shiftKey: shiftKey && isEnabledOrigin });
   };

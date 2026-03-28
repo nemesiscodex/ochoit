@@ -138,6 +138,36 @@ describe("workstation-shell", () => {
     expect(screen.getByDisplayValue("20")).toBeTruthy();
   });
 
+  it("extends and safely shrinks the pattern from the ruler without prompting when no content is lost", () => {
+    renderWorkstationShell(createEmptySongDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Add 4 steps" }));
+    expect(screen.getByText("20 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
+
+    expect(confirmDialog).not.toHaveBeenCalled();
+    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+  });
+
+  it("confirms before shrinking the pattern when content would be removed", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[12] = {
+      ...song.tracks.pulse1.steps[12],
+      enabled: true,
+    };
+    confirmDialog.mockReturnValueOnce(false);
+
+    renderWorkstationShell(song);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
+
+    expect(confirmDialog).toHaveBeenCalledWith(
+      "Reduce the pattern to 12 steps? This will delete or shorten notes and triggers beyond the new end.",
+    );
+    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+  });
+
   it("updates the global volume from the transport bar", () => {
     renderWorkstationShell();
 
@@ -967,8 +997,9 @@ describe("workstation-shell", () => {
   it("updates melodic steps from the detail panel controls", () => {
     renderWorkstationShell();
 
-    // Click disabled step 2 to enable + select
+    // Select disabled step 2, then press Enter to create it
     fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.keyDown(document, { key: "Enter" });
 
     const panel = screen.getByLabelText("Pulse I step 2 editor");
 
@@ -1011,8 +1042,9 @@ describe("workstation-shell", () => {
   it("updates the noise trigger controls from the detail panel", () => {
     renderWorkstationShell();
 
-    // Click disabled step 2 to enable + select
+    // Select disabled step 2, then press Enter to create it
     fireEvent.click(screen.getByLabelText("Noise step 2"));
+    fireEvent.keyDown(document, { key: "Enter" });
 
     const panel = screen.getByLabelText("Noise step 2 editor");
 
@@ -1045,8 +1077,9 @@ describe("workstation-shell", () => {
   it("updates the inspired PCM note controls from the detail panel", () => {
     renderWorkstationShell();
 
-    // Click disabled step 2 to enable + select
+    // Select disabled step 2, then press Enter to create it
     fireEvent.click(screen.getByLabelText("PCM step 2"));
+    fireEvent.keyDown(document, { key: "Enter" });
 
     const panel = screen.getByLabelText("PCM step 2 editor");
 
@@ -1127,8 +1160,9 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    // Click disabled PCM step 2 to enable + select
+    // Select disabled PCM step 2, then press Enter to create it
     fireEvent.click(screen.getByLabelText("PCM step 2"));
+    fireEvent.keyDown(document, { key: "Enter" });
 
     const panel = screen.getByLabelText("PCM step 2 editor");
     expect(within(panel).getByRole("button", { name: "Assign mic-002" }).getAttribute("aria-pressed")).toBe("true");

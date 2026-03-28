@@ -82,10 +82,12 @@ import {
   resizeSampleTrimWindow,
 } from "@/features/song/song-samples";
 import {
+  clampSongLoopLength,
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
   SONG_BPM_RANGE,
   SONG_LOOP_LENGTH_RANGE,
+  songLoopLengthWouldTrimContent,
   updateSongTransport,
 } from "@/features/song/song-transport";
 
@@ -228,6 +230,30 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
 
   const moveSampleSelection = (selectedStepIndexes: number[], delta: number) => {
     setSong((currentSong) => moveSampleTrackEntries(currentSong, selectedStepIndexes, delta));
+  };
+
+  const requestLoopLengthChange = (nextLoopLength: number) => {
+    const resolvedLoopLength = clampSongLoopLength(nextLoopLength);
+
+    if (resolvedLoopLength === song.transport.loopLength) {
+      return;
+    }
+
+    if (
+      resolvedLoopLength < song.transport.loopLength &&
+      songLoopLengthWouldTrimContent(song, resolvedLoopLength) &&
+      typeof window !== "undefined"
+    ) {
+      const confirmed = window.confirm(
+        `Reduce the pattern to ${resolvedLoopLength} steps? This will delete or shorten notes and triggers beyond the new end.`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setSong((currentSong) => updateSongTransport(currentSong, { loopLength: resolvedLoopLength }));
   };
 
   const updateEngineMode = (engineMode: EngineMode) => {
@@ -962,6 +988,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               engine={engine}
               onOpenMelodicTrackEditor={openMelodicTrackEditor}
               onOpenTriggerTrackEditor={openTriggerTrackEditor}
+              onRequestLoopLengthChange={requestLoopLengthChange}
               onToggleTrackMute={toggleTrackMute}
               onUpdateTrackVolume={setTrackVolume}
               onUpdateMelodicStep={updateMelodicStep}

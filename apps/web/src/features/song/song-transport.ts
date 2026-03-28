@@ -53,6 +53,23 @@ export function resolveSongLoopLengthInput(rawValue: string, fallback: number) {
   return clampSongLoopLength(parsedValue);
 }
 
+export function songLoopLengthWouldTrimContent(song: SongDocument, nextLoopLength: number) {
+  const clampedLoopLength = clampSongLoopLength(nextLoopLength);
+
+  return Object.values(song.tracks).some((track) => {
+    switch (track.kind) {
+      case "pulse":
+      case "triangle":
+        return track.steps.some(
+          (step, index) => step.enabled && (index >= clampedLoopLength || index + step.length > clampedLoopLength),
+        );
+      case "noise":
+      case "sample":
+        return track.steps.some((step, index) => step.enabled && index >= clampedLoopLength);
+    }
+  });
+}
+
 export function updateSongTransport(
   song: SongDocument,
   updates: Partial<Pick<SongDocument["transport"], "bpm" | "loopLength">>,
