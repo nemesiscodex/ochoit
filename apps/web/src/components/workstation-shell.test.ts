@@ -444,6 +444,7 @@ describe("workstation-shell", () => {
   });
 
   it("downloads the current arrangement as a wav file", async () => {
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
     renderWorkstationShell();
 
     await act(async () => {
@@ -462,6 +463,21 @@ describe("workstation-shell", () => {
 
     expect(exportedBlob.type).toBe("audio/wav");
     expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    const downloadCleanupCall = setTimeoutSpy.mock.calls.find((call) => call[1] === 1_000);
+
+    if (downloadCleanupCall === undefined) {
+      throw new Error("Expected download cleanup to schedule a 1 second timeout.");
+    }
+
+    const revokeDownloadUrl = downloadCleanupCall[0];
+
+    if (typeof revokeDownloadUrl !== "function") {
+      throw new Error("Expected download cleanup to schedule a timeout callback.");
+    }
+
+    revokeDownloadUrl();
+
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:arrangement");
     expect(screen.getByText("WAV download started.")).toBeTruthy();
   });

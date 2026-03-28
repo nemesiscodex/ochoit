@@ -1797,7 +1797,10 @@ function downloadBlobFile(blob: Blob, fileName: string) {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(objectUrl);
+  // Give the browser time to start the download before releasing the blob URL.
+  window.setTimeout(() => {
+    URL.revokeObjectURL(objectUrl);
+  }, 1_000);
 }
 
 /* ─────────── Song Metadata ─────────── */
