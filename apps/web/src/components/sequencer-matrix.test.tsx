@@ -384,6 +384,38 @@ describe("sequencer-matrix", () => {
     expect(previewSampleTrigger).toHaveBeenCalledWith("mic-001", 1.5);
   });
 
+  it("suppresses sequencer hover previews when hover preview is disabled", () => {
+    const previewNote = vi.fn();
+    const previewNoiseConfig = vi.fn();
+    const previewSampleNote = vi.fn();
+    const song = createDefaultSongDocument();
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      previewNote,
+      previewNoiseConfig,
+      previewSampleNote,
+      previewSampleTrigger: vi.fn(),
+    } as unknown as AudioEngine;
+
+    renderMatrix({ engine, hoverPreviewEnabled: false, song });
+
+    fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.mouseEnter(screen.getByLabelText("Noise step 1"));
+    fireEvent.mouseEnter(screen.getByLabelText("PCM step 8"));
+
+    expect(previewNote).not.toHaveBeenCalled();
+    expect(previewNoiseConfig).not.toHaveBeenCalled();
+    expect(previewSampleNote).not.toHaveBeenCalled();
+  });
+
+  it("can hide the pattern ruler and keyboard notes", () => {
+    renderMatrix({ rulerVisible: false });
+
+    expect(screen.queryByText("Pattern Ruler")).toBeNull();
+    expect(screen.queryByText("Keyboard Notes")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Pulse I" })).toBeTruthy();
+  });
+
   it("selects a disabled step on click without enabling it", () => {
     const onUpdateMelodicStep = vi.fn();
 
@@ -448,6 +480,40 @@ describe("sequencer-matrix", () => {
     expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
   });
 
+  it("skips to the end of a sustained melodic note when navigating right", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[3] = {
+      ...song.tracks.pulse1.steps[3],
+      enabled: true,
+      length: 5,
+      note: "C5",
+    };
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 4"));
+    fireEvent.keyDown(document, { key: "ArrowRight" });
+
+    expect(screen.getByLabelText("Pulse I step 9 editor")).toBeTruthy();
+  });
+
+  it("jumps back to the origin of the previous sustained melodic note when navigating left", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[3] = {
+      ...song.tracks.pulse1.steps[3],
+      enabled: true,
+      length: 5,
+      note: "C5",
+    };
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 9"));
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+
+    expect(screen.getByLabelText("Pulse I step 4 editor")).toBeTruthy();
+  });
+
   it("navigates between voice tracks with up/down arrow keys", () => {
     renderMatrix();
 
@@ -473,7 +539,7 @@ describe("sequencer-matrix", () => {
     fireEvent.keyDown(document, { key: "Delete" });
 
     expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 0, { enabled: false });
-    expect(screen.queryByLabelText("Pulse I step 1 editor")).toBeNull();
+    expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
   });
 
   it("deletes a selected trigger step with Backspace", () => {
@@ -492,7 +558,7 @@ describe("sequencer-matrix", () => {
     fireEvent.keyDown(document, { key: "Backspace" });
 
     expect(onUpdateNoiseStep).toHaveBeenCalledWith(2, { enabled: false });
-    expect(screen.queryByLabelText("Noise step 3 editor")).toBeNull();
+    expect(screen.getByLabelText("Noise step 3 editor")).toBeTruthy();
   });
 
   it("shift-click selects enabled origin entries between the anchor and target", () => {

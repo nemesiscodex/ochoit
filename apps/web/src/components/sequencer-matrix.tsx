@@ -177,6 +177,8 @@ function rangesOverlap(startA: number, endA: number, startB: number, endB: numbe
 export function SequencerMatrix({
   defaultSampleId,
   engine,
+  hoverPreviewEnabled = true,
+  rulerVisible = true,
   song,
   playbackState,
   nextStep,
@@ -195,6 +197,8 @@ export function SequencerMatrix({
 }: {
   defaultSampleId: string | null;
   engine: AudioEngine | null;
+  hoverPreviewEnabled?: boolean;
+  rulerVisible?: boolean;
   song: SongDocument;
   playbackState: "stopped" | "playing";
   nextStep: number;
@@ -800,7 +804,6 @@ export function SequencerMatrix({
               break;
           }
 
-          setSelectionState(null);
           event.preventDefault();
           break;
         }
@@ -825,7 +828,8 @@ export function SequencerMatrix({
 
           setSelectionState((prev) => {
             if (prev === null) return null;
-            const nextStepIndex = Math.max(0, prev.anchorStepIndex - 1);
+            const nextTrack = song.tracks[prev.trackId];
+            const nextStepIndex = getAdjacentStepIndex(nextTrack, prev.anchorStepIndex, "left");
             return {
               ...prev,
               anchorStepIndex: nextStepIndex,
@@ -841,7 +845,8 @@ export function SequencerMatrix({
 
           setSelectionState((prev) => {
             if (prev === null) return null;
-            const nextStepIndex = Math.min(song.transport.loopLength - 1, prev.anchorStepIndex + 1);
+            const nextTrack = song.tracks[prev.trackId];
+            const nextStepIndex = getAdjacentStepIndex(nextTrack, prev.anchorStepIndex, "right");
             return {
               ...prev,
               anchorStepIndex: nextStepIndex,
@@ -946,25 +951,27 @@ export function SequencerMatrix({
 
   return (
     <div className="flex flex-col gap-2">
-      <StepRuler
-        activeKeyboardKey={activeKeyboardKey}
-        keyboardBaseOctave={keyboardBaseOctave}
-        keyboardBindings={keyboardBindings}
-        keyboardModeEnabled={keyboardModeEnabled}
-        keyboardModeShortcutKey={keyboardModeShortcutKey}
-        keyboardTarget={keyboardNoteTarget}
-        loopLength={song.transport.loopLength}
-        nextStep={nextStep}
-        onKeyboardBaseOctaveDecrease={() => {
-          setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue - 1));
-        }}
-        onKeyboardBaseOctaveIncrease={() => {
-          setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue + 1));
-        }}
-        onRequestLoopLengthChange={onRequestLoopLengthChange}
-        onToggleKeyboardMode={toggleKeyboardMode}
-        playbackState={playbackState}
-      />
+      {rulerVisible ? (
+        <StepRuler
+          activeKeyboardKey={activeKeyboardKey}
+          keyboardBaseOctave={keyboardBaseOctave}
+          keyboardBindings={keyboardBindings}
+          keyboardModeEnabled={keyboardModeEnabled}
+          keyboardModeShortcutKey={keyboardModeShortcutKey}
+          keyboardTarget={keyboardNoteTarget}
+          loopLength={song.transport.loopLength}
+          nextStep={nextStep}
+          onKeyboardBaseOctaveDecrease={() => {
+            setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue - 1));
+          }}
+          onKeyboardBaseOctaveIncrease={() => {
+            setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue + 1));
+          }}
+          onRequestLoopLengthChange={onRequestLoopLengthChange}
+          onToggleKeyboardMode={toggleKeyboardMode}
+          playbackState={playbackState}
+        />
+      ) : null}
       {tracks.map((track) => {
         const selectedStepIndex = selectionState?.trackId === track.id ? selectionState.anchorStepIndex : null;
         const selectedStepIndexes = selectionState?.trackId === track.id ? selectionState.selectedStepIndexes : [];
@@ -975,6 +982,7 @@ export function SequencerMatrix({
             key={track.id}
             defaultSampleId={defaultSampleId}
             engine={engine}
+            hoverPreviewEnabled={hoverPreviewEnabled}
             nextStep={nextStep}
             onDeselectStep={handleDeselectStep}
             onOpenMelodicTrackEditor={onOpenMelodicTrackEditor}
@@ -1178,6 +1186,32 @@ function getKeyboardNoteTarget(song: SongDocument, selectionState: StepSelection
 
 function getKeyboardBindingKeyForNote(note: NoteValue, bindings: ReturnType<typeof buildKeyboardNoteBindings>) {
   return bindings.find((binding) => binding.note === note)?.key ?? null;
+}
+
+function getAdjacentStepIndex(track: Track, currentStepIndex: number, direction: "left" | "right") {
+  const maxStepIndex = track.steps.length - 1;
+
+  if (track.kind !== "pulse" && track.kind !== "triangle") {
+    return direction === "left"
+      ? Math.max(0, currentStepIndex - 1)
+      : Math.min(maxStepIndex, currentStepIndex + 1);
+  }
+
+  if (direction === "left") {
+    const candidateStepIndex = Math.max(0, currentStepIndex - 1);
+    return resolveTrackOriginStepIndex(track, candidateStepIndex);
+  }
+
+  const melodicState = getMelodicStepState(track, currentStepIndex);
+  let candidateStepIndex = currentStepIndex + 1;
+
+  if (melodicState.kind === "start") {
+    candidateStepIndex = currentStepIndex + melodicState.length;
+  } else if (melodicState.kind === "hold") {
+    candidateStepIndex = melodicState.startIndex + melodicState.length;
+  }
+
+  return resolveTrackOriginStepIndex(track, Math.min(maxStepIndex, candidateStepIndex));
 }
 
 /* ─────────── Step Ruler ─────────── */
@@ -1466,6 +1500,7 @@ function SequencerRow({
   defaultSampleId,
   dragState,
   engine,
+  hoverPreviewEnabled,
   nextStep,
   onDeselectStep,
   onDragPointerEnd,
@@ -1490,6 +1525,7 @@ function SequencerRow({
   defaultSampleId: string | null;
   dragState: DragState | null;
   engine: AudioEngine | null;
+  hoverPreviewEnabled: boolean;
   nextStep: number;
   onDeselectStep: () => void;
   onDragPointerEnd: () => void;
@@ -1519,7 +1555,7 @@ function SequencerRow({
   };
 
   const handleStepHover = (stepIndex: number) => {
-    if (engine === null) {
+    if (engine === null || !hoverPreviewEnabled) {
       return;
     }
 

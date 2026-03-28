@@ -138,4 +138,23 @@ describe("note-picker", () => {
     expect(screen.queryByRole("button", { name: "Select note E#4" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Select note B#4" })).toBeNull();
   });
+
+  it("still previews hovered notes while the picker is open", () => {
+    const onHoverNote = vi.fn();
+
+    render(
+      <NotePicker
+        selectedNote="C4"
+        accentColor="#ffcf4a"
+        ariaLabel="Test note picker"
+        onHoverNote={onHoverNote}
+        onSelectNote={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Test note picker"));
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Select note D5" }));
+
+    expect(onHoverNote).toHaveBeenCalledWith("D5");
+  });
 });

@@ -113,6 +113,8 @@ type WorkstationShellProps = {
 
 export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const [song, setSong] = useState(() => initialSong ?? createEmptySongDocument());
+  const [sequencerHoverPreviewEnabled, setSequencerHoverPreviewEnabled] = useState(true);
+  const [sequencerRulerVisible, setSequencerRulerVisible] = useState(true);
   const [deckSampleId, setDeckSampleId] = useState<string | null>(null);
   const [arrangementEditor, setArrangementEditor] = useState<ArrangementEditorState | null>(null);
   const [shareDslEditor, setShareDslEditor] = useState<ShareDslEditorState | null>(null);
@@ -811,8 +813,12 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
             startTransport={startTransport}
             stopTransport={stopTransport}
             isPlaying={isPlaying}
+            sequencerRulerVisible={sequencerRulerVisible}
+            sequencerHoverPreviewEnabled={sequencerHoverPreviewEnabled}
             onMasterVolumeChange={setMasterSongVolume}
             onOldSpeakerModeChange={setOldSpeakerMode}
+            onSequencerRulerVisibleChange={setSequencerRulerVisible}
+            onSequencerHoverPreviewChange={setSequencerHoverPreviewEnabled}
             onBpmChange={(nextBpm) => {
               setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
             }}
@@ -986,6 +992,8 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
             <SequencerMatrix
               defaultSampleId={deckSample?.id ?? null}
               engine={engine}
+              hoverPreviewEnabled={sequencerHoverPreviewEnabled}
+              rulerVisible={sequencerRulerVisible}
               onOpenMelodicTrackEditor={openMelodicTrackEditor}
               onOpenTriggerTrackEditor={openTriggerTrackEditor}
               onRequestLoopLengthChange={requestLoopLengthChange}
@@ -1082,8 +1090,12 @@ function TransportStrip({
   startTransport,
   stopTransport,
   isPlaying,
+  sequencerRulerVisible,
+  sequencerHoverPreviewEnabled,
   onMasterVolumeChange,
   onOldSpeakerModeChange,
+  onSequencerRulerVisibleChange,
+  onSequencerHoverPreviewChange,
   onBpmChange,
   onLoopLengthChange,
 }: {
@@ -1092,8 +1104,12 @@ function TransportStrip({
   startTransport: () => Promise<void>;
   stopTransport: () => void;
   isPlaying: boolean;
+  sequencerRulerVisible: boolean;
+  sequencerHoverPreviewEnabled: boolean;
   onMasterVolumeChange: (value: number) => void;
   onOldSpeakerModeChange: (enabled: boolean) => void;
+  onSequencerRulerVisibleChange: (enabled: boolean) => void;
+  onSequencerHoverPreviewChange: (enabled: boolean) => void;
   onBpmChange: (value: number) => void;
   onLoopLengthChange: (value: number) => void;
 }) {
@@ -1161,8 +1177,12 @@ function TransportStrip({
       <MasterVolumeField
         value={song.mixer.masterVolume}
         oldSpeakerMode={song.mixer.oldSpeakerMode}
+        sequencerRulerVisible={sequencerRulerVisible}
+        sequencerHoverPreviewEnabled={sequencerHoverPreviewEnabled}
         onChange={onMasterVolumeChange}
         onOldSpeakerModeChange={onOldSpeakerModeChange}
+        onSequencerRulerVisibleChange={onSequencerRulerVisibleChange}
+        onSequencerHoverPreviewChange={onSequencerHoverPreviewChange}
       />
 
       {/* ── Spacer ── */}
@@ -1180,13 +1200,21 @@ function TransportStrip({
 function MasterVolumeField({
   value,
   oldSpeakerMode,
+  sequencerRulerVisible,
+  sequencerHoverPreviewEnabled,
   onChange,
   onOldSpeakerModeChange,
+  onSequencerRulerVisibleChange,
+  onSequencerHoverPreviewChange,
 }: {
   value: number;
   oldSpeakerMode: boolean;
+  sequencerRulerVisible: boolean;
+  sequencerHoverPreviewEnabled: boolean;
   onChange: (value: number) => void;
   onOldSpeakerModeChange: (enabled: boolean) => void;
+  onSequencerRulerVisibleChange: (enabled: boolean) => void;
+  onSequencerHoverPreviewChange: (enabled: boolean) => void;
 }) {
   const percentValue = toTrackVolumePercent(value);
 
@@ -1212,6 +1240,62 @@ function MasterVolumeField({
         }}
       />
       <span className="w-8 text-right font-[var(--oc-mono)] text-[9px] tabular-nums text-white/35">{percentValue}%</span>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Sequencer ruler"
+              aria-pressed={sequencerRulerVisible}
+              className={cn(
+                "h-7 rounded-md border px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
+                sequencerRulerVisible
+                  ? "border-[var(--oc-play)]/35 bg-[var(--oc-play)]/10 text-[var(--oc-play)] hover:bg-[var(--oc-play)]/18"
+                  : "border-white/[0.06] bg-white/[0.02] text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+              )}
+              onClick={() => {
+                onSequencerRulerVisibleChange(!sequencerRulerVisible);
+              }}
+            >
+              Ruler
+            </Button>
+          }
+        />
+        <TooltipContent side="bottom">
+          {sequencerRulerVisible
+            ? "Sequencer ruler and keyboard notes are visible"
+            : "Sequencer ruler and keyboard notes are hidden"}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Sequencer hover preview"
+              aria-pressed={sequencerHoverPreviewEnabled}
+              className={cn(
+                "h-7 rounded-md border px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
+                sequencerHoverPreviewEnabled
+                  ? "border-[var(--oc-accent)]/35 bg-[var(--oc-accent)]/12 text-[var(--oc-accent)] hover:bg-[var(--oc-accent)]/18"
+                  : "border-white/[0.06] bg-white/[0.02] text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+              )}
+              onClick={() => {
+                onSequencerHoverPreviewChange(!sequencerHoverPreviewEnabled);
+              }}
+            >
+              Preview
+            </Button>
+          }
+        />
+        <TooltipContent side="bottom">
+          {sequencerHoverPreviewEnabled
+            ? "Sequencer step hover previews are on"
+            : "Sequencer step hover previews are off"}
+        </TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger
           render={

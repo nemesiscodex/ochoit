@@ -211,6 +211,32 @@ describe("workstation-shell", () => {
     expect(latestSong.mixer.oldSpeakerMode).toBe(true);
   });
 
+  it("toggles sequencer hover preview from the transport bar", () => {
+    renderWorkstationShell();
+
+    const hoverPreviewButton = screen.getByRole("button", { name: "Sequencer hover preview" });
+
+    expect(hoverPreviewButton.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(hoverPreviewButton);
+
+    expect(hoverPreviewButton.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("toggles the sequencer ruler from the transport bar", () => {
+    renderWorkstationShell();
+
+    const rulerButton = screen.getByRole("button", { name: "Sequencer ruler" });
+
+    expect(rulerButton.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Pattern Ruler")).toBeTruthy();
+
+    fireEvent.click(rulerButton);
+
+    expect(rulerButton.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByText("Pattern Ruler")).toBeNull();
+  });
+
   it("highlights start audio as the first action before the engine is ready", () => {
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
 
