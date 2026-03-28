@@ -413,6 +413,20 @@ describe("workstation-shell", () => {
     });
   });
 
+  it("loads the Zelda Medley example from the examples dialog", async () => {
+    renderEmptyWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open examples" }));
+    fireEvent.click(screen.getByRole("button", { name: "Load example Zelda Medley" }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Zelda Medley")).toBeTruthy();
+      expect(screen.getByDisplayValue("nemesiscodex")).toBeTruthy();
+      expect(screen.getByText("140 bpm")).toBeTruthy();
+      expect(screen.getByText("Loaded example: Zelda Medley.")).toBeTruthy();
+    });
+  });
+
   it("copies a share link and updates the current url", async () => {
     renderWorkstationShell();
 

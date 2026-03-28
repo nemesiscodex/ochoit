@@ -34,4 +34,22 @@ describe("song-examples", () => {
     expect(song.mixer.masterVolume).toBe(0.43);
     expect(song.samples).toHaveLength(0);
   });
+
+  it("ships a parseable built-in Zelda Medley example", () => {
+    const zeldaMedley = songExamples.find((example) => example.id === "zelda-medley");
+
+    if (zeldaMedley === undefined) {
+      throw new Error("Expected the Zelda Medley example to be registered.");
+    }
+
+    const song = parseSongShareText(zeldaMedley.dsl);
+
+    expect(song.meta.name).toBe("Zelda Medley");
+    expect(song.meta.author).toBe("nemesiscodex");
+    expect(song.transport.loopLength).toBe(128);
+    expect(song.transport.bpm).toBe(140);
+    expect(song.mixer.masterVolume).toBe(0.88);
+    expect(song.mixer.oldSpeakerMode).toBe(true);
+    expect(song.samples).toHaveLength(0);
+  });
 });
