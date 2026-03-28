@@ -14,6 +14,13 @@ import {
   getOrderedTracks,
   trackOrder,
 } from "@/features/song/song-document";
+import {
+  buildKeyboardNoteBindings,
+  clampKeyboardBaseOctave,
+  getKeyboardBaseOctaveForNote,
+  normalizeKeyboardNoteKey,
+  resolveKeyboardNoteFromKey,
+} from "@/features/song/song-keyboard-input";
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
 import {
   getDefaultSampleTrigger,
@@ -49,6 +56,25 @@ type StepSelectionState = {
   anchorStepIndex: number;
   selectedStepIndexes: number[];
 };
+
+type KeyboardNoteTarget =
+  | {
+      trackId: MelodicTrackId;
+      stepIndex: number;
+      note: NoteValue;
+      enabled: boolean;
+      kind: "melodic";
+      label: string;
+    }
+  | {
+      trackId: "sample";
+      stepIndex: number;
+      note: NoteValue;
+      enabled: boolean;
+      kind: "sample";
+      label: string;
+      sampleId: string | null;
+    };
 
 type CopiedMelodicEntry = MelodicArrangementEntry & {
   volume: number;
@@ -127,6 +153,9 @@ const fallbackStepWidthPx = 40;
 const fallbackStepHeightPx = 48;
 const fallbackStepGapPx = 4;
 const mediumViewportQuery = "(min-width: 768px)";
+const keyboardModeShortcutKey = "\\";
+const keyboardBaseOctaveMin = 0;
+const keyboardBaseOctaveMax = 8;
 
 function getStepDurationMs(song: SongDocument) {
   return (60_000 / song.transport.bpm) / song.transport.stepsPerBeat;
@@ -190,8 +219,12 @@ export function SequencerMatrix({
   const [selectionState, setSelectionState] = useState<StepSelectionState | null>(null);
   const [clipboardState, setClipboardState] = useState<ClipboardState | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [keyboardModeEnabled, setKeyboardModeEnabled] = useState(false);
+  const [keyboardBaseOctave, setKeyboardBaseOctave] = useState(3);
+  const [activeKeyboardKey, setActiveKeyboardKey] = useState<string | null>(null);
   const suppressClickRef = useRef(false);
   const dragStateRef = useRef<DragState | null>(null);
+  const keyboardKeyResetTimeoutRef = useRef<number | null>(null);
   const songRef = useRef(song);
   const moveMelodicSelectionRef = useRef(onMoveMelodicSelection);
   const moveNoiseSelectionRef = useRef(onMoveNoiseSelection);
@@ -203,6 +236,66 @@ export function SequencerMatrix({
   moveNoiseSelectionRef.current = onMoveNoiseSelection;
   moveSampleSelectionRef.current = onMoveSampleSelection;
   resizeMelodicStepRef.current = onResizeMelodicStep;
+
+  const keyboardNoteTarget = getKeyboardNoteTarget(song, selectionState);
+  const keyboardBindings = buildKeyboardNoteBindings(keyboardBaseOctave);
+
+  const previewKeyboardInputNote = (target: KeyboardNoteTarget, note: NoteValue) => {
+    if (engine === null) {
+      return;
+    }
+
+    const stepDurationMs = getStepDurationMs(song);
+
+    if (target.kind === "melodic") {
+      const track = song.tracks[target.trackId];
+      const step = track.steps[target.stepIndex];
+      const previewDurationMs = stepDurationMs * Math.max(step?.length ?? 1, 1);
+      const previewDuty = track.kind === "pulse" ? track.steps[target.stepIndex]?.duty ?? 0.5 : 0.5;
+
+      engine.previewNote(
+        target.trackId,
+        note,
+        previewDurationMs,
+        previewDuty,
+        step?.volume ?? track.volume,
+      );
+      return;
+    }
+
+    const sampleId = target.sampleId ?? getDefaultSampleTrigger(song.samples, defaultSampleId).sampleId;
+
+    if (sampleId === null) {
+      return;
+    }
+
+    const sample = song.samples.find((entry) => entry.id === sampleId);
+
+    if (sample === undefined) {
+      return;
+    }
+
+    engine.previewSampleNote?.(sample.id, sample.baseNote as NoteValue, note);
+
+    if (typeof engine.previewSampleNote !== "function") {
+      engine.previewSampleTrigger(sample.id, getFrequencyForNote(note) / getFrequencyForNote(sample.baseNote));
+    }
+  };
+
+  const flashKeyboardKey = (key: string) => {
+    setActiveKeyboardKey(key);
+
+    if (keyboardKeyResetTimeoutRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(keyboardKeyResetTimeoutRef.current);
+    }
+
+    if (typeof window !== "undefined") {
+      keyboardKeyResetTimeoutRef.current = window.setTimeout(() => {
+        setActiveKeyboardKey(null);
+        keyboardKeyResetTimeoutRef.current = null;
+      }, 160);
+    }
+  };
 
   const handleDeselectStep = () => {
     setSelectionState(null);
@@ -239,6 +332,41 @@ export function SequencerMatrix({
         });
       }
     }
+  };
+
+  const applyKeyboardInputNote = (target: KeyboardNoteTarget, note: NoteValue) => {
+    const bindingKey = getKeyboardBindingKeyForNote(note, keyboardBindings);
+
+    if (bindingKey !== null) {
+      flashKeyboardKey(bindingKey);
+    }
+
+    previewKeyboardInputNote(target, note);
+
+    if (target.kind === "melodic") {
+      onUpdateMelodicStep(target.trackId, target.stepIndex, { enabled: true, note });
+      return;
+    }
+
+    const defaultSampleTrigger = getDefaultSampleTrigger(song.samples, defaultSampleId);
+    onUpdateSampleStep(target.stepIndex, {
+      enabled: true,
+      sampleId: target.sampleId ?? defaultSampleTrigger.sampleId,
+      note,
+      playbackRate: song.tracks.sample.steps[target.stepIndex]?.playbackRate ?? defaultSampleTrigger.playbackRate,
+    });
+  };
+
+  const toggleKeyboardMode = () => {
+    setKeyboardModeEnabled((currentValue) => {
+      const nextValue = !currentValue;
+
+      if (nextValue && keyboardNoteTarget !== null) {
+        setKeyboardBaseOctave(getKeyboardBaseOctaveForNote(keyboardNoteTarget.note));
+      }
+
+      return nextValue;
+    });
   };
 
   const copySelection = () => {
@@ -582,12 +710,14 @@ export function SequencerMatrix({
   };
 
   useEffect(() => {
-    if (selectionState === null) {
-      return;
-    }
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isKeyboardTargetEditable(event.target)) {
+        return;
+      }
+
+      if (event.code === "Backslash" || event.key === keyboardModeShortcutKey) {
+        toggleKeyboardMode();
+        event.preventDefault();
         return;
       }
 
@@ -607,13 +737,47 @@ export function SequencerMatrix({
         }
       }
 
+      if (keyboardModeEnabled) {
+        if (event.key === "[") {
+          setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue - 1));
+          event.preventDefault();
+          return;
+        }
+
+        if (event.key === "]") {
+          setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue + 1));
+          event.preventDefault();
+          return;
+        }
+
+        if (
+          !event.altKey &&
+          keyboardNoteTarget !== null &&
+          normalizeKeyboardNoteKey(event.key) !== null
+        ) {
+          const resolvedNote = resolveKeyboardNoteFromKey(event.key, keyboardBaseOctave);
+
+          if (resolvedNote !== null) {
+            applyKeyboardInputNote(keyboardNoteTarget, resolvedNote);
+            event.preventDefault();
+            return;
+          }
+        }
+      }
+
       switch (event.key) {
         case "Escape":
-          setSelectionState(null);
-          event.preventDefault();
+          if (selectionState !== null) {
+            setSelectionState(null);
+            event.preventDefault();
+          }
           break;
         case "Backspace":
         case "Delete": {
+          if (selectionState === null) {
+            break;
+          }
+
           const currentSelection = selectionState;
           const selectedTrack = song.tracks[currentSelection.trackId];
 
@@ -641,6 +805,10 @@ export function SequencerMatrix({
           break;
         }
         case "Enter": {
+          if (selectionState === null) {
+            break;
+          }
+
           const selectedTrack = song.tracks[selectionState.trackId];
           const selectedStep = selectedTrack.steps[selectionState.anchorStepIndex];
 
@@ -651,6 +819,10 @@ export function SequencerMatrix({
           break;
         }
         case "ArrowLeft":
+          if (selectionState === null) {
+            break;
+          }
+
           setSelectionState((prev) => {
             if (prev === null) return null;
             const nextStepIndex = Math.max(0, prev.anchorStepIndex - 1);
@@ -663,6 +835,10 @@ export function SequencerMatrix({
           event.preventDefault();
           break;
         case "ArrowRight":
+          if (selectionState === null) {
+            break;
+          }
+
           setSelectionState((prev) => {
             if (prev === null) return null;
             const nextStepIndex = Math.min(song.transport.loopLength - 1, prev.anchorStepIndex + 1);
@@ -675,6 +851,10 @@ export function SequencerMatrix({
           event.preventDefault();
           break;
         case "ArrowUp": {
+          if (selectionState === null) {
+            break;
+          }
+
           const currentIndex = trackOrder.indexOf(selectionState.trackId);
           if (currentIndex > 0) {
             setSelectionState({
@@ -687,6 +867,10 @@ export function SequencerMatrix({
           break;
         }
         case "ArrowDown": {
+          if (selectionState === null) {
+            break;
+          }
+
           const currentIndex = trackOrder.indexOf(selectionState.trackId);
           if (currentIndex < trackOrder.length - 1) {
             setSelectionState({
@@ -709,6 +893,11 @@ export function SequencerMatrix({
   }, [
     clipboardState,
     defaultSampleId,
+    engine,
+    keyboardBaseOctave,
+    keyboardBindings,
+    keyboardModeEnabled,
+    keyboardNoteTarget,
     onUpdateMelodicStep,
     onUpdateNoiseStep,
     onUpdateSampleStep,
@@ -716,6 +905,14 @@ export function SequencerMatrix({
     song,
     song.transport.loopLength,
   ]);
+
+  useEffect(() => {
+    return () => {
+      if (keyboardKeyResetTimeoutRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(keyboardKeyResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -750,9 +947,22 @@ export function SequencerMatrix({
   return (
     <div className="flex flex-col gap-2">
       <StepRuler
+        activeKeyboardKey={activeKeyboardKey}
+        keyboardBaseOctave={keyboardBaseOctave}
+        keyboardBindings={keyboardBindings}
+        keyboardModeEnabled={keyboardModeEnabled}
+        keyboardModeShortcutKey={keyboardModeShortcutKey}
+        keyboardTarget={keyboardNoteTarget}
         loopLength={song.transport.loopLength}
         nextStep={nextStep}
+        onKeyboardBaseOctaveDecrease={() => {
+          setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue - 1));
+        }}
+        onKeyboardBaseOctaveIncrease={() => {
+          setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue + 1));
+        }}
         onRequestLoopLengthChange={onRequestLoopLengthChange}
+        onToggleKeyboardMode={toggleKeyboardMode}
         playbackState={playbackState}
       />
       {tracks.map((track) => {
@@ -914,58 +1124,193 @@ function validateMovePreview(song: SongDocument, track: Track, selectedStepIndex
   }
 }
 
+function getKeyboardNoteTarget(song: SongDocument, selectionState: StepSelectionState | null): KeyboardNoteTarget | null {
+  if (selectionState === null) {
+    return null;
+  }
+
+  const track = song.tracks[selectionState.trackId];
+  const stepIndex = selectionState.anchorStepIndex;
+
+  switch (track.kind) {
+    case "pulse":
+    case "triangle": {
+      const step = track.steps[stepIndex];
+
+      if (step === undefined) {
+        return null;
+      }
+
+      return {
+        trackId: track.id,
+        stepIndex,
+        note: step.note as NoteValue,
+        enabled: step.enabled,
+        kind: "melodic",
+        label: `${labelByTrackId[track.id]} step ${stepIndex + 1}`,
+      };
+    }
+    case "sample": {
+      if (song.meta.engineMode !== "inspired") {
+        return null;
+      }
+
+      const step = track.steps[stepIndex];
+
+      if (step === undefined) {
+        return null;
+      }
+
+      return {
+        trackId: "sample",
+        stepIndex,
+        note: step.note as NoteValue,
+        enabled: step.enabled,
+        kind: "sample",
+        label: `PCM step ${stepIndex + 1}`,
+        sampleId: step.sampleId,
+      };
+    }
+    case "noise":
+      return null;
+  }
+}
+
+function getKeyboardBindingKeyForNote(note: NoteValue, bindings: ReturnType<typeof buildKeyboardNoteBindings>) {
+  return bindings.find((binding) => binding.note === note)?.key ?? null;
+}
+
 /* ─────────── Step Ruler ─────────── */
 
 function StepRuler({
+  activeKeyboardKey,
+  keyboardBaseOctave,
+  keyboardBindings,
+  keyboardModeEnabled,
+  keyboardModeShortcutKey,
+  keyboardTarget,
   loopLength,
   nextStep,
+  onKeyboardBaseOctaveDecrease,
+  onKeyboardBaseOctaveIncrease,
   onRequestLoopLengthChange,
+  onToggleKeyboardMode,
   playbackState,
 }: {
+  activeKeyboardKey: string | null;
+  keyboardBaseOctave: number;
+  keyboardBindings: ReturnType<typeof buildKeyboardNoteBindings>;
+  keyboardModeEnabled: boolean;
+  keyboardModeShortcutKey: string;
+  keyboardTarget: KeyboardNoteTarget | null;
   loopLength: number;
   nextStep: number;
+  onKeyboardBaseOctaveDecrease: () => void;
+  onKeyboardBaseOctaveIncrease: () => void;
   onRequestLoopLengthChange: (nextLoopLength: number) => void;
+  onToggleKeyboardMode: () => void;
   playbackState: "stopped" | "playing";
 }) {
   const canDecrease = loopLength > SONG_LOOP_LENGTH_RANGE.min;
   const canIncrease = loopLength < SONG_LOOP_LENGTH_RANGE.max;
+  const canLowerKeyboardOctave = keyboardBaseOctave > keyboardBaseOctaveMin;
+  const canRaiseKeyboardOctave = keyboardBaseOctave < keyboardBaseOctaveMax;
+  const keyboardTargetSummary =
+    keyboardTarget === null
+      ? "Select a melodic or inspired PCM step to use note-entry mode."
+      : keyboardModeEnabled
+        ? `${keyboardTarget.label} is armed for keyboard note entry.`
+        : `${keyboardTarget.label} is ready for keyboard note entry.`;
+  const selectedKeyboardNote = keyboardTarget?.note ?? null;
 
   return (
     <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-2 backdrop-blur">
-      <div className="mb-2 flex items-start justify-between gap-3 px-1">
-        <div>
-          <div className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">Pattern Ruler</div>
+      <div className="mb-2 flex flex-col gap-3 px-1 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-xl">
+          <div className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">
+            Pattern Ruler
+          </div>
           <div className="mt-1 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/38">
             {loopLength} step loop. Select empty steps, then press Enter to add.
           </div>
+          <div className="mt-2 font-[var(--oc-mono)] text-[10px] text-white/55">{keyboardTargetSummary}</div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Remove 4 steps"
-            disabled={!canDecrease}
-            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
-            onClick={() => {
-              onRequestLoopLengthChange(loopLength - SONG_LOOP_LENGTH_RANGE.step);
-            }}
-          >
-            -4
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Add 4 steps"
-            disabled={!canIncrease}
-            className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
-            onClick={() => {
-              onRequestLoopLengthChange(loopLength + SONG_LOOP_LENGTH_RANGE.step);
-            }}
-          >
-            +4
-          </Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={keyboardModeEnabled ? "Disable keyboard note mode" : "Enable keyboard note mode"}
+              aria-pressed={keyboardModeEnabled}
+              className={cn(
+                "h-7 rounded-md border px-2.5 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
+                keyboardModeEnabled
+                  ? "border-[var(--oc-play)]/35 bg-[var(--oc-play)]/10 text-[var(--oc-play)]"
+                  : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.08] hover:text-white",
+              )}
+              onClick={onToggleKeyboardMode}
+            >
+              {keyboardModeEnabled ? "Keys On" : "Keys Off"} <span className="text-white/35">{keyboardModeShortcutKey}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Lower keyboard octave"
+              disabled={!canLowerKeyboardOctave}
+              className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+              onClick={onKeyboardBaseOctaveDecrease}
+            >
+              [
+            </Button>
+            <div
+              aria-label="Keyboard octave"
+              className="flex h-7 min-w-[5rem] items-center justify-center rounded-md border border-white/[0.08] bg-black/20 px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/60"
+            >
+              Oct {keyboardBaseOctave}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Raise keyboard octave"
+              disabled={!canRaiseKeyboardOctave}
+              className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+              onClick={onKeyboardBaseOctaveIncrease}
+            >
+              ]
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Remove 4 steps"
+              disabled={!canDecrease}
+              className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+              onClick={() => {
+                onRequestLoopLengthChange(loopLength - SONG_LOOP_LENGTH_RANGE.step);
+              }}
+            >
+              -4
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Add 4 steps"
+              disabled={!canIncrease}
+              className="h-7 rounded-md border-white/[0.08] bg-white/[0.03] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+              onClick={() => {
+                onRequestLoopLengthChange(loopLength + SONG_LOOP_LENGTH_RANGE.step);
+              }}
+            >
+              +4
+            </Button>
+          </div>
+          <div className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.12em] text-white/32">
+            Note keys follow the classic tracker layout. Press note keys directly, or use Enter first on an empty step.
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
@@ -991,6 +1336,126 @@ function StepRuler({
           );
         })}
       </div>
+      {(keyboardModeEnabled || keyboardTarget !== null) ? (
+        <KeyboardPianoPreview
+          activeKeyboardKey={activeKeyboardKey}
+          bindings={keyboardBindings}
+          keyboardModeEnabled={keyboardModeEnabled}
+          selectedNote={selectedKeyboardNote}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function KeyboardPianoPreview({
+  activeKeyboardKey,
+  bindings,
+  keyboardModeEnabled,
+  selectedNote,
+}: {
+  activeKeyboardKey: string | null;
+  bindings: ReturnType<typeof buildKeyboardNoteBindings>;
+  keyboardModeEnabled: boolean;
+  selectedNote: NoteValue | null;
+}) {
+  return (
+    <div className="mt-3 border-t border-white/[0.06] pt-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.2em] text-white/30">Keyboard Notes</div>
+        <div className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/35">
+          {keyboardModeEnabled ? "Live note entry" : "Preview layout"}
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <KeyboardBindingRow
+          activeKeyboardKey={activeKeyboardKey}
+          bindings={bindings.filter((binding) => binding.row === "lower")}
+          rowLabel="Lower keys"
+          selectedNote={selectedNote}
+        />
+        <KeyboardBindingRow
+          activeKeyboardKey={activeKeyboardKey}
+          bindings={bindings.filter((binding) => binding.row === "upper")}
+          rowLabel="Upper keys"
+          selectedNote={selectedNote}
+        />
+      </div>
+    </div>
+  );
+}
+
+function KeyboardBindingRow({
+  activeKeyboardKey,
+  bindings,
+  rowLabel,
+  selectedNote,
+}: {
+  activeKeyboardKey: string | null;
+  bindings: ReturnType<typeof buildKeyboardNoteBindings>;
+  rowLabel: string;
+  selectedNote: NoteValue | null;
+}) {
+  const blackBindings = bindings.filter((binding) => binding.lane === "black");
+  const whiteBindings = bindings.filter((binding) => binding.lane === "white");
+
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+      <div className="mb-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">{rowLabel}</div>
+      <div className="space-y-1">
+        <div className="grid grid-cols-7 gap-1">
+          {blackBindings.map((binding) => (
+            <KeyboardBindingKey
+              key={`${rowLabel}-${binding.key}`}
+              activeKeyboardKey={activeKeyboardKey}
+              binding={binding}
+              selectedNote={selectedNote}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-10 gap-1">
+          {whiteBindings.map((binding) => (
+            <KeyboardBindingKey
+              key={`${rowLabel}-${binding.key}`}
+              activeKeyboardKey={activeKeyboardKey}
+              binding={binding}
+              selectedNote={selectedNote}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KeyboardBindingKey({
+  activeKeyboardKey,
+  binding,
+  selectedNote,
+}: {
+  activeKeyboardKey: string | null;
+  binding: ReturnType<typeof buildKeyboardNoteBindings>[number];
+  selectedNote: NoteValue | null;
+}) {
+  const isPressed = activeKeyboardKey === binding.key;
+  const isSelected = binding.note !== null && binding.note === selectedNote;
+
+  return (
+    <div
+      data-keyboard-key={binding.key}
+      aria-label={`${binding.keyLabel} keyboard note ${binding.note ?? "unavailable"}`}
+      className={cn(
+        "flex min-h-[3.5rem] flex-col justify-between rounded-md border px-2 py-1.5 transition-all",
+        binding.lane === "black"
+          ? "border-white/[0.06] bg-[#111521] text-white/65"
+          : "border-white/[0.06] bg-white/[0.03] text-white/75",
+        !binding.isPlayable && "opacity-25",
+        isSelected && "border-[var(--oc-play)]/35 bg-[var(--oc-play)]/10 text-[var(--oc-play)]",
+        isPressed && "translate-y-[1px] border-white/30 bg-white/[0.12] text-white",
+      )}
+    >
+      <span className="font-[var(--oc-mono)] text-[11px] font-semibold uppercase leading-none">{binding.note ?? "--"}</span>
+      <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">{binding.keyLabel}</span>
     </div>
   );
 }

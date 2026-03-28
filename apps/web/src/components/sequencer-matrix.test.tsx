@@ -91,6 +91,47 @@ describe("sequencer-matrix", () => {
     expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
+  it("toggles keyboard note mode from the ruler and via the shortcut", () => {
+    renderMatrix();
+
+    const toggle = screen.getByRole("button", { name: "Enable keyboard note mode" });
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Disable keyboard note mode" }).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.keyDown(document, { key: "\\", code: "Backslash" });
+    expect(screen.getByRole("button", { name: "Enable keyboard note mode" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("applies keyboard note input to a selected empty melodic step", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Enable keyboard note mode" }));
+    fireEvent.keyDown(document, { key: "[" });
+    fireEvent.keyDown(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 1, { enabled: true, note: "C3" });
+    expect(screen.getByLabelText("Z keyboard note C3")).toBeTruthy();
+  });
+
+  it("applies keyboard note input to inspired PCM steps", () => {
+    const onUpdateSampleStep = vi.fn();
+
+    renderMatrix({ onUpdateSampleStep });
+
+    fireEvent.click(screen.getByLabelText("PCM step 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Enable keyboard note mode" }));
+    fireEvent.keyDown(document, { key: "x" });
+
+    expect(onUpdateSampleStep).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ enabled: true, note: "D4" }),
+    );
+  });
+
   it("calls the mute toggle callback for a specific voice", () => {
     const onToggleTrackMute = vi.fn();
 
