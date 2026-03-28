@@ -17,6 +17,7 @@ import {
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
 import {
   getDefaultSampleTrigger,
+  type MelodicArrangementEntry,
   getMelodicArrangementEntries,
   moveMelodicTrackEntries,
   moveNoiseTrackEntries,
@@ -47,6 +48,45 @@ type StepSelectionState = {
   anchorStepIndex: number;
   selectedStepIndexes: number[];
 };
+
+type CopiedMelodicEntry = MelodicArrangementEntry & {
+  volume: number;
+};
+
+type CopiedNoiseEntry = {
+  stepIndex: number;
+  mode: SongDocument["tracks"]["noise"]["steps"][number]["mode"];
+  periodIndex: SongDocument["tracks"]["noise"]["steps"][number]["periodIndex"];
+  volume: number;
+};
+
+type CopiedSampleEntry = {
+  stepIndex: number;
+  sampleId: string;
+  note: NoteValue;
+  playbackRate: number;
+  volume: number;
+};
+
+type ClipboardState =
+  | {
+      kind: "melodic";
+      trackId: MelodicTrackId;
+      startStepIndex: number;
+      entries: CopiedMelodicEntry[];
+    }
+  | {
+      kind: "noise";
+      trackId: "noise";
+      startStepIndex: number;
+      entries: CopiedNoiseEntry[];
+    }
+  | {
+      kind: "sample";
+      trackId: "sample";
+      startStepIndex: number;
+      entries: CopiedSampleEntry[];
+    };
 
 type GridMetrics = {
   pointerStartX: number;
@@ -91,6 +131,19 @@ function getStepDurationMs(song: SongDocument) {
   return (60_000 / song.transport.bpm) / song.transport.stepsPerBeat;
 }
 
+function isKeyboardTargetEditable(target: EventTarget | null) {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function rangesOverlap(startA: number, endA: number, startB: number, endB: number) {
+  return startA < endB && startB < endA;
+}
+
 export function SequencerMatrix({
   defaultSampleId,
   engine,
@@ -132,6 +185,7 @@ export function SequencerMatrix({
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
 }) {
   const [selectionState, setSelectionState] = useState<StepSelectionState | null>(null);
+  const [clipboardState, setClipboardState] = useState<ClipboardState | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const suppressClickRef = useRef(false);
   const dragStateRef = useRef<DragState | null>(null);
@@ -149,6 +203,213 @@ export function SequencerMatrix({
 
   const handleDeselectStep = () => {
     setSelectionState(null);
+  };
+
+  const copySelection = () => {
+    if (selectionState === null) {
+      return;
+    }
+
+    const selectedTrack = song.tracks[selectionState.trackId];
+
+    switch (selectedTrack.kind) {
+      case "pulse":
+      case "triangle": {
+        const entries = getMelodicArrangementEntries(selectedTrack)
+          .filter((entry) => selectionState.selectedStepIndexes.includes(entry.stepIndex))
+          .map((entry) => ({
+            ...entry,
+            volume: selectedTrack.steps[entry.stepIndex]?.volume ?? selectedTrack.volume,
+          }));
+
+        if (entries.length === 0) {
+          return;
+        }
+
+        setClipboardState({
+          kind: "melodic",
+          trackId: selectedTrack.id,
+          startStepIndex: Math.min(...entries.map((entry) => entry.stepIndex)),
+          entries,
+        });
+        return;
+      }
+      case "noise": {
+        const entries = selectionState.selectedStepIndexes.flatMap((stepIndex) => {
+          const step = selectedTrack.steps[stepIndex];
+
+          return step?.enabled
+            ? [
+                {
+                  stepIndex,
+                  mode: step.mode,
+                  periodIndex: step.periodIndex,
+                  volume: step.volume,
+                },
+              ]
+            : [];
+        });
+
+        if (entries.length === 0) {
+          return;
+        }
+
+        setClipboardState({
+          kind: "noise",
+          trackId: selectedTrack.id,
+          startStepIndex: Math.min(...entries.map((entry) => entry.stepIndex)),
+          entries,
+        });
+        return;
+      }
+      case "sample": {
+        const entries = selectionState.selectedStepIndexes.flatMap((stepIndex) => {
+          const step = selectedTrack.steps[stepIndex];
+
+          return step?.enabled && step.sampleId !== null
+            ? [
+                {
+                  stepIndex,
+                  sampleId: step.sampleId,
+                  note: step.note as NoteValue,
+                  playbackRate: step.playbackRate,
+                  volume: step.volume,
+                },
+              ]
+            : [];
+        });
+
+        if (entries.length === 0) {
+          return;
+        }
+
+        setClipboardState({
+          kind: "sample",
+          trackId: selectedTrack.id,
+          startStepIndex: Math.min(...entries.map((entry) => entry.stepIndex)),
+          entries,
+        });
+      }
+    }
+  };
+
+  const pasteSelection = () => {
+    if (selectionState === null || clipboardState === null || selectionState.trackId !== clipboardState.trackId) {
+      return;
+    }
+
+    const targetStartStepIndex = selectionState.anchorStepIndex;
+    const stepOffset = targetStartStepIndex - clipboardState.startStepIndex;
+
+    switch (clipboardState.kind) {
+      case "melodic": {
+        const selectedTrack = song.tracks[clipboardState.trackId];
+        const pastedEntries = clipboardState.entries
+          .map((entry) => ({
+            ...entry,
+            stepIndex: entry.stepIndex + stepOffset,
+          }))
+          .filter((entry) => entry.stepIndex >= 0 && entry.stepIndex < selectedTrack.steps.length)
+          .sort((left, right) => left.stepIndex - right.stepIndex);
+
+        if (pastedEntries.length === 0) {
+          return;
+        }
+
+        const existingEntries = getMelodicArrangementEntries(selectedTrack);
+        const conflictingStepIndexes = existingEntries
+          .filter((existingEntry) =>
+            pastedEntries.some((pastedEntry) =>
+              rangesOverlap(
+                existingEntry.stepIndex,
+                existingEntry.stepIndex + existingEntry.length,
+                pastedEntry.stepIndex,
+                Math.min(pastedEntry.stepIndex + pastedEntry.length, selectedTrack.steps.length),
+              ),
+            ),
+          )
+          .map((entry) => entry.stepIndex);
+
+        conflictingStepIndexes.forEach((stepIndex) => {
+          onUpdateMelodicStep(selectedTrack.id, stepIndex, { enabled: false });
+        });
+
+        pastedEntries.forEach((entry) => {
+          onUpdateMelodicStep(selectedTrack.id, entry.stepIndex, {
+            enabled: true,
+            note: entry.note,
+            length: entry.length,
+            ...(selectedTrack.kind === "pulse" ? { duty: entry.duty } : {}),
+            volume: entry.volume,
+          });
+        });
+
+        setSelectionState({
+          trackId: selectedTrack.id,
+          anchorStepIndex: targetStartStepIndex,
+          selectedStepIndexes: pastedEntries.map((entry) => entry.stepIndex),
+        });
+        return;
+      }
+      case "noise": {
+        const pastedEntries = clipboardState.entries
+          .map((entry) => ({
+            ...entry,
+            stepIndex: entry.stepIndex + stepOffset,
+          }))
+          .filter((entry) => entry.stepIndex >= 0 && entry.stepIndex < song.tracks.noise.steps.length)
+          .sort((left, right) => left.stepIndex - right.stepIndex);
+
+        if (pastedEntries.length === 0) {
+          return;
+        }
+
+        pastedEntries.forEach((entry) => {
+          onUpdateNoiseStep(entry.stepIndex, {
+            enabled: true,
+            mode: entry.mode,
+            periodIndex: entry.periodIndex,
+            volume: entry.volume,
+          });
+        });
+
+        setSelectionState({
+          trackId: "noise",
+          anchorStepIndex: targetStartStepIndex,
+          selectedStepIndexes: pastedEntries.map((entry) => entry.stepIndex),
+        });
+        return;
+      }
+      case "sample": {
+        const pastedEntries = clipboardState.entries
+          .map((entry) => ({
+            ...entry,
+            stepIndex: entry.stepIndex + stepOffset,
+          }))
+          .filter((entry) => entry.stepIndex >= 0 && entry.stepIndex < song.tracks.sample.steps.length)
+          .sort((left, right) => left.stepIndex - right.stepIndex);
+
+        if (pastedEntries.length === 0) {
+          return;
+        }
+
+        pastedEntries.forEach((entry) => {
+          onUpdateSampleStep(entry.stepIndex, {
+            enabled: true,
+            sampleId: entry.sampleId,
+            note: entry.note,
+            playbackRate: entry.playbackRate,
+            volume: entry.volume,
+          });
+        });
+
+        setSelectionState({
+          trackId: "sample",
+          anchorStepIndex: targetStartStepIndex,
+          selectedStepIndexes: pastedEntries.map((entry) => entry.stepIndex),
+        });
+      }
+    }
   };
 
   const updateDragPreview = (clientX: number, clientY: number) => {
@@ -290,14 +551,24 @@ export function SequencerMatrix({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement
-      ) {
+      if (isKeyboardTargetEditable(event.target)) {
         return;
+      }
+
+      if (event.metaKey || event.ctrlKey) {
+        const loweredKey = event.key.toLowerCase();
+
+        if (loweredKey === "c") {
+          copySelection();
+          event.preventDefault();
+          return;
+        }
+
+        if (loweredKey === "v") {
+          pasteSelection();
+          event.preventDefault();
+          return;
+        }
       }
 
       switch (event.key) {
@@ -305,6 +576,34 @@ export function SequencerMatrix({
           setSelectionState(null);
           event.preventDefault();
           break;
+        case "Backspace":
+        case "Delete": {
+          const currentSelection = selectionState;
+          const selectedTrack = song.tracks[currentSelection.trackId];
+
+          switch (selectedTrack.kind) {
+            case "pulse":
+            case "triangle":
+              currentSelection.selectedStepIndexes.forEach((stepIndex) => {
+                onUpdateMelodicStep(selectedTrack.id, stepIndex, { enabled: false });
+              });
+              break;
+            case "noise":
+              currentSelection.selectedStepIndexes.forEach((stepIndex) => {
+                onUpdateNoiseStep(stepIndex, { enabled: false });
+              });
+              break;
+            case "sample":
+              currentSelection.selectedStepIndexes.forEach((stepIndex) => {
+                onUpdateSampleStep(stepIndex, { enabled: false });
+              });
+              break;
+          }
+
+          setSelectionState(null);
+          event.preventDefault();
+          break;
+        }
         case "ArrowLeft":
           setSelectionState((prev) => {
             if (prev === null) return null;
@@ -361,7 +660,15 @@ export function SequencerMatrix({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [selectionState, song.transport.loopLength]);
+  }, [
+    clipboardState,
+    onUpdateMelodicStep,
+    onUpdateNoiseStep,
+    onUpdateSampleStep,
+    selectionState,
+    song,
+    song.transport.loopLength,
+  ]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {

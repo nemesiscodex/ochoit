@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkstationShell } from "@/components/workstation-shell";
 import type { AudioEngine } from "@/features/audio/audio-engine";
 import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
-import { createDefaultSongDocument, SONG_MAX_SAMPLE_COUNT, type SongDocument } from "@/features/song/song-document";
+import {
+  createDefaultSongDocument,
+  createEmptySongDocument,
+  SONG_MAX_SAMPLE_COUNT,
+  type SongDocument,
+} from "@/features/song/song-document";
 import { buildSongShareUrl, serializeSongShareText } from "@/features/song/song-share";
 import * as useAudioEngineModule from "@/features/audio/use-audio-engine";
 import * as sampleRecorderModule from "@/features/audio/sample-recorder";
@@ -219,6 +224,127 @@ describe("workstation-shell", () => {
     fireEvent.click(screen.getByRole("button", { name: /stop/i }));
 
     expect(playingResult.stopTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggles transport with the spacebar shortcut", () => {
+    const stoppedResult = createUseAudioEngineResult("stopped");
+    mockUseAudioEngine.mockReturnValue(stoppedResult);
+
+    const { rerender } = renderWorkstationShell();
+
+    fireEvent.keyDown(document, { key: " " });
+
+    expect(stoppedResult.startTransport).toHaveBeenCalledTimes(1);
+
+    const playingResult = createUseAudioEngineResult("playing");
+    mockUseAudioEngine.mockReturnValue(playingResult);
+    rerender(createWorkstationShellElement());
+
+    fireEvent.keyDown(document, { key: " " });
+
+    expect(playingResult.stopTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not toggle transport with the spacebar while typing into an input", () => {
+    const stoppedResult = createUseAudioEngineResult("stopped");
+    mockUseAudioEngine.mockReturnValue(stoppedResult);
+
+    renderWorkstationShell();
+
+    fireEvent.keyDown(screen.getByLabelText("BPM"), { key: " " });
+
+    expect(stoppedResult.startTransport).not.toHaveBeenCalled();
+  });
+
+  it("copies and pastes selected notes from a new start position", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[0] = {
+      ...song.tracks.pulse1.steps[0],
+      enabled: true,
+      note: "C5",
+      length: 2,
+      duty: 0.125,
+      volume: 0.61,
+    };
+    song.tracks.pulse1.steps[4] = {
+      ...song.tracks.pulse1.steps[4],
+      enabled: true,
+      note: "E5",
+      length: 1,
+      duty: 0.75,
+      volume: 0.43,
+    };
+
+    renderWorkstationShell(song);
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "c", ctrlKey: true });
+    fireEvent.click(screen.getByLabelText("Pulse I step 9"));
+    fireEvent.keyDown(document, { key: "v", ctrlKey: true });
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.tracks.pulse1.steps[8]).toMatchObject({
+      enabled: true,
+      note: "C5",
+      length: 2,
+      duty: 0.125,
+      volume: 0.61,
+    });
+    expect(latestSong.tracks.pulse1.steps[12]).toMatchObject({
+      enabled: true,
+      note: "E5",
+      length: 1,
+      duty: 0.75,
+      volume: 0.43,
+    });
+  });
+
+  it("overrides existing notes when pasting", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[0] = {
+      ...song.tracks.pulse1.steps[0],
+      enabled: true,
+      note: "C5",
+      length: 4,
+      duty: 0.25,
+      volume: 0.52,
+    };
+    song.tracks.pulse1.steps[9] = {
+      ...song.tracks.pulse1.steps[9],
+      enabled: true,
+      note: "G4",
+      length: 1,
+      duty: 0.5,
+      volume: 0.2,
+    };
+
+    renderWorkstationShell(song);
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.keyDown(document, { key: "c", ctrlKey: true });
+    fireEvent.click(screen.getByLabelText("Pulse I step 9"));
+    fireEvent.keyDown(document, { key: "v", ctrlKey: true });
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.tracks.pulse1.steps[8]).toMatchObject({
+      enabled: true,
+      note: "C5",
+      length: 4,
+      duty: 0.25,
+      volume: 0.52,
+    });
+    expect(latestSong.tracks.pulse1.steps[9]?.enabled).toBe(false);
   });
 
   it("renders the full five-row sequencer matrix", () => {

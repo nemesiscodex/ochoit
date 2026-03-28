@@ -694,6 +694,40 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   }, [arrangementEditor, examplesOpen, shareDslEditor]);
 
   useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.key !== " ") {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (isPlaying) {
+        stopTransport();
+        return;
+      }
+
+      void startTransport();
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isPlaying, startTransport, stopTransport]);
+
+  useEffect(() => {
     setDeckSampleId((currentSampleId) => {
       if (song.samples.length === 0) {
         return null;

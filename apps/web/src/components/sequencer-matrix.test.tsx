@@ -392,6 +392,37 @@ describe("sequencer-matrix", () => {
     expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
   });
 
+  it("deletes a selected melodic step with Delete", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 1"));
+    fireEvent.keyDown(document, { key: "Delete" });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 0, { enabled: false });
+    expect(screen.queryByLabelText("Pulse I step 1 editor")).toBeNull();
+  });
+
+  it("deletes a selected trigger step with Backspace", () => {
+    const onUpdateNoiseStep = vi.fn();
+    const song = createEmptySongDocument();
+    song.tracks.noise.steps[2] = {
+      ...song.tracks.noise.steps[2],
+      enabled: true,
+      mode: "long",
+      periodIndex: 8,
+    };
+
+    renderMatrix({ onUpdateNoiseStep, song });
+
+    fireEvent.click(screen.getByLabelText("Noise step 3"));
+    fireEvent.keyDown(document, { key: "Backspace" });
+
+    expect(onUpdateNoiseStep).toHaveBeenCalledWith(2, { enabled: false });
+    expect(screen.queryByLabelText("Noise step 3 editor")).toBeNull();
+  });
+
   it("shift-click selects enabled origin entries between the anchor and target", () => {
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
