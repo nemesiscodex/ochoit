@@ -16,20 +16,35 @@ import {
   formatNoiseConfigLabel,
   formatPulseDutyLabel,
   getMelodicArrangementEntries,
+  getNoiseTriggerPresetForStep,
+  noteEntryOptions,
   parseMelodicTrackArrangement,
   parseNoiseTrackArrangement,
   parseSampleTrackArrangement,
+  pulseDutyOptions,
+  samplePlaybackRateOptions,
   type MelodicArrangementEntry,
   type MelodicTrackId,
+  type NoteValue,
 } from "@/features/song/song-pattern";
 
 export const SONG_SHARE_HASH_KEY = "song";
 
-const SHARE_FORMAT_VERSION = 3;
+const SHARE_FORMAT_VERSION = 4;
+const LEGACY_COMPRESSED_SHARE_FORMAT_VERSION = 3;
 const SHARE_PAYLOAD_PREFIX = `v${SHARE_FORMAT_VERSION}.`;
 const shareLineBreak = "\n";
 const sampleLinePrefix = "$";
 const defaultSharedMeta = createEmptySongDocument().meta;
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+const noteIndexByValue = new Map<NoteValue, number>(noteEntryOptions.map((note, index) => [note, index]));
+const pulseDutyIndexByValue = new Map<PulseTrack["steps"][number]["duty"], number>(
+  pulseDutyOptions.map((duty, index) => [duty, index]),
+);
+const samplePlaybackRateIndexByValue = new Map<number, number>(
+  samplePlaybackRateOptions.map((playbackRate, index) => [playbackRate, index]),
+);
 
 const trackIdBySectionNumber = {
   1: "pulse1",
@@ -68,6 +83,114 @@ type ParsedShareHeader = {
   updatedAt: string;
 };
 
+type BinaryTrackState = Pick<PulseTrack | TriangleTrack | NoiseTrack | SampleTrack, "volume" | "muted">;
+
+class ByteWriter {
+  private readonly bytes: number[] = [];
+
+  writeByte(value: number) {
+    this.bytes.push(value & 0xff);
+  }
+
+  writeBytes(values: Uint8Array) {
+    values.forEach((value) => {
+      this.bytes.push(value);
+    });
+  }
+
+  writeVarUint(value: number) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error("Expected a non-negative integer for varint encoding.");
+    }
+
+    let remaining = value;
+
+    do {
+      let currentByte = remaining & 0x7f;
+      remaining >>>= 7;
+
+      if (remaining > 0) {
+        currentByte |= 0x80;
+      }
+
+      this.writeByte(currentByte);
+    } while (remaining > 0);
+  }
+
+  writeString(value: string) {
+    const bytes = textEncoder.encode(value);
+    this.writeVarUint(bytes.length);
+    this.writeBytes(bytes);
+  }
+
+  toUint8Array() {
+    return Uint8Array.from(this.bytes);
+  }
+}
+
+class ByteReader {
+  private offset = 0;
+
+  constructor(private readonly bytes: Uint8Array) {}
+
+  readByte() {
+    const value = this.bytes[this.offset];
+
+    if (value === undefined) {
+      throw new Error("Unexpected end of share payload.");
+    }
+
+    this.offset += 1;
+    return value;
+  }
+
+  readBytes(length: number) {
+    if (!Number.isInteger(length) || length < 0) {
+      throw new Error("Invalid binary length.");
+    }
+
+    const value = this.bytes.slice(this.offset, this.offset + length);
+
+    if (value.length !== length) {
+      throw new Error("Unexpected end of share payload.");
+    }
+
+    this.offset += length;
+    return value;
+  }
+
+  readVarUint() {
+    let value = 0;
+    let shift = 0;
+
+    while (true) {
+      const currentByte = this.readByte();
+      value |= (currentByte & 0x7f) << shift;
+
+      if ((currentByte & 0x80) === 0) {
+        return value;
+      }
+
+      shift += 7;
+
+      if (shift > 28) {
+        throw new Error("Invalid share payload varint.");
+      }
+    }
+  }
+
+  readString() {
+    const length = this.readVarUint();
+    return textDecoder.decode(this.readBytes(length));
+  }
+
+  assertFullyConsumed() {
+    if (this.offset !== this.bytes.length) {
+      throw new Error("Unexpected trailing bytes in share payload.");
+    }
+  }
+}
+
 export type SongShareLoadResult =
   | {
       status: "empty";
@@ -82,24 +205,27 @@ export type SongShareLoadResult =
     };
 
 export function serializeSongSharePayload(song: SongDocument) {
-  const compactText = serializeSongShareText(song);
-  const compressedBytes = deflateRaw(new TextEncoder().encode(compactText));
-
-  return `${SHARE_PAYLOAD_PREFIX}${encodeBase64Url(compressedBytes)}`;
+  return serializeSongSharePayloadV4(song);
 }
 
 export function parseSongSharePayload(payload: string) {
   const compressedPayloadMatch = /^v(\d+)\.(.+)$/u.exec(payload);
 
   if (compressedPayloadMatch !== null) {
-    const compressedPayload = compressedPayloadMatch[2] ?? "";
-    const compressedBytes = decodeBase64UrlToBytes(compressedPayload);
-    const compactText = new TextDecoder().decode(inflateRaw(compressedBytes));
+    const version = Number(compressedPayloadMatch[1] ?? "");
+    const payloadBody = compressedPayloadMatch[2] ?? "";
 
-    return parseSongShareText(compactText);
+    if (version === SHARE_FORMAT_VERSION) {
+      return parseSongSharePayloadV4(payloadBody);
+    }
+
+    if (version === LEGACY_COMPRESSED_SHARE_FORMAT_VERSION) {
+      return parseSongSharePayloadV3(payloadBody);
+    }
+
+    throw new Error("Unsupported share format version.");
   }
 
-  // Backward compatibility with the original base64url(JSON.stringify(song)) links.
   return parseSongDocument(JSON.parse(decodeBase64UrlToText(payload)));
 }
 
@@ -233,11 +359,117 @@ export function parseSongShareText(input: string) {
   return parseSongDocument(sharedSong);
 }
 
+function serializeSongSharePayloadV4(song: SongDocument) {
+  const writer = new ByteWriter();
+  const headerFlags =
+    (song.meta.engineMode === "authentic" ? 1 : 0) |
+    (song.mixer.oldSpeakerMode ? 1 << 1 : 0) |
+    (song.meta.name !== defaultSharedMeta.name ? 1 << 2 : 0) |
+    (song.meta.author !== defaultSharedMeta.author ? 1 << 3 : 0) |
+    (song.meta.createdAt !== defaultSharedMeta.createdAt ? 1 << 4 : 0) |
+    (song.meta.updatedAt !== defaultSharedMeta.updatedAt ? 1 << 5 : 0);
+
+  writer.writeByte(headerFlags);
+  writer.writeVarUint(song.transport.bpm - 40);
+  writer.writeVarUint(song.transport.stepsPerBeat - 1);
+  writer.writeVarUint(song.transport.loopLength / 4 - 2);
+  writer.writeByte(quantizeLevel(song.mixer.masterVolume));
+
+  if ((headerFlags & (1 << 2)) !== 0) {
+    writer.writeString(song.meta.name);
+  }
+
+  if ((headerFlags & (1 << 3)) !== 0) {
+    writer.writeString(song.meta.author);
+  }
+
+  if ((headerFlags & (1 << 4)) !== 0) {
+    writer.writeString(song.meta.createdAt);
+  }
+
+  if ((headerFlags & (1 << 5)) !== 0) {
+    writer.writeString(song.meta.updatedAt);
+  }
+
+  writeSamples(writer, song.samples);
+  writePulseTrack(writer, song.tracks.pulse1);
+  writePulseTrack(writer, song.tracks.pulse2);
+  writeTriangleTrack(writer, song.tracks.triangle);
+  writeNoiseTrack(writer, song.tracks.noise);
+  writeSampleTrack(writer, song.tracks.sample, song.samples, song.meta.engineMode);
+
+  return `${SHARE_PAYLOAD_PREFIX}${encodeBase64Url(deflateRaw(writer.toUint8Array()))}`;
+}
+
+function parseSongSharePayloadV4(payloadBody: string) {
+  const reader = new ByteReader(inflateRaw(decodeBase64UrlToBytes(payloadBody)));
+  return parseSongSharePayloadV4FromReader(reader);
+}
+
+function parseSongSharePayloadV4FromReader(reader: ByteReader) {
+  const defaultSong = createDefaultSongDocument();
+  const headerFlags = reader.readByte();
+  const bpm = reader.readVarUint() + 40;
+  const stepsPerBeat = reader.readVarUint() + 1;
+  const loopLength = (reader.readVarUint() + 2) * 4;
+  const masterVolume = dequantizeLevel(reader.readByte());
+
+  const name = (headerFlags & (1 << 2)) !== 0 ? reader.readString() : defaultSharedMeta.name;
+  const author = (headerFlags & (1 << 3)) !== 0 ? reader.readString() : defaultSharedMeta.author;
+  const createdAt = (headerFlags & (1 << 4)) !== 0 ? reader.readString() : defaultSharedMeta.createdAt;
+  const updatedAt = (headerFlags & (1 << 5)) !== 0 ? reader.readString() : defaultSharedMeta.updatedAt;
+  const engineMode = (headerFlags & 1) !== 0 ? "authentic" : "inspired";
+  const oldSpeakerMode = (headerFlags & (1 << 1)) !== 0;
+
+  const samples = readSamples(reader);
+  const pulse1 = readPulseTrack(reader, defaultSong.tracks.pulse1, loopLength);
+  const pulse2 = readPulseTrack(reader, defaultSong.tracks.pulse2, loopLength);
+  const triangle = readTriangleTrack(reader, defaultSong.tracks.triangle, loopLength);
+  const noise = readNoiseTrack(reader, defaultSong.tracks.noise, loopLength);
+  const sample = readSampleTrack(reader, defaultSong.tracks.sample, loopLength, samples);
+
+  reader.assertFullyConsumed();
+
+  return parseSongDocument({
+    kind: defaultSong.kind,
+    version: defaultSong.version,
+    meta: {
+      name,
+      author,
+      createdAt,
+      updatedAt,
+      engineMode,
+    },
+    transport: {
+      bpm,
+      stepsPerBeat,
+      loopLength,
+    },
+    mixer: {
+      masterVolume,
+      oldSpeakerMode,
+    },
+    tracks: {
+      pulse1,
+      pulse2,
+      triangle,
+      noise,
+      sample,
+    },
+    samples,
+  } satisfies SongDocument);
+}
+
+function parseSongSharePayloadV3(payloadBody: string) {
+  const compactText = textDecoder.decode(inflateRaw(decodeBase64UrlToBytes(payloadBody)));
+  return parseSongShareText(compactText);
+}
+
 function serializeHeader(song: SongDocument) {
   const modeToken = song.meta.engineMode === "inspired" ? "i" : "a";
 
   return [
-    `!v=${SHARE_FORMAT_VERSION}`,
+    `!v=${LEGACY_COMPRESSED_SHARE_FORMAT_VERSION}`,
     `bpm=${song.transport.bpm}`,
     `loop=${song.transport.loopLength}`,
     `spb=${song.transport.stepsPerBeat}`,
@@ -350,7 +582,7 @@ function parseHeader(line: string): ParsedShareHeader {
   const headerEntries = parseSemicolonEntries(line.slice(1));
   const version = getRequiredEntry(headerEntries, "v");
 
-  if (version !== "2" && version !== SHARE_FORMAT_VERSION.toString()) {
+  if (version !== "2" && version !== LEGACY_COMPRESSED_SHARE_FORMAT_VERSION.toString()) {
     throw new Error("Unsupported share format version.");
   }
 
@@ -481,7 +713,7 @@ function buildSharedNoiseTrack(defaultTrack: NoiseTrack, section: ShareTrackSect
       return {
         enabled: entry !== undefined,
         volume: entry === undefined ? section.volume : (stepVolumeByStepIndex.get(index) ?? section.volume),
-        mode: entry?.mode ?? "long",
+        mode: (entry?.mode ?? "long") as NoiseTrack["steps"][number]["mode"],
         periodIndex: entry?.periodIndex ?? 8,
       };
     }),
@@ -609,6 +841,477 @@ function normalizeMelodicEntries(entries: readonly MelodicArrangementEntry[], lo
   });
 }
 
+function writeSamples(writer: ByteWriter, samples: readonly SerializedSampleAsset[]) {
+  writer.writeVarUint(samples.length);
+
+  samples.forEach((sample) => {
+    const sampleFlags = (sample.source === "import" ? 1 : 0) | (sample.detectedBaseNote !== null ? 1 << 1 : 0);
+    const pcmBytes = quantizeSamplePcm(sample.pcm);
+
+    writer.writeByte(sampleFlags);
+    writer.writeString(sample.id);
+    writer.writeString(sample.name);
+    writer.writeByte(getRequiredNoteIndex(sample.baseNote as NoteValue));
+
+    if (sample.detectedBaseNote !== null) {
+      writer.writeByte(getRequiredNoteIndex(sample.detectedBaseNote as NoteValue));
+    }
+
+    writer.writeVarUint(sample.sampleRate);
+    writer.writeVarUint(sample.trim.startFrame);
+    writer.writeVarUint(sample.trim.endFrame - sample.trim.startFrame);
+    writer.writeVarUint(pcmBytes.length);
+    writer.writeBytes(pcmBytes);
+  });
+}
+
+function readSamples(reader: ByteReader): SerializedSampleAsset[] {
+  const sampleCount = reader.readVarUint();
+
+  return Array.from({ length: sampleCount }, () => {
+    const sampleFlags = reader.readByte();
+    const id = reader.readString();
+    const name = reader.readString();
+    const baseNote = getNoteValueByIndex(reader.readByte());
+    const detectedBaseNote = (sampleFlags & (1 << 1)) !== 0 ? getNoteValueByIndex(reader.readByte()) : null;
+    const sampleRate = reader.readVarUint();
+    const trimStartFrame = reader.readVarUint();
+    const trimLength = reader.readVarUint();
+    const pcmLength = reader.readVarUint();
+    const pcm = dequantizeSamplePcm(reader.readBytes(pcmLength));
+
+    return {
+      id,
+      name,
+      source: (sampleFlags & 1) !== 0 ? "import" : "mic",
+      baseNote,
+      detectedBaseNote,
+      sampleRate,
+      frameCount: pcm.length,
+      channels: 1,
+      trim: {
+        startFrame: trimStartFrame,
+        endFrame: trimStartFrame + trimLength,
+      },
+      pcm,
+    };
+  });
+}
+
+function writeTrackState(writer: ByteWriter, track: BinaryTrackState) {
+  writer.writeByte(quantizeLevel(track.volume));
+  writer.writeByte(track.muted ? 1 : 0);
+}
+
+function readTrackState(reader: ByteReader) {
+  return {
+    volume: dequantizeLevel(reader.readByte()),
+    muted: reader.readByte() === 1,
+  };
+}
+
+function writePulseTrack(writer: ByteWriter, track: PulseTrack) {
+  writeTrackState(writer, track);
+  const entries = getMelodicArrangementEntries(track);
+
+  writer.writeVarUint(entries.length);
+
+  let previousStepIndex = -1;
+
+  entries.forEach((entry) => {
+    const step = track.steps[entry.stepIndex];
+    const dutyIndex = pulseDutyIndexByValue.get(entry.duty ?? DEFAULT_PULSE_DUTY);
+
+    if (step === undefined || dutyIndex === undefined) {
+      throw new Error("Invalid pulse track entry.");
+    }
+
+    const hasVolumeOverride = !approximatelyEqual(step.volume, track.volume);
+    const entryFlags = dutyIndex | (hasVolumeOverride ? 1 << 2 : 0);
+
+    writer.writeVarUint(entry.stepIndex - previousStepIndex - 1);
+    writer.writeByte(getRequiredNoteIndex(entry.note));
+    writer.writeVarUint(entry.length - 1);
+    writer.writeByte(entryFlags);
+
+    if (hasVolumeOverride) {
+      writer.writeByte(quantizeLevel(step.volume));
+    }
+
+    previousStepIndex = entry.stepIndex;
+  });
+}
+
+function readPulseTrack(reader: ByteReader, defaultTrack: PulseTrack, loopLength: number) {
+  const trackState = readTrackState(reader);
+  const eventCount = reader.readVarUint();
+  const entries = new Map<number, PulseTrack["steps"][number]>();
+  let stepIndex = -1;
+
+  for (let index = 0; index < eventCount; index += 1) {
+    stepIndex += reader.readVarUint() + 1;
+    const note = getNoteValueByIndex(reader.readByte());
+    const length = reader.readVarUint() + 1;
+    const entryFlags = reader.readByte();
+    const duty = pulseDutyOptions[entryFlags & 0b11];
+
+    if (duty === undefined) {
+      throw new Error("Invalid pulse duty in share payload.");
+    }
+
+    const hasVolumeOverride = (entryFlags & (1 << 2)) !== 0;
+    const volume = hasVolumeOverride ? dequantizeLevel(reader.readByte()) : trackState.volume;
+
+    entries.set(stepIndex, {
+      enabled: true,
+      note,
+      volume,
+      duty,
+      length,
+    });
+  }
+
+  return {
+    ...defaultTrack,
+    muted: trackState.muted,
+    solo: false,
+    volume: trackState.volume,
+    steps: Array.from({ length: loopLength }, (_, currentStepIndex) => {
+      const entry = entries.get(currentStepIndex);
+
+      return entry ?? {
+        enabled: false,
+        note: "C4",
+        volume: trackState.volume,
+        duty: DEFAULT_PULSE_DUTY,
+        length: 1,
+      };
+    }),
+  };
+}
+
+function writeTriangleTrack(writer: ByteWriter, track: TriangleTrack) {
+  writeTrackState(writer, track);
+  const entries = getMelodicArrangementEntries(track);
+
+  writer.writeVarUint(entries.length);
+
+  let previousStepIndex = -1;
+
+  entries.forEach((entry) => {
+    const step = track.steps[entry.stepIndex];
+
+    if (step === undefined) {
+      throw new Error("Invalid triangle track entry.");
+    }
+
+    const hasVolumeOverride = !approximatelyEqual(step.volume, track.volume);
+
+    writer.writeVarUint(entry.stepIndex - previousStepIndex - 1);
+    writer.writeByte(getRequiredNoteIndex(entry.note));
+    writer.writeVarUint(entry.length - 1);
+    writer.writeByte(hasVolumeOverride ? 1 : 0);
+
+    if (hasVolumeOverride) {
+      writer.writeByte(quantizeLevel(step.volume));
+    }
+
+    previousStepIndex = entry.stepIndex;
+  });
+}
+
+function readTriangleTrack(reader: ByteReader, defaultTrack: TriangleTrack, loopLength: number) {
+  const trackState = readTrackState(reader);
+  const eventCount = reader.readVarUint();
+  const entries = new Map<number, TriangleTrack["steps"][number]>();
+  let stepIndex = -1;
+
+  for (let index = 0; index < eventCount; index += 1) {
+    stepIndex += reader.readVarUint() + 1;
+    const note = getNoteValueByIndex(reader.readByte());
+    const length = reader.readVarUint() + 1;
+    const hasVolumeOverride = reader.readByte() === 1;
+    const volume = hasVolumeOverride ? dequantizeLevel(reader.readByte()) : trackState.volume;
+
+    entries.set(stepIndex, {
+      enabled: true,
+      note,
+      volume,
+      length,
+    });
+  }
+
+  return {
+    ...defaultTrack,
+    muted: trackState.muted,
+    solo: false,
+    volume: trackState.volume,
+    steps: Array.from({ length: loopLength }, (_, currentStepIndex) => {
+      const entry = entries.get(currentStepIndex);
+
+      return entry ?? {
+        enabled: false,
+        note: "C3",
+        volume: trackState.volume,
+        length: 1,
+      };
+    }),
+  };
+}
+
+function writeNoiseTrack(writer: ByteWriter, track: NoiseTrack) {
+  writeTrackState(writer, track);
+  const steps = track.steps.flatMap((step, stepIndex) => (step.enabled ? [{ step, stepIndex }] : []));
+
+  writer.writeVarUint(steps.length);
+
+  let previousStepIndex = -1;
+
+  steps.forEach(({ step, stepIndex }) => {
+    const preset = getNoiseTriggerPresetForStep(step);
+    const hasVolumeOverride = !approximatelyEqual(step.volume, track.volume);
+    const presetIndex = preset === null ? 0 : getNoisePresetIndex(preset.id);
+
+    writer.writeVarUint(stepIndex - previousStepIndex - 1);
+    writer.writeByte(presetIndex | (hasVolumeOverride ? 1 << 4 : 0));
+
+    if (preset === null) {
+      writer.writeByte((step.mode === "short" ? 1 << 4 : 0) | (step.periodIndex & 0x0f));
+    }
+
+    if (hasVolumeOverride) {
+      writer.writeByte(quantizeLevel(step.volume));
+    }
+
+    previousStepIndex = stepIndex;
+  });
+}
+
+function readNoiseTrack(reader: ByteReader, defaultTrack: NoiseTrack, loopLength: number): NoiseTrack {
+  const trackState = readTrackState(reader);
+  const eventCount = reader.readVarUint();
+  const entries = new Map<number, NoiseTrack["steps"][number]>();
+  let stepIndex = -1;
+
+  for (let index = 0; index < eventCount; index += 1) {
+    stepIndex += reader.readVarUint() + 1;
+    const entryFlags = reader.readByte();
+    const hasVolumeOverride = (entryFlags & (1 << 4)) !== 0;
+    const presetIndex = entryFlags & 0x0f;
+    const preset = presetIndex === 0 ? null : noisePresetByIndex[presetIndex - 1];
+
+    if (preset === undefined) {
+      throw new Error("Invalid noise preset in share payload.");
+    }
+
+    const encodedNoiseValue = preset === null ? reader.readByte() : null;
+    const volume = hasVolumeOverride ? dequantizeLevel(reader.readByte()) : trackState.volume;
+
+    entries.set(stepIndex, {
+      enabled: true,
+      volume,
+      mode:
+        preset === null
+          ? ((((encodedNoiseValue ?? 0) & (1 << 4)) !== 0 ? "short" : "long") as NoiseTrack["steps"][number]["mode"])
+          : preset.mode,
+      periodIndex: preset === null ? (encodedNoiseValue ?? 0) & 0x0f : preset.periodIndex,
+    });
+  }
+
+  return {
+    ...defaultTrack,
+    muted: trackState.muted,
+    solo: false,
+    volume: trackState.volume,
+    steps: Array.from({ length: loopLength }, (_, currentStepIndex) => {
+      const entry = entries.get(currentStepIndex);
+
+      return entry ?? {
+        enabled: false,
+        volume: trackState.volume,
+        mode: "long" as NoiseTrack["steps"][number]["mode"],
+        periodIndex: 8,
+      };
+    }),
+  };
+}
+
+function writeSampleTrack(
+  writer: ByteWriter,
+  track: SampleTrack,
+  samples: readonly SerializedSampleAsset[],
+  engineMode: SongDocument["meta"]["engineMode"],
+) {
+  writeTrackState(writer, track);
+  const sampleIndexById = new Map(samples.map((sample, index) => [sample.id, index]));
+  const steps = track.steps.flatMap((step, stepIndex) =>
+    step.enabled && step.sampleId !== null ? [{ step, stepIndex }] : [],
+  );
+
+  writer.writeVarUint(steps.length);
+
+  let previousStepIndex = -1;
+
+  steps.forEach(({ step, stepIndex }) => {
+    const sampleIndex = sampleIndexById.get(step.sampleId ?? "");
+
+    if (sampleIndex === undefined) {
+      throw new Error("Sample track references an unknown sample.");
+    }
+
+    const hasVolumeOverride = !approximatelyEqual(step.volume, track.volume);
+    const playbackRateIndex = samplePlaybackRateIndexByValue.get(step.playbackRate) ?? -1;
+    const hasIndexedPlaybackRate = engineMode === "authentic" && playbackRateIndex !== -1;
+    const entryFlags =
+      (hasVolumeOverride ? 1 : 0) |
+      (engineMode === "authentic" ? 1 << 1 : 0) |
+      (hasIndexedPlaybackRate ? 1 << 2 : 0);
+
+    writer.writeVarUint(stepIndex - previousStepIndex - 1);
+    writer.writeVarUint(sampleIndex);
+    writer.writeByte(entryFlags);
+
+    if (engineMode === "inspired") {
+      writer.writeByte(getRequiredNoteIndex(step.note as NoteValue));
+    } else if (hasIndexedPlaybackRate) {
+      writer.writeByte(playbackRateIndex);
+    } else {
+      writer.writeVarUint(Math.round(step.playbackRate * 100));
+    }
+
+    if (hasVolumeOverride) {
+      writer.writeByte(quantizeLevel(step.volume));
+    }
+
+    previousStepIndex = stepIndex;
+  });
+}
+
+function readSampleTrack(
+  reader: ByteReader,
+  defaultTrack: SampleTrack,
+  loopLength: number,
+  samples: readonly SerializedSampleAsset[],
+) {
+  const trackState = readTrackState(reader);
+  const eventCount = reader.readVarUint();
+  const entries = new Map<number, SampleTrack["steps"][number]>();
+  let stepIndex = -1;
+
+  for (let index = 0; index < eventCount; index += 1) {
+    stepIndex += reader.readVarUint() + 1;
+    const sampleIndex = reader.readVarUint();
+    const entryFlags = reader.readByte();
+    const hasVolumeOverride = (entryFlags & 1) !== 0;
+    const encodedEngineMode = (entryFlags & (1 << 1)) !== 0 ? "authentic" : "inspired";
+    const hasIndexedPlaybackRate = (entryFlags & (1 << 2)) !== 0;
+    const sample = samples[sampleIndex];
+
+    if (sample === undefined) {
+      throw new Error("Invalid sample index in share payload.");
+    }
+
+    let note: NoteValue = sample.baseNote as NoteValue;
+    let playbackRate = 1;
+
+    if (encodedEngineMode === "inspired") {
+      note = getNoteValueByIndex(reader.readByte());
+    } else if (hasIndexedPlaybackRate) {
+      const playbackRateIndex = reader.readByte();
+      const indexedPlaybackRate = samplePlaybackRateOptions[playbackRateIndex];
+
+      if (indexedPlaybackRate === undefined) {
+        throw new Error("Invalid sample playback rate in share payload.");
+      }
+
+      playbackRate = indexedPlaybackRate;
+    } else {
+      playbackRate = reader.readVarUint() / 100;
+    }
+
+    const volume = hasVolumeOverride ? dequantizeLevel(reader.readByte()) : trackState.volume;
+
+    entries.set(stepIndex, {
+      enabled: true,
+      volume,
+      sampleId: sample.id,
+      note,
+      playbackRate: encodedEngineMode === "authentic" ? playbackRate : 1,
+    });
+  }
+
+  return {
+    ...defaultTrack,
+    muted: trackState.muted,
+    solo: false,
+    volume: trackState.volume,
+    steps: Array.from({ length: loopLength }, (_, currentStepIndex) => {
+      const entry = entries.get(currentStepIndex);
+
+      return entry ?? {
+        enabled: false,
+        volume: trackState.volume,
+        sampleId: null,
+        note: "C4",
+        playbackRate: 1,
+      };
+    }),
+  };
+}
+
+const noisePresetByIndex = [
+  { mode: "short", periodIndex: 0, id: "tick" },
+  { mode: "short", periodIndex: 1, id: "hat" },
+  { mode: "short", periodIndex: 3, id: "snare" },
+  { mode: "short", periodIndex: 7, id: "burst" },
+  { mode: "long", periodIndex: 5, id: "shaker" },
+  { mode: "long", periodIndex: 8, id: "hiss" },
+  { mode: "long", periodIndex: 12, id: "crash" },
+  { mode: "long", periodIndex: 15, id: "rumble" },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  mode: NoiseTrack["steps"][number]["mode"];
+  periodIndex: NoiseTrack["steps"][number]["periodIndex"];
+}>;
+
+function getNoisePresetIndex(presetId: string) {
+  const presetIndex = noisePresetByIndex.findIndex((preset) => preset.id === presetId);
+
+  if (presetIndex === -1) {
+    throw new Error("Unknown noise preset.");
+  }
+
+  return presetIndex + 1;
+}
+
+function getRequiredNoteIndex(note: NoteValue) {
+  const noteIndex = noteIndexByValue.get(note);
+
+  if (noteIndex === undefined) {
+    throw new Error("Unsupported note in share payload.");
+  }
+
+  return noteIndex;
+}
+
+function getNoteValueByIndex(noteIndex: number) {
+  const note = noteEntryOptions[noteIndex];
+
+  if (note === undefined) {
+    throw new Error("Invalid note index in share payload.");
+  }
+
+  return note;
+}
+
+function quantizeLevel(level: number) {
+  return Math.max(0, Math.min(100, Math.round(level * 100)));
+}
+
+function dequantizeLevel(level: number) {
+  return level / 100;
+}
+
 function parseSemicolonEntries(input: string) {
   const entries = new Map<string, string>();
 
@@ -720,7 +1423,7 @@ function decodeBase64UrlToBytes(value: string) {
 }
 
 function decodeBase64UrlToText(value: string) {
-  return new TextDecoder().decode(decodeBase64UrlToBytes(value));
+  return textDecoder.decode(decodeBase64UrlToBytes(value));
 }
 
 function encodeBase64(value: Uint8Array) {
