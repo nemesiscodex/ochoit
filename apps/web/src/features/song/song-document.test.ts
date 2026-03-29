@@ -16,6 +16,9 @@ describe("song-document", () => {
 
     expect(song.kind).toBe(SONG_DOCUMENT_KIND);
     expect(song.version).toBe(SONG_DOCUMENT_VERSION);
+    expect(song.mixer.masterVolume).toBe(0.75);
+    expect(trackOrder.every((trackId) => song.tracks[trackId].volume === 1)).toBe(true);
+    expect(trackOrder.every((trackId) => song.tracks[trackId].steps.every((step) => step.volume === 1))).toBe(true);
     expect(trackOrder.map((trackId) => song.tracks[trackId].steps.length)).toEqual([16, 16, 16, 16, 16]);
     expect(song.samples).toHaveLength(1);
   });
@@ -55,6 +58,9 @@ describe("song-document", () => {
     expect(song.version).toBe(SONG_DOCUMENT_VERSION);
     expect(song.meta.name).toBe("(No name)");
     expect(song.meta.author).toBe("(Anonymous)");
+    expect(song.mixer.masterVolume).toBe(0.75);
+    expect(trackOrder.every((trackId) => song.tracks[trackId].volume === 1)).toBe(true);
+    expect(trackOrder.every((trackId) => song.tracks[trackId].steps.every((step) => step.volume === 1))).toBe(true);
     expect(trackOrder.map((trackId) => song.tracks[trackId].steps.length)).toEqual([16, 16, 16, 16, 16]);
     expect(trackOrder.every((trackId) => song.tracks[trackId].steps.every((step) => step.enabled === false))).toBe(
       true,

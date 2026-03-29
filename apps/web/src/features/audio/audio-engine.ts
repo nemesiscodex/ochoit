@@ -4,7 +4,7 @@ import { AudioTransport } from "@/features/audio/audio-transport";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { PulseVoice } from "@/features/audio/pulse-voice";
 import { SampleVoice } from "@/features/audio/sample-voice";
-import { TriangleVoice } from "@/features/audio/triangle-voice";
+import { getTriangleOutputGain, TriangleVoice } from "@/features/audio/triangle-voice";
 import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "@/features/song/song-document";
 import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue, type PulseDutyValue } from "@/features/song/song-pattern";
 
@@ -80,7 +80,7 @@ export class AudioEngine {
     const masterSpeakerHighPass = context.createBiquadFilter();
     const masterSpeakerLowPass = context.createBiquadFilter();
 
-    masterGain.gain.value = 0.88;
+    masterGain.gain.value = 0.75;
     masterDryGain.gain.value = 1;
     masterSpeakerWetGain.gain.value = 0;
     configureOldSpeakerFilters(masterSpeakerHighPass, masterSpeakerLowPass);
@@ -97,7 +97,7 @@ export class AudioEngine {
         const gain = context.createGain();
         const analyser = context.createAnalyser();
 
-        gain.gain.value = 0.75;
+        gain.gain.value = 1;
         analyser.fftSize = analyserFftSize;
         analyser.smoothingTimeConstant = 0.85;
 
@@ -245,8 +245,10 @@ export class AudioEngine {
     oscillator.frequency.setValueAtTime(getFrequencyForNote(note), now);
 
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(volume, now + attackSec);
-    gain.gain.setValueAtTime(volume, now + durationSec - releaseSec);
+    const outputGain = getTriangleOutputGain(volume);
+
+    gain.gain.linearRampToValueAtTime(outputGain, now + attackSec);
+    gain.gain.setValueAtTime(outputGain, now + durationSec - releaseSec);
     gain.gain.linearRampToValueAtTime(0.0001, now + durationSec);
 
     oscillator.connect(gain);

@@ -2,7 +2,7 @@ import { applyOldSpeakerEffect } from "@/features/audio/old-speaker";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { createNoiseCycle, getNoisePlaybackRate } from "@/features/audio/noise-voice";
 import { createPulseCycle } from "@/features/audio/pulse-voice";
-import { createTriangleCycle } from "@/features/audio/triangle-voice";
+import { createTriangleCycle, getTriangleOutputGain } from "@/features/audio/triangle-voice";
 import { getTrimmedSamplePcm } from "@/features/song/song-samples";
 import type {
   NoiseTrack,
@@ -105,7 +105,7 @@ function renderPulseTrack(
     const durationSeconds = Math.max(stepDurationSeconds * step.length - pulseNoteAttackSeconds, pulseNoteAttackSeconds);
     const cycle = getPulseCycle(step.duty);
     const phaseIncrement = (getFrequencyForNote(step.note) * cycle.length) / sampleRate;
-    const gain = song.mixer.masterVolume * track.volume * step.volume;
+    const gain = getTriangleOutputGain(song.mixer.masterVolume * track.volume * step.volume);
 
     mixCycleVoice(target, {
       attackSeconds: pulseNoteAttackSeconds,

@@ -7,6 +7,11 @@ const noteAttackSeconds = 0.002;
 const noteReleaseSeconds = 0.02;
 const sourceStopPaddingSeconds = 0.01;
 const silentGainFloor = 0.0001;
+export const TRIANGLE_OUTPUT_GAIN = 1.7;
+
+export function getTriangleOutputGain(volume: number) {
+  return Math.min(1, volume * TRIANGLE_OUTPUT_GAIN);
+}
 
 export function createTriangleCycle(frameCount = triangleCycleFrameCount) {
   const waveform = new Float32Array(frameCount);
@@ -70,8 +75,10 @@ export class TriangleVoice {
 
     gain.gain.cancelScheduledValues(time);
     gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(step.volume, time + noteAttackSeconds);
-    gain.gain.setValueAtTime(step.volume, releaseStartTime);
+    const outputGain = getTriangleOutputGain(step.volume);
+
+    gain.gain.linearRampToValueAtTime(outputGain, time + noteAttackSeconds);
+    gain.gain.setValueAtTime(outputGain, releaseStartTime);
     gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
 
     source.connect(gain);

@@ -594,7 +594,7 @@ function parseHeader(line: string): ParsedShareHeader {
     createdAt: getOptionalEntry(headerEntries, "created") ?? defaultSharedMeta.createdAt,
     engineMode: modeToken === "a" ? "authentic" : "inspired",
     loopLength: parseIntegerValue(getRequiredEntry(headerEntries, "loop"), "loop"),
-    masterVolume: parseLevelPercent(getOptionalEntry(headerEntries, "mv") ?? "88", "mv"),
+    masterVolume: parseLevelPercent(getOptionalEntry(headerEntries, "mv") ?? "75", "mv"),
     oldSpeakerMode: (getOptionalEntry(headerEntries, "spk") ?? "0") === "1",
     name: decodeURIComponent(getOptionalEntry(headerEntries, "name") ?? "Shared Song"),
     stepsPerBeat: parseIntegerValue(getOptionalEntry(headerEntries, "spb") ?? "4", "spb"),

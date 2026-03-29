@@ -136,6 +136,7 @@ vi.mock("@/features/audio/pulse-voice", () => ({
 
 vi.mock("@/features/audio/triangle-voice", () => ({
   TriangleVoice: audioEngineMocks.TriangleVoice,
+  getTriangleOutputGain: (volume: number) => Math.min(1, volume * 1.7),
 }));
 
 vi.mock("@/features/audio/noise-voice", () => ({
@@ -425,6 +426,8 @@ describe("audio-engine", () => {
     expect(mockContext.createdOscillators[0]?.start).toHaveBeenCalledWith(mockContext.currentTime);
     expect(mockContext.createdOscillators[0]?.stop).toHaveBeenCalledWith(mockContext.currentTime + 0.19);
     expect(trianglePreviewGain?.connect).toHaveBeenCalledWith(engine.voices.triangle.input);
+    expect(trianglePreviewGain?.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(1, 0.561, mockContext.currentTime + 0.003);
+    expect(trianglePreviewGain?.gain.setValueAtTime).toHaveBeenNthCalledWith(2, 0.561, mockContext.currentTime + 0.155);
     expect(audioEngineMocks.pulsePreviewNote).toHaveBeenCalledWith("E4", 0.25, 120, 0.61);
   });
 

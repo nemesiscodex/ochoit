@@ -252,7 +252,7 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByLabelText("Triangle step 1 note"));
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Select note D3" }));
 
-    expect(previewNote).toHaveBeenCalledWith("triangle", "D3", expect.any(Number), 0.5, 0.72);
+    expect(previewNote).toHaveBeenCalledWith("triangle", "D3", expect.any(Number), 0.5, 1);
   });
 
   it("passes hovered pulse duty to the audio preview via the detail panel", () => {
@@ -267,7 +267,7 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.mouseEnter(screen.getByRole("button", { name: "Set duty 75%" }));
 
-    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", expect.any(Number), 0.75, 0.84);
+    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", expect.any(Number), 0.75, 1);
   });
 
   it("opens the text editor for a melodic voice", () => {
@@ -338,7 +338,7 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseEnter(screen.getByLabelText("PCM step 8"));
     fireEvent.mouseEnter(screen.getByLabelText("Pulse I step 4"));
 
-    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", expect.any(Number), 0.125, 0.84);
+    expect(previewNote).toHaveBeenCalledWith("pulse1", "C5", expect.any(Number), 0.125, 1);
     expect(previewNoiseConfig).toHaveBeenCalledWith("short", 3);
     expect(previewSampleNote).toHaveBeenCalledWith("mic-001", "C4", "C4");
     expect(previewNote).toHaveBeenCalledTimes(1);

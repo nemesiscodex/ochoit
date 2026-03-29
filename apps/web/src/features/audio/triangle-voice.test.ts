@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import { createTriangleCycle, TriangleVoice } from "@/features/audio/triangle-voice";
+import { createTriangleCycle, getTriangleOutputGain, TriangleVoice } from "@/features/audio/triangle-voice";
 import { createDefaultSongDocument } from "@/features/song/song-document";
 
 class MockAudioParam {
@@ -87,6 +87,11 @@ describe("triangle-voice", () => {
     expect(Array.from(createTriangleCycle(8))).toEqual([0, 0.5, 1, 0.5, 0, -0.5, -1, -0.5]);
   });
 
+  it("boosts and clamps triangle output gain", () => {
+    expect(getTriangleOutputGain(0.5)).toBe(0.85);
+    expect(getTriangleOutputGain(0.8)).toBe(1);
+  });
+
   it("schedules an enabled triangle step with a cached waveform buffer", () => {
     const song = createDefaultSongDocument();
     const { context, output, createdBuffers, createdGains, createdSources } = createMockAudioContext();
@@ -124,13 +129,17 @@ describe("triangle-voice", () => {
     const firstSource = createdSources[0];
     const firstGain = createdGains[0];
     const expectedPlaybackRate = (getFrequencyForNote(step.note) * 2048) / 48_000;
+    const expectedOutputGain = getTriangleOutputGain(step.volume);
+    const noteDuration = Math.max(stepDuration * 4 - 0.002, 0.002);
+    const expectedReleaseStartTime = Math.max(2.5 + 0.002, 2.5 + noteDuration - 0.02);
 
     expect(firstSource?.buffer).toBe(createdBuffers[0]);
     expect(firstSource?.loop).toBe(true);
     expect(firstSource?.playbackRate.setValueAtTime).toHaveBeenCalledWith(expectedPlaybackRate, 2.5);
     expect(firstGain?.gain.cancelScheduledValues).toHaveBeenCalledWith(2.5);
     expect(firstGain?.gain.setValueAtTime).toHaveBeenNthCalledWith(1, 0, 2.5);
-    expect(firstGain?.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(1, step.volume, 2.502);
+    expect(firstGain?.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(1, expectedOutputGain, 2.502);
+    expect(firstGain?.gain.setValueAtTime).toHaveBeenNthCalledWith(2, expectedOutputGain, expectedReleaseStartTime);
     expect(firstSource?.start).toHaveBeenCalledWith(2.5);
     expect(firstSource?.stop).toHaveBeenCalledWith(expectedStopTime);
 

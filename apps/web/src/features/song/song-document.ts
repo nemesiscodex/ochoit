@@ -225,7 +225,7 @@ function createPulseSteps(pattern: Array<{ index: number; note: string; duty?: z
     return {
       enabled: step !== undefined,
       note: step?.note ?? "C4",
-      volume: 0.84,
+      volume: 1,
       duty: step?.duty ?? DEFAULT_PULSE_DUTY,
       length: step?.length ?? 1,
     };
@@ -241,7 +241,7 @@ function createTriangleSteps(pattern: Array<{ index: number; note: string; lengt
     return {
       enabled: step !== undefined,
       note: step?.note ?? "C3",
-      volume: 0.72,
+      volume: 1,
       length: step?.length ?? 1,
     };
   });
@@ -252,7 +252,7 @@ function createNoiseSteps(pattern: number[]) {
 
   return Array.from({ length: defaultLoopLength }, (_, index) => ({
     enabled: seededSteps.has(index),
-    volume: index % 4 === 0 ? 0.82 : 0.58,
+    volume: 1,
     mode: index % 4 === 0 ? "short" : "long",
     periodIndex: index % 4 === 0 ? 3 : 8,
   }));
@@ -263,7 +263,7 @@ function createSampleSteps(pattern: number[]) {
 
   return Array.from({ length: defaultLoopLength }, (_, index) => ({
     enabled: seededSteps.has(index),
-    volume: 0.8,
+    volume: 1,
     sampleId: seededSteps.has(index) ? "mic-001" : null,
     note: "C4",
     playbackRate: 1,
@@ -287,7 +287,7 @@ export function createEmptySongDocument(): SongDocument {
       loopLength: defaultLoopLength,
     },
     mixer: {
-      masterVolume: 0.88,
+      masterVolume: 0.75,
       oldSpeakerMode: false,
     },
     tracks: {
@@ -297,7 +297,7 @@ export function createEmptySongDocument(): SongDocument {
         label: "Voice 1",
         muted: false,
         solo: false,
-        volume: 0.84,
+        volume: 1,
         steps: createPulseSteps([]),
       },
       pulse2: {
@@ -306,7 +306,7 @@ export function createEmptySongDocument(): SongDocument {
         label: "Voice 2",
         muted: false,
         solo: false,
-        volume: 0.76,
+        volume: 1,
         steps: createPulseSteps([]),
       },
       triangle: {
@@ -315,7 +315,7 @@ export function createEmptySongDocument(): SongDocument {
         label: "Voice 3",
         muted: false,
         solo: false,
-        volume: 0.78,
+        volume: 1,
         steps: createTriangleSteps([]),
       },
       noise: {
@@ -324,7 +324,7 @@ export function createEmptySongDocument(): SongDocument {
         label: "Voice 4",
         muted: false,
         solo: false,
-        volume: 0.68,
+        volume: 1,
         steps: createNoiseSteps([]),
       },
       sample: {
@@ -333,7 +333,7 @@ export function createEmptySongDocument(): SongDocument {
         label: "Voice 5",
         muted: false,
         solo: false,
-        volume: 0.74,
+        volume: 1,
         steps: createSampleSteps([]),
       },
     },
@@ -358,7 +358,7 @@ export function createDefaultSongDocument(): SongDocument {
       loopLength: defaultLoopLength,
     },
     mixer: {
-      masterVolume: 0.88,
+      masterVolume: 0.75,
       oldSpeakerMode: false,
     },
     tracks: {
@@ -368,7 +368,7 @@ export function createDefaultSongDocument(): SongDocument {
         label: "Voice 1",
         muted: false,
         solo: false,
-        volume: 0.84,
+        volume: 1,
         steps: createPulseSteps([
           { index: 0, note: "C5", duty: 0.125 },
           { index: 4, note: "E5", duty: 0.25 },
@@ -382,7 +382,7 @@ export function createDefaultSongDocument(): SongDocument {
         label: "Voice 2",
         muted: false,
         solo: false,
-        volume: 0.76,
+        volume: 1,
         steps: createPulseSteps([
           { index: 2, note: "C4", duty: 0.5 },
           { index: 6, note: "G4", duty: 0.75 },
@@ -396,7 +396,7 @@ export function createDefaultSongDocument(): SongDocument {
         label: "Voice 3",
         muted: false,
         solo: false,
-        volume: 0.78,
+        volume: 1,
         steps: createTriangleSteps([
           { index: 0, note: "C3" },
           { index: 4, note: "C3" },
@@ -410,7 +410,7 @@ export function createDefaultSongDocument(): SongDocument {
         label: "Voice 4",
         muted: false,
         solo: false,
-        volume: 0.68,
+        volume: 1,
         steps: createNoiseSteps([0, 2, 4, 6, 8, 10, 12, 14]),
       },
       sample: {
@@ -419,7 +419,7 @@ export function createDefaultSongDocument(): SongDocument {
         label: "Voice 5",
         muted: false,
         solo: false,
-        volume: 0.74,
+        volume: 1,
         steps: createSampleSteps([7, 15]),
       },
     },

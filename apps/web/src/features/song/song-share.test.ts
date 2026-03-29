@@ -107,6 +107,21 @@ describe("song-share", () => {
 
     expect(parsedSong.mixer.oldSpeakerMode).toBe(false);
   });
+
+  it("defaults missing master volume in share text to 75 percent", () => {
+    const shareText = [
+      "!v=3;bpm=136;loop=16;spb=4;mode=i;name=Shared%20Song;author=Julio;created=2026-03-18T00:00:00.000Z;updated=2026-03-18T00:00:00.000Z",
+      "=1;vol=100;mute=0",
+      "=2;vol=100;mute=0",
+      "=3;vol=100;mute=0",
+      "=4;vol=100;mute=0",
+      "=5;vol=100;mute=0",
+    ].join("\n");
+
+    const parsedSong = parseSongShareText(shareText);
+
+    expect(parsedSong.mixer.masterVolume).toBe(0.75);
+  });
 });
 
 function createDenseSongFixture() {
