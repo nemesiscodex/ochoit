@@ -1,3 +1,4 @@
+import { encodeSampleToDpcm, normalizeDpcmRate } from "@/features/audio/dpcm";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import type { SampleTrack, SerializedSampleAsset, SongDocument } from "@/features/song/song-document";
 
@@ -17,8 +18,8 @@ function getFrameRange(sample: SerializedSampleAsset) {
   };
 }
 
-function getSampleCacheKey(sample: SerializedSampleAsset) {
-  return `${sample.id}:${sample.sampleRate}:${sample.trim.startFrame}:${sample.trim.endFrame}:${sample.frameCount}:${sample.pcm.length}`;
+function getSampleCacheKey(sample: SerializedSampleAsset, dpcmRate: number | null) {
+  return `${sample.id}:${sample.sampleRate}:${sample.trim.startFrame}:${sample.trim.endFrame}:${sample.frameCount}:${sample.pcm.length}:${dpcmRate ?? "pcm"}`;
 }
 
 export class SampleVoice {
@@ -82,8 +83,9 @@ export class SampleVoice {
     });
   }
 
-  private getSampleBuffer(sample: SerializedSampleAsset) {
-    const cacheKey = getSampleCacheKey(sample);
+  private getSampleBuffer(sample: SerializedSampleAsset, playbackRate: number) {
+    const dpcmRate = this.engineMode === "authentic" ? normalizeDpcmRate(playbackRate) : null;
+    const cacheKey = getSampleCacheKey(sample, dpcmRate);
     const cachedBuffer = this.bufferByCacheKey.get(cacheKey);
 
     if (cachedBuffer !== undefined) {
@@ -91,9 +93,18 @@ export class SampleVoice {
     }
 
     const { startFrame, endFrame, frameCount } = getFrameRange(sample);
+    const pcmSlice = sample.pcm.slice(startFrame, endFrame);
+
+    if (this.engineMode === "authentic") {
+      const dpcmSample = encodeSampleToDpcm(pcmSlice, sample.sampleRate, playbackRate);
+      const dpcmBuffer = this.context.createBuffer(1, dpcmSample.decodedPcm.length, dpcmSample.sampleRate);
+      dpcmBuffer.getChannelData(0).set(dpcmSample.decodedPcm);
+      this.bufferByCacheKey.set(cacheKey, dpcmBuffer);
+      return dpcmBuffer;
+    }
+
     const buffer = this.context.createBuffer(1, frameCount, sample.sampleRate);
     const channel = buffer.getChannelData(0);
-    const pcmSlice = sample.pcm.slice(startFrame, endFrame);
 
     if (pcmSlice.length === 0) {
       channel[0] = 0;
@@ -116,8 +127,9 @@ export class SampleVoice {
   ) {
     const source = this.context.createBufferSource();
     const gain = this.context.createGain();
-    const buffer = this.getSampleBuffer(sample);
-    const naturalDuration = buffer.duration / options.playbackRate;
+    const buffer = this.getSampleBuffer(sample, options.playbackRate);
+    const resolvedPlaybackRate = this.engineMode === "authentic" ? 1 : options.playbackRate;
+    const naturalDuration = buffer.duration / resolvedPlaybackRate;
     const sampleDuration =
       options.maxDurationSeconds === undefined
         ? naturalDuration
@@ -126,7 +138,7 @@ export class SampleVoice {
     const releaseStartTime = Math.max(options.time + noteAttackSeconds, sampleEndTime - noteReleaseSeconds);
 
     source.buffer = buffer;
-    source.playbackRate.setValueAtTime(options.playbackRate, options.time);
+    source.playbackRate.setValueAtTime(resolvedPlaybackRate, options.time);
 
     gain.gain.cancelScheduledValues(options.time);
     gain.gain.setValueAtTime(0, options.time);

@@ -459,9 +459,9 @@ describe("song-pattern", () => {
       ok: false,
       error: "Line 1 references an unknown sample. Use a sample id or name from the deck.",
     });
-    expect(parseSampleTrackArrangement("1: mic-001@5x", 16, song.samples)).toEqual({
+    expect(parseSampleTrackArrangement("1: mic-001@50000hz", 16, song.samples)).toEqual({
       ok: false,
-      error: "Line 1 has an unsupported playback rate. Use a value between 0.25 and 4.",
+      error: "Line 1 has an unsupported DPCM rate. Use a value between 0.25 and 40000.",
     });
   });
 

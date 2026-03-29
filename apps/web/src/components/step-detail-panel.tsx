@@ -30,7 +30,7 @@ import {
   isMelodicTrackId,
   noiseTriggerPresets,
   pulseDutyOptions,
-  samplePlaybackRateOptions,
+  sampleDpcmRateOptions,
 } from "@/features/song/song-pattern";
 import { labelByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
@@ -553,9 +553,9 @@ function SampleStepDetail({
               />
             </DetailField>
           ) : (
-            <DetailField label="Rate">
+            <DetailField label="DPCM Rate">
               <div className="flex gap-1" role="group" aria-label={`${trackLabel} step ${stepIndex + 1} playback rate`}>
-                {samplePlaybackRateOptions.map((rate) => {
+                {sampleDpcmRateOptions.map((rate) => {
                   const isSelected = step.playbackRate === rate;
 
                   return (

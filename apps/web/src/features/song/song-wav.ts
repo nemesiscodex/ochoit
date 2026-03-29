@@ -1,4 +1,5 @@
 import { applyOldSpeakerEffect } from "@/features/audio/old-speaker";
+import { encodeSampleToDpcm } from "@/features/audio/dpcm";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
 import { createNoiseCycle, getNoisePlaybackRate } from "@/features/audio/noise-voice";
 import { createPulseCycle } from "@/features/audio/pulse-voice";
@@ -224,13 +225,32 @@ function renderSampleTrack(
       continue;
     }
 
+    const playbackRate = getSamplePlaybackRate(step, sample, song.meta.engineMode);
+
+    if (song.meta.engineMode === "authentic") {
+      const dpcmSample = encodeSampleToDpcm(trimmedPcm, sample.sampleRate, playbackRate);
+
+      mixSampleVoice(target, {
+        attackSeconds: sampleNoteAttackSeconds,
+        gain: song.mixer.masterVolume * track.volume * step.volume,
+        inputPcm: dpcmSample.decodedPcm,
+        inputSampleRate: dpcmSample.sampleRate,
+        outputSampleRate,
+        playbackRate: 1,
+        releaseSeconds: sampleNoteReleaseSeconds,
+        startSeconds: stepIndex * stepDurationSeconds,
+      });
+
+      continue;
+    }
+
     mixSampleVoice(target, {
       attackSeconds: sampleNoteAttackSeconds,
       gain: song.mixer.masterVolume * track.volume * step.volume,
       inputPcm: trimmedPcm,
       inputSampleRate: sample.sampleRate,
       outputSampleRate,
-      playbackRate: getSamplePlaybackRate(step, sample, song.meta.engineMode),
+      playbackRate,
       releaseSeconds: sampleNoteReleaseSeconds,
       startSeconds: stepIndex * stepDurationSeconds,
     });
@@ -273,7 +293,7 @@ function mixSampleVoice(
   options: {
     attackSeconds: number;
     gain: number;
-    inputPcm: readonly number[];
+    inputPcm: ArrayLike<number>;
     inputSampleRate: number;
     outputSampleRate: number;
     playbackRate: number;
@@ -388,14 +408,8 @@ function getSampleTailDuration(song: SongDocument, stepDurationSeconds: number) 
       continue;
     }
 
-    const playbackRate = getSamplePlaybackRate(step, sample, song.meta.engineMode);
-
-    if (!Number.isFinite(playbackRate) || playbackRate <= 0) {
-      continue;
-    }
-
     const stepTimeSeconds = stepIndex * stepDurationSeconds;
-    const sampleDurationSeconds = trimmedFrameCount / (sample.sampleRate * playbackRate);
+    const sampleDurationSeconds = getSampleDurationSeconds(step, sample, song.meta.engineMode);
     maxDurationSeconds = Math.max(maxDurationSeconds, stepTimeSeconds + sampleDurationSeconds);
   }
 
@@ -412,6 +426,31 @@ function getSamplePlaybackRate(
   }
 
   return getFrequencyForNote(step.note) / getFrequencyForNote(sample.baseNote);
+}
+
+function getSampleDurationSeconds(
+  step: SampleTrack["steps"][number],
+  sample: SerializedSampleAsset,
+  engineMode: SongDocument["meta"]["engineMode"],
+) {
+  const trimmedPcm = getTrimmedSamplePcm(sample);
+
+  if (trimmedPcm.length === 0) {
+    return 0;
+  }
+
+  if (engineMode === "authentic") {
+    const dpcmSample = encodeSampleToDpcm(trimmedPcm, sample.sampleRate, step.playbackRate);
+    return dpcmSample.decodedPcm.length / dpcmSample.sampleRate;
+  }
+
+  const playbackRate = getSamplePlaybackRate(step, sample, engineMode);
+
+  if (!Number.isFinite(playbackRate) || playbackRate <= 0) {
+    return 0;
+  }
+
+  return trimmedPcm.length / (sample.sampleRate * playbackRate);
 }
 
 function getInterpolatedCycleSample(cycle: Float32Array, phase: number) {

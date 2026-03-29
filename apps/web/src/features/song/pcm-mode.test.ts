@@ -14,17 +14,17 @@ describe("pcm-mode", () => {
     );
   });
 
-  it("defines authentic mode as the trigger-and-rate workflow", () => {
+  it("defines authentic mode as the DPCM trigger workflow", () => {
     expect(formatEngineModeLabel("authentic")).toBe("Authentic");
     expect(getPcmModeLabel("authentic")).toBe("Authentic DPCM");
-    expect(getPcmModeSummary("authentic")).toMatch(/one-shot workflow/i);
-    expect(getPcmModeSummary("authentic")).toMatch(/playback rate/i);
+    expect(getPcmModeSummary("authentic")).toMatch(/one-bit delta-encoded/i);
+    expect(getPcmModeSummary("authentic")).toMatch(/rate preset/i);
 
     expect(getSampleArrangementHelperCopy("authentic", 32, "vox-hit")).toContain(
-      "Authentic mode stays trigger-based: choose a sample and optional playback rate, without per-step note mapping.",
+      "Authentic mode stays trigger-based: choose a sample and optional DPCM rate preset, without per-step note mapping.",
     );
     expect(getSampleArrangementHelperCopy("authentic", 32, "vox-hit")).toContain(
-      "One trigger per line in the format 8: vox-hit@1x.",
+      "One trigger per line in the format 8: vox-hit@11186hz.",
     );
     expect(getSampleArrangementHelperCopy("authentic", 32, "vox-hit")).toContain(
       "Steps above 32 are ignored when you apply.",

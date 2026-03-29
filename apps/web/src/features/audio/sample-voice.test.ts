@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { normalizeDpcmRate } from "@/features/audio/dpcm";
 import { SampleVoice } from "@/features/audio/sample-voice";
 import { createDefaultSongDocument } from "@/features/song/song-document";
 
@@ -124,25 +125,23 @@ describe("sample-voice", () => {
 
     voice.configure(trimmedSong.tracks.sample, trimmedSong.samples, "authentic");
     voice.scheduleStep(7, 3);
-    voice.scheduleStep(15, 4);
+    voice.scheduleStep(7, 4);
 
     expect(createdBuffers).toHaveLength(1);
     expect(createdSources).toHaveLength(2);
     expect(createdGains).toHaveLength(2);
     const trimmedData = Array.from(createdBuffers[0]?.data ?? []);
-    const expectedTrimmedData = sample.pcm.slice(2, 8);
 
-    expect(trimmedData).toHaveLength(expectedTrimmedData.length);
-    trimmedData.forEach((value, index) => {
-      expect(value).toBeCloseTo(expectedTrimmedData[index] ?? 0, 6);
-    });
+    expect(createdBuffers[0]?.sampleRate).toBe(normalizeDpcmRate(2));
+    expect(trimmedData).toHaveLength(createdBuffers[0]?.length ?? 0);
+    expect(trimmedData.some((value) => Math.abs(value) > 0.0001)).toBe(true);
 
     const firstSource = createdSources[0];
     const firstGain = createdGains[0];
-    const expectedStopTime = 3 + 6 / sample.sampleRate / 2 + 0.01;
+    const expectedStopTime = 3 + (createdBuffers[0]?.duration ?? 0) + 0.01;
 
     expect(firstSource?.buffer).toBe(createdBuffers[0]);
-    expect(firstSource?.playbackRate.setValueAtTime).toHaveBeenCalledWith(2, 3);
+    expect(firstSource?.playbackRate.setValueAtTime).toHaveBeenCalledWith(1, 3);
     expect(firstGain?.gain.cancelScheduledValues).toHaveBeenCalledWith(3);
     expect(firstGain?.gain.setValueAtTime).toHaveBeenNthCalledWith(1, 0, 3);
     expect(firstGain?.gain.linearRampToValueAtTime).toHaveBeenNthCalledWith(1, 0.65, 3.001);

@@ -8,6 +8,7 @@ import {
   type TrackId,
   type TriangleTrack,
 } from "@/features/song/song-document";
+import { defaultDpcmRate, dpcmRatePresets, formatDpcmRateLabel } from "@/features/audio/dpcm";
 
 const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const noteOctaves = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;
@@ -175,6 +176,7 @@ export const noiseTriggerPresets = [
 ] as const satisfies readonly NoiseTriggerPreset[];
 
 export const samplePlaybackRateOptions = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+export const sampleDpcmRateOptions = dpcmRatePresets.map((preset) => preset.value);
 export const pulseDutyOptions = [0.125, 0.25, 0.5, 0.75] as const satisfies readonly PulseDutyValue[];
 
 const arrangementLinePattern = /^(\d+)\s*:\s*(.+)$/;
@@ -183,8 +185,8 @@ const arrangementNotePattern = /^([A-Ga-g])(#?)([0-8])$/;
 const pulseDutyPattern = /^(12\.5|25|50|75)%?$/;
 const supportedNoteSet = new Set(noteEntryOptions);
 const samplePlaybackRateMin = 0.25;
-const samplePlaybackRateMax = 4;
-const defaultSamplePlaybackRate = 1;
+const samplePlaybackRateMax = 40_000;
+const defaultSamplePlaybackRate = defaultDpcmRate;
 
 const noisePresetById = new Map<NoiseTriggerPresetId, NoiseTriggerPreset>(
   noiseTriggerPresets.map((preset) => [preset.id, preset]),
@@ -653,7 +655,7 @@ export function serializeSampleTrackArrangement(
 
       return engineMode === "inspired"
         ? `${index + 1}: ${step.sampleId}>${step.note}`
-        : `${index + 1}: ${step.sampleId}@${formatSamplePlaybackRate(step.playbackRate)}`;
+        : `${index + 1}: ${step.sampleId}@${formatSamplePlaybackRate(step.playbackRate)}${step.playbackRate > 4 ? "hz" : "x"}`;
     })
     .join("\n");
 }
@@ -937,7 +939,7 @@ export function getDefaultSampleTrigger(
 }
 
 export function formatPlaybackRateLabel(playbackRate: number) {
-  return `${formatSamplePlaybackRate(playbackRate)}x`;
+  return playbackRate > 4 ? formatDpcmRateLabel(playbackRate) : `${formatSamplePlaybackRate(playbackRate)}x`;
 }
 
 export function formatNoiseConfigLabel(
@@ -1454,7 +1456,7 @@ function parseSampleTriggerDescriptor(
   if (trimmedValue.length === 0) {
     return {
       ok: false,
-      error: 'must include a sample reference like "mic-001@1x" or "mic-001>C5".',
+      error: 'must include a sample reference like "mic-001@11186hz" or "mic-001>C5".',
     };
   }
 
@@ -1476,7 +1478,7 @@ function parseSampleTriggerDescriptor(
     const rateToken = trimmedValue
       .slice(rateSeparatorIndex + 1)
       .trim()
-      .replace(/x$/i, "");
+      .replace(/(?:hz|x)$/i, "");
 
     if (nextSampleReference.length === 0) {
       return {
@@ -1490,14 +1492,14 @@ function parseSampleTriggerDescriptor(
     if (!Number.isFinite(parsedPlaybackRate)) {
       return {
         ok: false,
-        error: `has an invalid playback rate. Use a value between ${samplePlaybackRateMin} and ${samplePlaybackRateMax}.`,
+        error: `has an invalid DPCM rate. Use a value between ${samplePlaybackRateMin} and ${samplePlaybackRateMax}.`,
       };
     }
 
     if (parsedPlaybackRate < samplePlaybackRateMin || parsedPlaybackRate > samplePlaybackRateMax) {
       return {
         ok: false,
-        error: `has an unsupported playback rate. Use a value between ${samplePlaybackRateMin} and ${samplePlaybackRateMax}.`,
+        error: `has an unsupported DPCM rate. Use a value between ${samplePlaybackRateMin} and ${samplePlaybackRateMax}.`,
       };
     }
 

@@ -1,6 +1,7 @@
 import { deflateRaw } from "pako";
 import { describe, expect, it } from "vitest";
 
+import { defaultDpcmRate, normalizeDpcmRate } from "@/features/audio/dpcm";
 import { createDefaultSongDocument } from "@/features/song/song-document";
 import {
   buildSongShareUrl,
@@ -218,7 +219,12 @@ function createDenseSongFixture() {
           ? "imp-002"
           : null,
     note: index === 15 || index === 31 ? "G3" : "C4",
-    playbackRate: index === 15 ? 1.5 : index === 31 ? 1.25 : 1,
+    playbackRate:
+      index === 15
+        ? normalizeDpcmRate(1.5)
+        : index === 31
+          ? normalizeDpcmRate(1.25)
+          : defaultDpcmRate,
   }));
 
   return song;

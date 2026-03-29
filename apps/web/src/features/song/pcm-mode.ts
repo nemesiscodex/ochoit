@@ -22,11 +22,11 @@ const pcmModeDefinitions: Record<EngineMode, PcmModeDefinition> = {
   authentic: {
     panelLabel: "Authentic DPCM",
     summary:
-      "Authentic mode keeps the PCM lane closer to the original one-shot workflow: choose a clip and trigger it at a playback rate.",
+      "Authentic mode converts the PCM lane into a DPCM trigger path: each clip is replayed as one-bit delta-encoded audio at a fixed NES-style rate preset.",
     arrangementSummary:
-      "Authentic mode stays trigger-based: choose a sample and optional playback rate, without per-step note mapping.",
+      "Authentic mode stays trigger-based: choose a sample and optional DPCM rate preset, without per-step note mapping.",
     arrangementInstructions:
-      "One trigger per line in the format 8: {sampleReference}@1x. Use a sample id or sample name plus an optional playback rate from 0.25x to 4x.",
+      "One trigger per line in the format 8: {sampleReference}@11186hz. Use a sample id or sample name plus an optional DPCM playback rate in hertz.",
   },
 };
 

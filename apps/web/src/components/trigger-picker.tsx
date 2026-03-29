@@ -10,7 +10,7 @@ import {
   getNoiseTriggerPresetById,
   noiseTriggerPresets,
   pulseDutyOptions,
-  samplePlaybackRateOptions,
+  sampleDpcmRateOptions,
   type NoiseTriggerPresetId,
   type PulseDutyValue,
 } from "@/features/song/song-pattern";
@@ -263,7 +263,7 @@ export function SampleTriggerPicker({
                   </div>
 
                   <div className="mt-3 grid grid-cols-3 gap-1.5">
-                    {samplePlaybackRateOptions.map((rate) => {
+                    {sampleDpcmRateOptions.map((rate) => {
                       const isSelectedRate = isSelectedSample && rate === playbackRate;
 
                       return (

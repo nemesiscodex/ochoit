@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { defaultDpcmRate } from "@/features/audio/dpcm";
 
 export const SONG_DOCUMENT_KIND = "ochoit-song";
 export const SONG_DOCUMENT_VERSION = 1 as const;
@@ -52,7 +53,7 @@ const sampleStepSchema = z.object({
   volume: levelSchema,
   sampleId: z.string().min(1).nullable(),
   note: noteSchema.default("C4"),
-  playbackRate: z.number().min(0.25).max(4),
+  playbackRate: z.number().positive().max(40_000),
 });
 
 const pulseTrackSchema = z.object({
@@ -266,7 +267,7 @@ function createSampleSteps(pattern: number[]) {
     volume: 1,
     sampleId: seededSteps.has(index) ? "mic-001" : null,
     note: "C4",
-    playbackRate: 1,
+    playbackRate: defaultDpcmRate,
   }));
 }
 

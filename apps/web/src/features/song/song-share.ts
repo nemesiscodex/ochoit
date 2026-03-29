@@ -1,4 +1,5 @@
 import { deflateRaw, inflateRaw } from "pako";
+import { defaultDpcmRate, normalizeDpcmRate } from "@/features/audio/dpcm";
 
 import {
   DEFAULT_PULSE_DUTY,
@@ -22,7 +23,7 @@ import {
   parseNoiseTrackArrangement,
   parseSampleTrackArrangement,
   pulseDutyOptions,
-  samplePlaybackRateOptions,
+  sampleDpcmRateOptions,
   type MelodicArrangementEntry,
   type MelodicTrackId,
   type NoteValue,
@@ -43,7 +44,7 @@ const pulseDutyIndexByValue = new Map<PulseTrack["steps"][number]["duty"], numbe
   pulseDutyOptions.map((duty, index) => [duty, index]),
 );
 const samplePlaybackRateIndexByValue = new Map<number, number>(
-  samplePlaybackRateOptions.map((playbackRate, index) => [playbackRate, index]),
+  sampleDpcmRateOptions.map((playbackRate, index) => [playbackRate, index]),
 );
 
 const trackIdBySectionNumber = {
@@ -528,7 +529,8 @@ function serializeSampleSection(track: SampleTrack, engineMode: SongDocument["me
       return `${index + 1}:${step.sampleId}>${step.note}${formatStepVolumeSuffix(step.volume, track.volume)}`;
     }
 
-    const rateSuffix = approximatelyEqual(step.playbackRate, 1) ? "" : `@${formatCompactNumber(step.playbackRate)}`;
+    const dpcmRate = normalizeDpcmRate(step.playbackRate);
+    const rateSuffix = dpcmRate === defaultDpcmRate ? "" : `@${formatCompactNumber(dpcmRate)}hz`;
 
     return `${index + 1}:${step.sampleId}${rateSuffix}${formatStepVolumeSuffix(step.volume, track.volume)}`;
   });
@@ -750,7 +752,7 @@ function buildSharedSampleTrack(
         volume: entry === undefined ? section.volume : (stepVolumeByStepIndex.get(index) ?? section.volume),
         sampleId: entry?.sampleId ?? null,
         note: entry?.note ?? "C4",
-        playbackRate: entry?.playbackRate ?? 1,
+      playbackRate: entry?.playbackRate ?? defaultDpcmRate,
       };
     }),
   };
@@ -1160,7 +1162,8 @@ function writeSampleTrack(
     }
 
     const hasVolumeOverride = !approximatelyEqual(step.volume, track.volume);
-    const playbackRateIndex = samplePlaybackRateIndexByValue.get(step.playbackRate) ?? -1;
+    const normalizedPlaybackRate = engineMode === "authentic" ? normalizeDpcmRate(step.playbackRate) : step.playbackRate;
+    const playbackRateIndex = samplePlaybackRateIndexByValue.get(normalizedPlaybackRate) ?? -1;
     const hasIndexedPlaybackRate = engineMode === "authentic" && playbackRateIndex !== -1;
     const entryFlags =
       (hasVolumeOverride ? 1 : 0) |
@@ -1176,7 +1179,7 @@ function writeSampleTrack(
     } else if (hasIndexedPlaybackRate) {
       writer.writeByte(playbackRateIndex);
     } else {
-      writer.writeVarUint(Math.round(step.playbackRate * 100));
+      writer.writeVarUint(Math.round(normalizedPlaybackRate));
     }
 
     if (hasVolumeOverride) {
@@ -1212,13 +1215,13 @@ function readSampleTrack(
     }
 
     let note: NoteValue = sample.baseNote as NoteValue;
-    let playbackRate = 1;
+    let playbackRate = defaultDpcmRate;
 
     if (encodedEngineMode === "inspired") {
       note = getNoteValueByIndex(reader.readByte());
     } else if (hasIndexedPlaybackRate) {
       const playbackRateIndex = reader.readByte();
-      const indexedPlaybackRate = samplePlaybackRateOptions[playbackRateIndex];
+      const indexedPlaybackRate = sampleDpcmRateOptions[playbackRateIndex];
 
       if (indexedPlaybackRate === undefined) {
         throw new Error("Invalid sample playback rate in share payload.");
@@ -1226,7 +1229,8 @@ function readSampleTrack(
 
       playbackRate = indexedPlaybackRate;
     } else {
-      playbackRate = reader.readVarUint() / 100;
+      const rawPlaybackRate = reader.readVarUint();
+      playbackRate = rawPlaybackRate <= 400 ? rawPlaybackRate / 100 : rawPlaybackRate;
     }
 
     const volume = hasVolumeOverride ? dequantizeLevel(reader.readByte()) : trackState.volume;
@@ -1236,7 +1240,7 @@ function readSampleTrack(
       volume,
       sampleId: sample.id,
       note,
-      playbackRate: encodedEngineMode === "authentic" ? playbackRate : 1,
+      playbackRate: encodedEngineMode === "authentic" ? playbackRate : defaultDpcmRate,
     });
   }
 
@@ -1253,7 +1257,7 @@ function readSampleTrack(
         volume: trackState.volume,
         sampleId: null,
         note: "C4",
-        playbackRate: 1,
+        playbackRate: defaultDpcmRate,
       };
     }),
   };

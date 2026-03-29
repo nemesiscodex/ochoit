@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { defaultDpcmRate } from "@/features/audio/dpcm";
 import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
 import {
   clampSongBpm,
@@ -52,7 +53,7 @@ describe("song-transport", () => {
       volume: song.tracks.sample.volume,
       sampleId: null,
       note: "C4",
-      playbackRate: 1,
+      playbackRate: defaultDpcmRate,
     });
   });
 

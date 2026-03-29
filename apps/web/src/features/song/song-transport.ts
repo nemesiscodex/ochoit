@@ -1,4 +1,5 @@
 import { DEFAULT_PULSE_DUTY, SONG_MAX_LOOP_LENGTH, type SongDocument } from "@/features/song/song-document";
+import { defaultDpcmRate } from "@/features/audio/dpcm";
 
 export const SONG_BPM_RANGE = {
   min: 40,
@@ -207,13 +208,13 @@ function resizeSampleTrack(track: SongDocument["tracks"]["sample"], loopLength: 
         return step;
       }
 
-      return {
-        enabled: false,
-        volume: track.volume,
-        sampleId: null,
-        note: "C4",
-        playbackRate: 1,
-      };
+        return {
+          enabled: false,
+          volume: track.volume,
+          sampleId: null,
+          note: "C4",
+          playbackRate: defaultDpcmRate,
+        };
     }),
   };
 }
