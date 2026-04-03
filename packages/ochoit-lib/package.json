@@ -1,0 +1,39 @@
+{
+  "name": "ochoit-lib",
+  "version": "0.1.0",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./web": {
+      "types": "./dist/web/index.d.ts",
+      "import": "./dist/web/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "verify": "pnpm run check-types && pnpm run test"
+  },
+  "dependencies": {
+    "pako": "^2.1.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ochoit/config": "workspace:*",
+    "@types/node": "^25.5.0",
+    "@types/pako": "^2.0.4",
+    "jsdom": "^26.0.0",
+    "typescript": "^5",
+    "vitest": "^4.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

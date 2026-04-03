@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { AudioEngine } from "ochoit-lib/web";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
-import type { AudioEngine } from "@/features/audio/audio-engine";
 import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
 
 function setCellWidth(element: HTMLElement, width: number) {

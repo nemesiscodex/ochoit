@@ -1,4 +1,4 @@
-import { type Track, type TrackId } from "@/features/song/song-document";
+import { type Track, type TrackId } from "ochoit-lib";
 
 export const accentByTrackId: Record<TrackId, string> = {
   pulse1: "border-[var(--oc-pulse1)]/40 bg-[var(--oc-pulse1)]/10 text-[var(--oc-pulse1)]",

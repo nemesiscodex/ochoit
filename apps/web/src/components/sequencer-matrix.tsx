@@ -2,18 +2,32 @@ import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-
-import type { AudioEngine } from "@/features/audio/audio-engine";
-import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
-import { useTrackWaveform } from "@/features/audio/use-track-waveform";
 import {
+  getFrequencyForNote,
+  getOrderedTracks,
+  trackOrder,
+  type MelodicArrangementEntry,
+  type MelodicStepUpdates,
+  type MelodicTrackId,
+  type NoteValue,
+  type SampleStepUpdates,
   type SongDocument,
   type Track,
   type TrackId,
-  getOrderedTracks,
-  trackOrder,
-} from "@/features/song/song-document";
+  type TriggerTrackId,
+  type NoiseStepUpdates,
+  getDefaultSampleTrigger,
+  getMelodicArrangementEntries,
+  getMelodicStepState,
+  getNoiseTriggerPresetForStep,
+  moveMelodicTrackEntries,
+  moveNoiseTrackEntries,
+  moveSampleTrackEntries,
+} from "ochoit-lib";
+import type { AudioEngine } from "ochoit-lib/web";
+
+import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
+import { useTrackWaveform } from "@/features/audio/use-track-waveform";
 import {
   buildKeyboardNoteBindings,
   clampKeyboardBaseOctave,
@@ -22,22 +36,6 @@ import {
   resolveKeyboardNoteFromKey,
 } from "@/features/song/song-keyboard-input";
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
-import {
-  getDefaultSampleTrigger,
-  type MelodicArrangementEntry,
-  getMelodicArrangementEntries,
-  moveMelodicTrackEntries,
-  moveNoiseTrackEntries,
-  moveSampleTrackEntries,
-  getMelodicStepState,
-  getNoiseTriggerPresetForStep,
-  type MelodicStepUpdates,
-  type MelodicTrackId,
-  type NoiseStepUpdates,
-  type NoteValue,
-  type SampleStepUpdates,
-  type TriggerTrackId,
-} from "@/features/song/song-pattern";
 import { SONG_LOOP_LENGTH_RANGE } from "@/features/song/song-transport";
 
 import {

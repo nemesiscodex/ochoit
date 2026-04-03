@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { AudioEngine } from "@/features/audio/audio-engine";
 import { WAVEFORM_SAMPLE_SIZE, createFlatWaveform } from "@/features/audio/waveform-data";
-import type { TrackId } from "@/features/song/song-document";
+import type { TrackId } from "ochoit-lib";
+import type { AudioEngine } from "ochoit-lib/web";
 
 const waveformRefreshIntervalMs = 1000 / 30;
 

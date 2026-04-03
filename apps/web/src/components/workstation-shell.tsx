@@ -5,6 +5,41 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/t
 import { cn } from "@ochoit/ui/lib/utils";
 import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import {
+  SONG_MAX_SAMPLE_COUNT,
+  buildSongShareUrl,
+  createEmptySongDocument,
+  getOrderedTracks,
+  parseMelodicTrackArrangement,
+  parseNoiseTrackArrangement,
+  parseSampleTrackArrangement,
+  parseSongShareText,
+  readSongShareFromHash,
+  replaceMelodicTrackArrangement,
+  replaceNoiseTrackArrangement,
+  replaceSampleTrackArrangement,
+  replaceSampleTrackSampleReference,
+  resizeMelodicTrackStep,
+  serializeMelodicTrackArrangement,
+  serializeNoiseTrackArrangement,
+  serializeSampleTrackArrangement,
+  serializeSongShareText,
+  updateMelodicTrackStep,
+  updateNoiseTrackStep,
+  updateSampleTrackStep,
+  noiseTriggerPresets,
+  isMelodicTrackId,
+  moveMelodicTrackEntries,
+  moveNoiseTrackEntries,
+  moveSampleTrackEntries,
+  type MelodicStepUpdates,
+  type MelodicTrackId,
+  type NoiseStepUpdates,
+  type SampleStepUpdates,
+  type SongDocument,
+  type TrackId,
+  type TriggerTrackId,
+} from "ochoit-lib";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { NotePicker } from "@/components/note-picker";
@@ -18,25 +53,12 @@ import {
 } from "@/features/audio/sample-recorder";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import {
-  createEmptySongDocument,
-  getOrderedTracks,
-  SONG_MAX_SAMPLE_COUNT,
-  type SongDocument,
-  type TrackId,
-} from "@/features/song/song-document";
-import {
   type EngineMode,
   formatEngineModeLabel,
   getPcmModeLabel,
   getPcmModeSummary,
   getSampleArrangementHelperCopy,
 } from "@/features/song/pcm-mode";
-import {
-  buildSongShareUrl,
-  parseSongShareText,
-  readSongShareFromHash,
-  serializeSongShareText,
-} from "@/features/song/song-share";
 import { getSongExampleById, songExamples, type SongExample } from "@/features/song/song-examples";
 import {
   TRACK_VOLUME_PERCENT_RANGE,
@@ -47,32 +69,6 @@ import {
   updateTrackVolume,
 } from "@/features/song/song-mixer";
 import { createSongWavBlob, createSongWavFileName } from "@/features/song/song-wav";
-import {
-  moveMelodicTrackEntries,
-  moveNoiseTrackEntries,
-  moveSampleTrackEntries,
-  type MelodicStepUpdates,
-  type MelodicTrackId,
-  type NoiseStepUpdates,
-  type SampleStepUpdates,
-  type TriggerTrackId,
-  isMelodicTrackId,
-  noiseTriggerPresets,
-  parseNoiseTrackArrangement,
-  parseSampleTrackArrangement,
-  parseMelodicTrackArrangement,
-  replaceNoiseTrackArrangement,
-  replaceSampleTrackArrangement,
-  replaceMelodicTrackArrangement,
-  replaceSampleTrackSampleReference,
-  resizeMelodicTrackStep,
-  serializeNoiseTrackArrangement,
-  serializeSampleTrackArrangement,
-  updateNoiseTrackStep,
-  updateSampleTrackStep,
-  serializeMelodicTrackArrangement,
-  updateMelodicTrackStep,
-} from "@/features/song/song-pattern";
 import {
   applySampleTrim,
   getTrimmedFrameCount,

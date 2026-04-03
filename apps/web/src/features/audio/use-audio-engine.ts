@@ -1,8 +1,7 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 
-import { type AudioTransportEvent, type AudioTransportSnapshot } from "@/features/audio/audio-transport";
-import { AudioEngine } from "@/features/audio/audio-engine";
-import type { SongDocument } from "@/features/song/song-document";
+import { type SongDocument } from "ochoit-lib";
+import { AudioEngine, type AudioTransportEvent, type AudioTransportSnapshot } from "ochoit-lib/web";
 
 export type AudioBootstrapState =
   | "idle"

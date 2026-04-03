@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AudioEngine } from "ochoit-lib/web";
 
 import { WorkstationShell } from "@/components/workstation-shell";
-import type { AudioEngine } from "@/features/audio/audio-engine";
 import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
 import {
   createDefaultSongDocument,

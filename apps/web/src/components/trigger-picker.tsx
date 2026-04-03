@@ -2,7 +2,6 @@ import { cn } from "@ochoit/ui/lib/utils";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import type { NoiseTrack, SerializedSampleAsset } from "@/features/song/song-document";
 import {
   formatPlaybackRateLabel,
   formatNoiseConfigLabel,
@@ -11,9 +10,11 @@ import {
   noiseTriggerPresets,
   pulseDutyOptions,
   sampleDpcmRateOptions,
+  type NoiseTrack,
   type NoiseTriggerPresetId,
   type PulseDutyValue,
-} from "@/features/song/song-pattern";
+  type SerializedSampleAsset,
+} from "ochoit-lib";
 
 type PanelPosition = {
   top: number;

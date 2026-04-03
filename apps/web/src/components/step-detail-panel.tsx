@@ -2,28 +2,12 @@ import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
-
-import type { AudioEngine } from "@/features/audio/audio-engine";
-import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import type { EngineMode } from "@/features/song/pcm-mode";
-import type {
-  NoiseTrack,
-  PulseTrack,
-  SampleTrack,
-  SongDocument,
-  TrackId,
-  TriangleTrack,
-} from "@/features/song/song-document";
 import {
-  type MelodicStepUpdates,
-  type MelodicTrackId,
-  type NoiseStepUpdates,
-  type NoteValue,
-  type SampleStepUpdates,
   formatNoiseConfigLabel,
   formatPlaybackRateLabel,
   formatPulseDutyLabel,
   getDefaultSampleTrigger,
+  getFrequencyForNote,
   getMelodicStepState,
   getMelodicTrackMaxLength,
   getNoiseTriggerPresetForStep,
@@ -31,7 +15,21 @@ import {
   noiseTriggerPresets,
   pulseDutyOptions,
   sampleDpcmRateOptions,
-} from "@/features/song/song-pattern";
+  type MelodicStepUpdates,
+  type MelodicTrackId,
+  type NoiseStepUpdates,
+  type NoiseTrack,
+  type NoteValue,
+  type PulseTrack,
+  type SampleStepUpdates,
+  type SampleTrack,
+  type SongDocument,
+  type TrackId,
+  type TriangleTrack,
+} from "ochoit-lib";
+import type { AudioEngine } from "ochoit-lib/web";
+
+import type { EngineMode } from "@/features/song/pcm-mode";
 import { labelByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
 
