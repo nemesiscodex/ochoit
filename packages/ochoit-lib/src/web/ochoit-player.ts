@@ -1,3 +1,4 @@
+import { createVoiceSong, isPlayableVoiceId, type PlayableVoiceId, type VoiceSongOptions } from "../core/voice-song";
 import { parseSongShareText } from "../core/song-share";
 import { parseSongDocument, type SongDocument } from "../core/song-document";
 import type { AudioTransportEvent, AudioTransportSnapshot } from "./audio-transport";
@@ -5,6 +6,10 @@ import { AudioEngine } from "./audio-engine";
 
 export type SongInput = string | SongDocument;
 export type OchoitPlayerEvent = AudioTransportEvent;
+export type OchoitVoiceOptions = VoiceSongOptions &
+  Pick<OchoitOptions, "audioContext" | "autoResume"> & {
+    loop?: boolean;
+  };
 
 export interface OchoitPlayer {
   play(options?: { when?: number; startStep?: number }): Promise<void>;
@@ -43,6 +48,7 @@ class OchoitPlayerController implements OchoitPlayer {
   constructor(
     input: SongInput,
     private readonly options: OchoitOptions = {},
+    private readonly playbackLoop = true,
   ) {
     this.song = resolveSong(input);
   }
@@ -130,7 +136,9 @@ class OchoitPlayerController implements OchoitPlayer {
   }
 
   private configureEngine(engine: AudioEngine) {
-    engine.configureSong(this.song);
+    engine.configureSong(this.song, {
+      loop: this.playbackLoop,
+    });
 
     if (this.options.masterVolume !== undefined) {
       engine.setMasterVolume(this.options.masterVolume);
@@ -144,6 +152,49 @@ class OchoitPlayerController implements OchoitPlayer {
   }
 }
 
-export function ochoit(input: SongInput, options?: OchoitOptions): OchoitPlayer {
+function createVoicePlayer(voiceId: PlayableVoiceId, arrangementInput: string, options: OchoitVoiceOptions = {}) {
+  const song = createVoiceSong(voiceId, arrangementInput, options);
+
+  return new OchoitPlayerController(
+    song,
+    {
+      audioContext: options.audioContext,
+      autoResume: options.autoResume,
+      masterVolume: options.masterVolume,
+    },
+    options.loop !== false,
+  );
+}
+
+function createSongPlayer(input: SongInput, options?: OchoitOptions) {
   return new OchoitPlayerController(input, options);
 }
+
+export interface OchoitFactory {
+  (input: SongInput, options?: OchoitOptions): OchoitPlayer;
+  (voiceId: PlayableVoiceId, arrangementInput: string, options?: OchoitVoiceOptions): OchoitPlayer;
+  voice: (voiceId: PlayableVoiceId, arrangementInput: string, options?: OchoitVoiceOptions) => OchoitPlayer;
+}
+
+const ochoitFactory = Object.assign(
+  (
+    inputOrVoiceId: PlayableVoiceId | SongInput,
+    arrangementInputOrOptions?: string | OchoitOptions,
+    maybeOptions?: OchoitVoiceOptions,
+  ) => {
+    if (
+      typeof inputOrVoiceId === "string" &&
+      typeof arrangementInputOrOptions === "string" &&
+      isPlayableVoiceId(inputOrVoiceId)
+    ) {
+      return createVoicePlayer(inputOrVoiceId, arrangementInputOrOptions, maybeOptions);
+    }
+
+    return createSongPlayer(inputOrVoiceId as SongInput, arrangementInputOrOptions as OchoitOptions | undefined);
+  },
+  {
+    voice: createVoicePlayer,
+  },
+);
+
+export const ochoit = ochoitFactory as OchoitFactory;

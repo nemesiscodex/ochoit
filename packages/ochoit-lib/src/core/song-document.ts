@@ -135,7 +135,7 @@ export const songDocumentSchema = z
       engineMode: z.enum(["inspired", "authentic"]),
     }),
     transport: z.object({
-      bpm: z.number().int().min(40).max(240),
+      bpm: z.number().int().min(40),
       stepsPerBeat: z.number().int().min(1).max(8),
       loopLength: loopLengthSchema,
     }),

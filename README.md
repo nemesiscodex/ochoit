@@ -30,5 +30,19 @@ The PCM channel was especially fun to explore. I was a little disappointed that 
 - Example songs for fast onboarding
 - Shareable song links and a text-based song DSL
 
+## ochoit-lib
+
+This repo also includes [`ochoit-lib`](/Users/julio/personal/ochoit/packages/ochoit-lib/README.md), a browser-first TypeScript package for parsing and playing Ochoit DSL songs in your own projects.
+
+Install it with:
+
+```bash
+npm install ochoit-lib
+```
+
+You can create/export DSL songs from the Ochoit app here:
+
+https://ochoit.nemesiscodex.org/
+
 ## Disclaimer
 This is just a fun project I just want to build for myself, and thanks to AI if you can think of it, you can probably build it too. This project was made entirely using codex (And Opus 4.6 to fix the sh*tty UI made by GPT-5.4).

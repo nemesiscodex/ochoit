@@ -5,6 +5,7 @@ export * from "./core/song-pattern";
 export * from "./core/song-share";
 export * from "./core/transport-scheduler";
 export * from "./core/transport-worklet-shared";
+export * from "./core/voice-song";
 
 import {
   createDefaultSongDocument,

@@ -92,6 +92,8 @@ export function collectScheduledSteps(
   let nextStep = state.nextStep;
   let nextStepTime = state.nextStepTime;
   let loopCount = state.loopCount;
+  let playing: boolean = state.playing;
+  const looping = state.config.loop !== false;
 
   while (nextStepTime < scheduleWindowEnd) {
     scheduledSteps.push({
@@ -102,6 +104,13 @@ export function collectScheduledSteps(
 
     nextStep += 1;
     if (nextStep >= state.config.loopLength) {
+      if (!looping) {
+        nextStep = 0;
+        nextStepTime += stepDuration;
+        playing = false;
+        break;
+      }
+
       nextStep = 0;
       loopCount += 1;
     }
@@ -112,8 +121,9 @@ export function collectScheduledSteps(
   return {
     state: {
       ...state,
+      playing,
       nextStep,
-      nextStepTime,
+      nextStepTime: playing ? nextStepTime : null,
       loopCount,
     },
     scheduledSteps,

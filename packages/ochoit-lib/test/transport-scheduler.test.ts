@@ -98,4 +98,33 @@ describe("transport-scheduler", () => {
       loopCount: 0,
     });
   });
+
+  it("stops cleanly after one pass when looping is disabled", () => {
+    const state = startTransportScheduler(
+      createTransportSchedulerState(
+        {
+          bpm: 120,
+          loop: false,
+          stepsPerBeat: 4,
+          loopLength: 8,
+        },
+        0.1,
+      ),
+      0,
+      6,
+    );
+
+    const result = collectScheduledSteps(state, 0.5);
+
+    expect(result.scheduledSteps).toEqual([
+      { step: 6, time: 0, loopCount: 0 },
+      { step: 7, time: 0.125, loopCount: 0 },
+    ]);
+    expect(result.state).toMatchObject({
+      playing: false,
+      nextStep: 0,
+      nextStepTime: null,
+      loopCount: 0,
+    });
+  });
 });

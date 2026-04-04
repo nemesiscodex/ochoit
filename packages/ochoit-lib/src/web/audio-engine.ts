@@ -2,6 +2,7 @@ import { configureOldSpeakerFilters } from "./old-speaker";
 import { NoiseVoice } from "./noise-voice";
 import { AudioTransport } from "./audio-transport";
 import { getFrequencyForNote } from "../core/note-frequency";
+import type { TransportConfig } from "../core/transport-worklet-shared";
 import { PulseVoice } from "./pulse-voice";
 import { SampleVoice } from "./sample-voice";
 import { getTriangleOutputGain, TriangleVoice } from "./triangle-voice";
@@ -187,7 +188,7 @@ export class AudioEngine {
     this.voices[trackId].gain.gain.value = volume;
   }
 
-  configureSong(song: SongDocument) {
+  configureSong(song: SongDocument, transportOverrides: Partial<TransportConfig> = {}) {
     this.setMasterVolume(song.mixer.masterVolume);
     this.setOldSpeakerMode(song.mixer.oldSpeakerMode);
     getOrderedTracks(song).forEach((track) => {
@@ -198,10 +199,13 @@ export class AudioEngine {
     this.triangleVoice.configure(song.tracks.triangle, song.transport);
     this.noiseVoice.configure(song.tracks.noise, song.transport);
     this.sampleVoice.configure(song.tracks.sample, song.samples, song.meta.engineMode);
-    this.transport.configure(song.transport);
+    this.transport.configure({
+      ...song.transport,
+      ...transportOverrides,
+    });
   }
 
-  configureTransport(transport: SongDocument["transport"]) {
+  configureTransport(transport: TransportConfig) {
     this.transport.configure(transport);
   }
 

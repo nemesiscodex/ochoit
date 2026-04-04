@@ -3,6 +3,7 @@ export const DEFAULT_TRANSPORT_LOOKAHEAD_SECONDS = 0.1;
 
 export type TransportConfig = {
   bpm: number;
+  loop?: boolean;
   stepsPerBeat: number;
   loopLength: number;
 };

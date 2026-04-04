@@ -51,6 +51,15 @@ describe("song-document", () => {
     expect(parsedSong.mixer.oldSpeakerMode).toBe(false);
   });
 
+  it("accepts bpm values above the web app editor limit", () => {
+    const song = createDefaultSongDocument();
+    song.transport.bpm = 512;
+
+    const parsedSong = parseSongDocument(song);
+
+    expect(parsedSong.transport.bpm).toBe(512);
+  });
+
   it("creates a valid empty song document for starting from scratch", () => {
     const song = createEmptySongDocument();
 
