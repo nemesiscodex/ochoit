@@ -40,6 +40,8 @@ Install it with:
 npm install ochoit-lib
 ```
 
+Use `ochoit-lib/web` for browser playback and `ochoit-lib` for core parsing/serialization helpers.
+
 You can create/export DSL songs from the Ochoit app here:
 
 https://ochoit.nemesiscodex.org/

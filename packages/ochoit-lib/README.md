@@ -8,6 +8,11 @@ Browser-first TypeScript library for parsing and playing Ochoit DSL songs.
 npm install ochoit-lib
 ```
 
+Use:
+
+- `ochoit-lib` for parsing, validation, and serialization
+- `ochoit-lib/web` for browser playback
+
 ## Get A DSL Song
 
 You can create and export songs from the Ochoit sequencer:
@@ -18,16 +23,22 @@ Use the app's DSL/share text as the input to this library.
 
 ## Play A Song
 
-Call `ochoit.start()` from a user interaction first if you want an explicit browser-audio unlock step.
+Import the playback API from `ochoit-lib/web`.
+
+Call `ochoit.start()` from a user interaction before the first playback. Browsers will often block audio if you try to start it outside a click, tap, or keypress.
 
 ```ts
 import { ochoit } from "ochoit-lib/web";
 
-await ochoit.start(); // call from a click/tap/keypress
+button.addEventListener("click", async () => {
+  await ochoit.start();
 
-const player = ochoit(dsl);
-await player.play();
+  const player = ochoit(dsl);
+  await player.play();
+});
 ```
+
+`play()` still resumes audio internally, but `ochoit.start()` is the recommended explicit unlock step.
 
 ## Play A Single Voice
 
