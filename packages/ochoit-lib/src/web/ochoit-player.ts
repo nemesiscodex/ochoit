@@ -1,9 +1,9 @@
-import { createVoiceSong, isPlayableVoiceId, type PlayableVoiceId, type VoiceSongOptions } from "../core/voice-song";
-import { parseSongShareText } from "../core/song-share";
-import { parseSongDocument, type SongDocument } from "../core/song-document";
-import type { AudioTransportEvent, AudioTransportSnapshot } from "./audio-transport";
-import { AudioEngine } from "./audio-engine";
-import { getSharedAudioContext, startSharedAudioContext } from "./shared-audio-context";
+import { createVoiceSong, isPlayableVoiceId, type PlayableVoiceId, type VoiceSongOptions } from "../core/voice-song.js";
+import { parseSongShareText } from "../core/song-share.js";
+import { parseSongDocument, type SongDocument } from "../core/song-document.js";
+import type { AudioTransportEvent, AudioTransportSnapshot } from "./audio-transport.js";
+import { AudioEngine } from "./audio-engine.js";
+import { getSharedAudioContext, startSharedAudioContext } from "./shared-audio-context.js";
 
 export type SongInput = string | SongDocument;
 export type OchoitPlayerEvent = AudioTransportEvent;

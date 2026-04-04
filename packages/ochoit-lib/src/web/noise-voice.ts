@@ -1,5 +1,5 @@
-import type { TransportConfig } from "../core/transport-worklet-shared";
-import type { NoiseTrack } from "../core/song-document";
+import type { TransportConfig } from "../core/transport-worklet-shared.js";
+import type { NoiseTrack } from "../core/song-document.js";
 
 const noiseCycleFrameCount = 2048;
 const noteAttackSeconds = 0.001;

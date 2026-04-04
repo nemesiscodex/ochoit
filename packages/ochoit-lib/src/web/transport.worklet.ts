@@ -3,7 +3,7 @@ import {
   type TransportProcessorCommand,
   type TransportProcessorEvent,
   TRANSPORT_WORKLET_NAME,
-} from "../core/transport-worklet-shared";
+} from "../core/transport-worklet-shared.js";
 import {
   collectScheduledSteps,
   configureTransportScheduler,
@@ -11,7 +11,7 @@ import {
   startTransportScheduler,
   stopTransportScheduler,
   type TransportSchedulerState,
-} from "../core/transport-scheduler";
+} from "../core/transport-scheduler.js";
 
 const defaultTransportConfig: TransportConfig = {
   bpm: 136,

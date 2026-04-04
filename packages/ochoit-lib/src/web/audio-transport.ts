@@ -5,7 +5,7 @@ import {
   type TransportConfig,
   type TransportProcessorCommand,
   type TransportProcessorEvent,
-} from "../core/transport-worklet-shared";
+} from "../core/transport-worklet-shared.js";
 
 export type AudioTransportPlaybackState = "stopped" | "playing";
 

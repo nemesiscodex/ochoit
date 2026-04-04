@@ -1,18 +1,18 @@
-export * from "./core/dpcm";
-export * from "./core/note-frequency";
-export * from "./core/song-document";
-export * from "./core/song-pattern";
-export * from "./core/song-share";
-export * from "./core/transport-scheduler";
-export * from "./core/transport-worklet-shared";
-export * from "./core/voice-song";
+export * from "./core/dpcm.js";
+export * from "./core/note-frequency.js";
+export * from "./core/song-document.js";
+export * from "./core/song-pattern.js";
+export * from "./core/song-share.js";
+export * from "./core/transport-scheduler.js";
+export * from "./core/transport-worklet-shared.js";
+export * from "./core/voice-song.js";
 
 import {
   createDefaultSongDocument,
   createEmptySongDocument,
   parseSongDocument,
   type SongDocument,
-} from "./core/song-document";
+} from "./core/song-document.js";
 import {
   parseMelodicTrackArrangement,
   parseNoiseTrackArrangement,
@@ -20,8 +20,8 @@ import {
   replaceMelodicTrackArrangement,
   replaceNoiseTrackArrangement,
   replaceSampleTrackArrangement,
-} from "./core/song-pattern";
-import { parseSongShareText, serializeSongShareText } from "./core/song-share";
+} from "./core/song-pattern.js";
+import { parseSongShareText, serializeSongShareText } from "./core/song-share.js";
 
 export type SongInput = string | SongDocument;
 

@@ -1,13 +1,13 @@
-import { configureOldSpeakerFilters } from "./old-speaker";
-import { NoiseVoice } from "./noise-voice";
-import { AudioTransport } from "./audio-transport";
-import { getFrequencyForNote } from "../core/note-frequency";
-import type { TransportConfig } from "../core/transport-worklet-shared";
-import { PulseVoice } from "./pulse-voice";
-import { SampleVoice } from "./sample-voice";
-import { getTriangleOutputGain, TriangleVoice } from "./triangle-voice";
-import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "../core/song-document";
-import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue, type PulseDutyValue } from "../core/song-pattern";
+import { configureOldSpeakerFilters } from "./old-speaker.js";
+import { NoiseVoice } from "./noise-voice.js";
+import { AudioTransport } from "./audio-transport.js";
+import { getFrequencyForNote } from "../core/note-frequency.js";
+import type { TransportConfig } from "../core/transport-worklet-shared.js";
+import { PulseVoice } from "./pulse-voice.js";
+import { SampleVoice } from "./sample-voice.js";
+import { getTriangleOutputGain, TriangleVoice } from "./triangle-voice.js";
+import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "../core/song-document.js";
+import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue, type PulseDutyValue } from "../core/song-pattern.js";
 
 export type AudioEngineState = AudioContextState | "closed";
 

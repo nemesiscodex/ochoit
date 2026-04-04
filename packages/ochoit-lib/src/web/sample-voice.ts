@@ -1,6 +1,6 @@
-import { encodeSampleToDpcm, normalizeDpcmRate } from "../core/dpcm";
-import { getFrequencyForNote } from "../core/note-frequency";
-import type { SampleTrack, SerializedSampleAsset, SongDocument } from "../core/song-document";
+import { encodeSampleToDpcm, normalizeDpcmRate } from "../core/dpcm.js";
+import { getFrequencyForNote } from "../core/note-frequency.js";
+import type { SampleTrack, SerializedSampleAsset, SongDocument } from "../core/song-document.js";
 
 const noteAttackSeconds = 0.001;
 const noteReleaseSeconds = 0.012;

@@ -2,7 +2,7 @@ import {
   DEFAULT_TRANSPORT_LOOKAHEAD_SECONDS,
   type ScheduledTransportStep,
   type TransportConfig,
-} from "./transport-worklet-shared";
+} from "./transport-worklet-shared.js";
 
 export type TransportSchedulerState = {
   config: TransportConfig;

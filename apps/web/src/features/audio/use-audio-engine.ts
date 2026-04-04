@@ -1,7 +1,7 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 
 import { type SongDocument } from "ochoit-lib";
-import { AudioEngine, type AudioTransportEvent, type AudioTransportSnapshot } from "ochoit-lib/web";
+import { AudioEngine, ochoit, type AudioTransportEvent, type AudioTransportSnapshot } from "ochoit-lib/web";
 
 export type AudioBootstrapState =
   | "idle"
@@ -57,25 +57,25 @@ export function useAudioEngine(song: SongDocument) {
   };
 
   const initializeAudio = async () => {
-    if (engineRef.current !== null) {
-      engineRef.current.configureSong(song);
-      await engineRef.current.resume();
-      syncState(engineRef.current);
-      return engineRef.current;
-    }
-
     startTransition(() => {
       setEngineState("initializing");
       setErrorMessage(null);
     });
 
     try {
-      const engine = await AudioEngine.create();
+      if (engineRef.current !== null) {
+        await ochoit.start();
+        engineRef.current.configureSong(song);
+        syncState(engineRef.current);
+        return engineRef.current;
+      }
+
+      const context = await ochoit.start();
+      const engine = await AudioEngine.create({ context });
       engineRef.current = engine;
       unsubscribeTransportRef.current?.();
       unsubscribeTransportRef.current = engine.transport.subscribe(syncTransportState);
       engine.configureSong(song);
-      await engine.resume();
       syncState(engine);
       return engine;
     } catch (error) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defaultDpcmRate } from "./dpcm";
+import { defaultDpcmRate } from "./dpcm.js";
 
 export const SONG_DOCUMENT_KIND = "ochoit-song";
 export const SONG_DOCUMENT_VERSION = 1 as const;

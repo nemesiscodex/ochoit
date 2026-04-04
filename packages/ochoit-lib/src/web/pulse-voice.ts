@@ -1,6 +1,6 @@
-import type { TransportConfig } from "../core/transport-worklet-shared";
-import { getFrequencyForNote } from "../core/note-frequency";
-import type { PulseTrack } from "../core/song-document";
+import type { TransportConfig } from "../core/transport-worklet-shared.js";
+import { getFrequencyForNote } from "../core/note-frequency.js";
+import type { PulseTrack } from "../core/song-document.js";
 
 const pulseCycleFrameCount = 2048;
 const noteAttackSeconds = 0.002;

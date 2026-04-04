@@ -1,5 +1,5 @@
 import { deflateRaw, inflateRaw } from "pako";
-import { defaultDpcmRate, normalizeDpcmRate } from "./dpcm";
+import { defaultDpcmRate, normalizeDpcmRate } from "./dpcm.js";
 
 import {
   DEFAULT_PULSE_DUTY,
@@ -12,7 +12,7 @@ import {
   type SerializedSampleAsset,
   type SongDocument,
   type TriangleTrack,
-} from "./song-document";
+} from "./song-document.js";
 import {
   formatNoiseConfigLabel,
   formatPulseDutyLabel,
@@ -27,7 +27,7 @@ import {
   type MelodicArrangementEntry,
   type MelodicTrackId,
   type NoteValue,
-} from "./song-pattern";
+} from "./song-pattern.js";
 
 export const SONG_SHARE_HASH_KEY = "song";
 

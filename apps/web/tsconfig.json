@@ -23,9 +23,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@ochoit/ui/*": ["../../packages/ui/src/*"],
-      "ochoit-lib": ["../../packages/ochoit-lib/src/index.ts"],
-      "ochoit-lib/web": ["../../packages/ochoit-lib/src/web/index.ts"]
+      "@ochoit/ui/*": ["../../packages/ui/src/*"]
     }
   }
 }

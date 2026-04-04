@@ -7,8 +7,8 @@ import {
   type SongDocument,
   type TrackId,
   type TriangleTrack,
-} from "./song-document";
-import { defaultDpcmRate, dpcmRatePresets, formatDpcmRateLabel } from "./dpcm";
+} from "./song-document.js";
+import { defaultDpcmRate, dpcmRatePresets, formatDpcmRateLabel } from "./dpcm.js";
 
 const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const noteOctaves = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const;

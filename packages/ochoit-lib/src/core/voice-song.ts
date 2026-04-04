@@ -3,8 +3,8 @@ import {
   parseSongDocument,
   type SerializedSampleAsset,
   type SongDocument,
-} from "./song-document";
-import { defaultDpcmRate } from "./dpcm";
+} from "./song-document.js";
+import { defaultDpcmRate } from "./dpcm.js";
 import {
   parseMelodicTrackArrangement,
   parseNoiseTrackArrangement,
@@ -13,7 +13,7 @@ import {
   replaceNoiseTrackArrangement,
   replaceSampleTrackArrangement,
   type MelodicTrackId,
-} from "./song-pattern";
+} from "./song-pattern.js";
 
 export type PlayableVoiceId = "pulse" | "pulse1" | "pulse2" | "triangle" | "noise" | "sample" | "pcm";
 export type CanonicalVoiceId = "pulse1" | "pulse2" | "triangle" | "noise" | "sample";
