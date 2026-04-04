@@ -5,4 +5,5 @@ export * from "./old-speaker";
 export * from "./ochoit-player";
 export * from "./pulse-voice";
 export * from "./sample-voice";
+export * from "./shared-audio-context";
 export * from "./triangle-voice";

@@ -3,6 +3,7 @@ import { parseSongShareText } from "../core/song-share";
 import { parseSongDocument, type SongDocument } from "../core/song-document";
 import type { AudioTransportEvent, AudioTransportSnapshot } from "./audio-transport";
 import { AudioEngine } from "./audio-engine";
+import { getSharedAudioContext, startSharedAudioContext } from "./shared-audio-context";
 
 export type SongInput = string | SongDocument;
 export type OchoitPlayerEvent = AudioTransportEvent;
@@ -116,9 +117,8 @@ class OchoitPlayerController implements OchoitPlayer {
       return this.engine;
     }
 
-    const engine = await AudioEngine.create({
-      context: this.options.audioContext,
-    });
+    const context = this.options.audioContext ?? getSharedAudioContext();
+    const engine = await AudioEngine.create({ context });
 
     engine.transport.subscribe((event) => {
       if (event.type === "playback-state") {
@@ -173,6 +173,7 @@ function createSongPlayer(input: SongInput, options?: OchoitOptions) {
 export interface OchoitFactory {
   (input: SongInput, options?: OchoitOptions): OchoitPlayer;
   (voiceId: PlayableVoiceId, arrangementInput: string, options?: OchoitVoiceOptions): OchoitPlayer;
+  start: (options?: AudioContextOptions) => Promise<AudioContext>;
   voice: (voiceId: PlayableVoiceId, arrangementInput: string, options?: OchoitVoiceOptions) => OchoitPlayer;
 }
 
@@ -193,6 +194,7 @@ const ochoitFactory = Object.assign(
     return createSongPlayer(inputOrVoiceId as SongInput, arrangementInputOrOptions as OchoitOptions | undefined);
   },
   {
+    start: startSharedAudioContext,
     voice: createVoicePlayer,
   },
 );

@@ -18,8 +18,12 @@ Use the app's DSL/share text as the input to this library.
 
 ## Play A Song
 
+Call `ochoit.start()` from a user interaction first if you want an explicit browser-audio unlock step.
+
 ```ts
 import { ochoit } from "ochoit-lib/web";
+
+await ochoit.start(); // call from a click/tap/keypress
 
 const player = ochoit(dsl);
 await player.play();

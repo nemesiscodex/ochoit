@@ -3,6 +3,19 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createDefaultSongDocument } from "../src/core/song-document";
 import { serializeSongShareText } from "../src/core/song-share";
 
+const sharedAudioContextMocks = vi.hoisted(() => {
+  const sharedContext = {
+    resume: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    state: "suspended" as AudioContextState,
+  };
+
+  return {
+    getSharedAudioContext: vi.fn(() => sharedContext),
+    sharedContext,
+    startSharedAudioContext: vi.fn(async () => sharedContext),
+  };
+});
+
 const playerMocks = vi.hoisted(() => {
   const transportSubscribe = vi.fn<(listener: (event: unknown) => void) => () => void>();
   const transport = {
@@ -37,10 +50,18 @@ vi.mock("../src/web/audio-engine", () => ({
   },
 }));
 
+vi.mock("../src/web/shared-audio-context", () => ({
+  getSharedAudioContext: sharedAudioContextMocks.getSharedAudioContext,
+  startSharedAudioContext: sharedAudioContextMocks.startSharedAudioContext,
+}));
+
 import { ochoit } from "../src/web/ochoit-player";
 
 describe("ochoit-player", () => {
   beforeEach(() => {
+    sharedAudioContextMocks.getSharedAudioContext.mockClear();
+    sharedAudioContextMocks.startSharedAudioContext.mockClear();
+    sharedAudioContextMocks.sharedContext.resume.mockClear();
     playerMocks.create.mockClear();
     playerMocks.engine.close.mockClear();
     playerMocks.engine.configureSong.mockClear();
@@ -64,10 +85,23 @@ describe("ochoit-player", () => {
     await player.play({ when: 2.5, startStep: 4 });
 
     expect(playerMocks.create).toHaveBeenCalledTimes(1);
+    expect(sharedAudioContextMocks.getSharedAudioContext).toHaveBeenCalledTimes(1);
+    expect(playerMocks.create).toHaveBeenCalledWith({
+      context: sharedAudioContextMocks.sharedContext,
+    });
     expect(playerMocks.engine.configureSong).toHaveBeenCalledTimes(1);
     expect(playerMocks.engine.resume).toHaveBeenCalledTimes(1);
     expect(playerMocks.engine.setMasterVolume).toHaveBeenCalledWith(0.42);
     expect(playerMocks.engine.startTransport).toHaveBeenCalledWith(2.5, 4);
+  });
+
+  it("exposes a global start method for unlocking the shared audio context", async () => {
+    const context = await ochoit.start({ latencyHint: "interactive" });
+
+    expect(context).toBe(sharedAudioContextMocks.sharedContext);
+    expect(sharedAudioContextMocks.startSharedAudioContext).toHaveBeenCalledWith({
+      latencyHint: "interactive",
+    });
   });
 
   it("builds a single-voice song from shorthand arrangement input", async () => {
@@ -128,6 +162,24 @@ describe("ochoit-player", () => {
       enabled: true,
       note: "G3",
       length: 4,
+    });
+  });
+
+  it("prefers an explicitly provided audio context over the shared one", async () => {
+    const customContext = {
+      resume: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      state: "suspended" as AudioContextState,
+    } as AudioContext;
+
+    const player = ochoit(createDefaultSongDocument(), {
+      audioContext: customContext,
+    });
+
+    await player.play();
+
+    expect(sharedAudioContextMocks.getSharedAudioContext).not.toHaveBeenCalled();
+    expect(playerMocks.create).toHaveBeenCalledWith({
+      context: customContext,
     });
   });
 
