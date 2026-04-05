@@ -6,6 +6,7 @@ import { cn } from "@ochoit/ui/lib/utils";
 import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import {
+  type ArrangementTextFormat,
   SONG_MAX_SAMPLE_COUNT,
   buildSongShareUrl,
   createEmptySongDocument,
@@ -91,6 +92,7 @@ type ArrangementEditorState = {
   trackId: MelodicTrackId | TriggerTrackId;
   draft: string;
   error: string | null;
+  textFormat: ArrangementTextFormat;
 };
 
 type ShareDslEditorState = {
@@ -106,6 +108,15 @@ type ShareStatus = {
 type WorkstationShellProps = {
   initialSong?: SongDocument;
 };
+
+function reformatArrangementDraft(draft: string, textFormat: ArrangementTextFormat) {
+  const entries = draft
+    .split(/\r?\n|,/u)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  return entries.join(textFormat === "compact" ? ", " : "\n");
+}
 
 export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const [song, setSong] = useState(() => initialSong ?? createEmptySongDocument());
@@ -461,8 +472,9 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     setShareDslEditor(null);
     setArrangementEditor({
       trackId,
-      draft: serializeMelodicTrackArrangement(song.tracks[trackId]),
+      draft: serializeMelodicTrackArrangement(song.tracks[trackId], "compact"),
       error: null,
+      textFormat: "compact",
     });
   };
 
@@ -472,10 +484,11 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     setArrangementEditor({
       trackId,
       draft:
-      trackId === "noise"
-          ? serializeNoiseTrackArrangement(song.tracks.noise)
-          : serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode),
+        trackId === "noise"
+          ? serializeNoiseTrackArrangement(song.tracks.noise, "compact")
+          : serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode, "compact"),
       error: null,
+      textFormat: "compact",
     });
   };
 
@@ -608,6 +621,21 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       return {
         ...currentEditor,
         draft,
+        error: null,
+      };
+    });
+  };
+
+  const updateArrangementTextFormat = (textFormat: ArrangementTextFormat) => {
+    setArrangementEditor((currentEditor) => {
+      if (currentEditor === null || currentEditor.textFormat === textFormat) {
+        return currentEditor;
+      }
+
+      return {
+        ...currentEditor,
+        textFormat,
+        draft: reformatArrangementDraft(currentEditor.draft, textFormat),
         error: null,
       };
     });
@@ -1055,8 +1083,10 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
           loopLength={song.transport.loopLength}
           draft={arrangementEditor.draft}
           error={arrangementEditor.error}
+          textFormat={arrangementEditor.textFormat}
           samples={song.samples}
           onChangeDraft={updateArrangementDraft}
+          onChangeTextFormat={updateArrangementTextFormat}
           onClose={closeMelodicTrackEditor}
           onApply={applyArrangement}
         />
@@ -2185,8 +2215,10 @@ function TrackArrangementEditor({
   loopLength,
   draft,
   error,
+  textFormat,
   samples,
   onChangeDraft,
+  onChangeTextFormat,
   onClose,
   onApply,
 }: {
@@ -2195,21 +2227,24 @@ function TrackArrangementEditor({
   loopLength: number;
   draft: string;
   error: string | null;
+  textFormat: ArrangementTextFormat;
   samples: SongDocument["samples"];
   onChangeDraft: (draft: string) => void;
+  onChangeTextFormat: (textFormat: ArrangementTextFormat) => void;
   onClose: () => void;
   onApply: () => void;
 }) {
   const trackLabel = labelByTrackId[trackId];
   const accentColor = waveformLineColorByTrackId[trackId];
+  const sharedFormatCopy = `Use commas or new lines between entries. Compact keeps everything on one line for quick edits or copy/paste. `;
   const helperCopy =
     trackId === "noise"
-      ? `One trigger per line in the format 1: short P3 or 1: long P12. Preset aliases (${noiseTriggerPresets.map((preset) => preset.id).join(", ")}) are also accepted on paste. Steps above ${loopLength} are ignored when you apply.`
+      ? `${sharedFormatCopy}Use the format 1: short P3 or 1: long P12. Preset aliases (${noiseTriggerPresets.map((preset) => preset.id).join(", ")}) are also accepted on paste. Steps above ${loopLength} are ignored when you apply.`
       : trackId === "sample"
-        ? getSampleArrangementHelperCopy(engineMode, loopLength, samples[0]?.id ?? "mic-001")
+        ? `${sharedFormatCopy}${getSampleArrangementHelperCopy(engineMode, loopLength, samples[0]?.id ?? "mic-001")}`
         : trackId === "pulse1" || trackId === "pulse2"
-          ? `One pulse note per line in the format 1: E4 @25% or 1-4: E4 @12.5% for sustained notes. The duty suffix is optional and defaults to 50%. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`
-          : `One note per line in the format 1: E4 or 1-4: E4 for sustained notes. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`;
+          ? `${sharedFormatCopy}Use the format 1: E4 @25% or 1-4: E4 @12.5% for sustained notes. The duty suffix is optional and defaults to 50%. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`
+          : `${sharedFormatCopy}Use the format 1: E4 or 1-4: E4 for sustained notes. Notes are case-insensitive. Steps above ${loopLength} are ignored when you apply.`;
   const editorTitle =
     trackId === "noise" ? "Noise Trigger Map" : trackId === "sample" ? "PCM Trigger Map" : "Voice Arrangement";
   const labelSuffix =
@@ -2239,15 +2274,59 @@ function TrackArrangementEditor({
               {helperCopy}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="rounded-md border border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
-            onClick={onClose}
-          >
-            Close
-          </Button>
+          <div className="flex items-center gap-2">
+            <div
+              role="group"
+              aria-label="Arrangement text format"
+              className="flex items-center gap-1 rounded-md border border-white/[0.08] bg-black/20 p-1"
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={textFormat === "compact"}
+                aria-label="Use compact arrangement text"
+                className={cn(
+                  "rounded-md px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em]",
+                  textFormat === "compact"
+                    ? "bg-white/[0.1] text-white"
+                    : "text-white/55 hover:bg-white/[0.08] hover:text-white",
+                )}
+                onClick={() => {
+                  onChangeTextFormat("compact");
+                }}
+              >
+                Compact
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={textFormat === "multiline"}
+                aria-label="Use multiline arrangement text"
+                className={cn(
+                  "rounded-md px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em]",
+                  textFormat === "multiline"
+                    ? "bg-white/[0.1] text-white"
+                    : "text-white/55 hover:bg-white/[0.08] hover:text-white",
+                )}
+                onClick={() => {
+                  onChangeTextFormat("multiline");
+                }}
+              >
+                Lines
+              </Button>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="rounded-md border border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/55 hover:bg-white/[0.08] hover:text-white"
+              onClick={onClose}
+            >
+              Close
+            </Button>
+          </div>
         </div>
 
         <label

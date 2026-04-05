@@ -38,6 +38,7 @@ export const triggerTrackIds = ["noise", "sample"] as const;
 
 export type MelodicTrackId = (typeof melodicTrackIds)[number];
 export type TriggerTrackId = (typeof triggerTrackIds)[number];
+export type ArrangementTextFormat = "multiline" | "compact";
 
 export type MelodicStepUpdates = {
   enabled?: boolean;
@@ -613,8 +614,9 @@ export function replaceSampleTrackSampleReference(
   };
 }
 
-export function serializeMelodicTrackArrangement(track: MelodicTrack) {
-  return getMelodicArrangementEntries(track)
+export function serializeMelodicTrackArrangement(track: MelodicTrack, format: ArrangementTextFormat = "multiline") {
+  return joinArrangementEntries(
+    getMelodicArrangementEntries(track)
     .map((entry) => {
       const normalizedDuty = entry.duty ?? DEFAULT_PULSE_DUTY;
       const dutySuffix =
@@ -627,27 +629,32 @@ export function serializeMelodicTrackArrangement(track: MelodicTrack) {
       }
 
       return `${entry.stepIndex + 1}-${entry.stepIndex + entry.length}: ${entry.note}${dutySuffix}`;
-    })
-    .join("\n");
+    }),
+    format,
+  );
 }
 
-export function serializeNoiseTrackArrangement(track: NoiseTrack) {
-  return track.steps
+export function serializeNoiseTrackArrangement(track: NoiseTrack, format: ArrangementTextFormat = "multiline") {
+  return joinArrangementEntries(
+    track.steps
     .flatMap((step, index) => {
       if (!step.enabled) {
         return [];
       }
 
       return `${index + 1}: ${formatNoiseConfigLabel(step.mode, step.periodIndex)}`;
-    })
-    .join("\n");
+    }),
+    format,
+  );
 }
 
 export function serializeSampleTrackArrangement(
   track: SampleTrack,
   engineMode: SongDocument["meta"]["engineMode"],
+  format: ArrangementTextFormat = "multiline",
 ) {
-  return track.steps
+  return joinArrangementEntries(
+    track.steps
     .flatMap((step, index) => {
       if (!step.enabled || step.sampleId === null) {
         return [];
@@ -656,8 +663,9 @@ export function serializeSampleTrackArrangement(
       return engineMode === "inspired"
         ? `${index + 1}: ${step.sampleId}>${step.note}`
         : `${index + 1}: ${step.sampleId}@${formatSamplePlaybackRate(step.playbackRate)}${step.playbackRate > 4 ? "hz" : "x"}`;
-    })
-    .join("\n");
+    }),
+    format,
+  );
 }
 
 export function parseMelodicTrackArrangement(
@@ -1369,9 +1377,13 @@ function normalizePulseDutyValue(rawValue: string): PulseDutyValue | null {
 
 function splitArrangementLines(input: string) {
   return input
-    .split(/\r?\n/)
+    .split(/\r?\n|,/u)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+}
+
+function joinArrangementEntries(entries: string[], format: ArrangementTextFormat) {
+  return entries.join(format === "compact" ? ", " : "\n");
 }
 
 function parseMelodicArrangementLine(

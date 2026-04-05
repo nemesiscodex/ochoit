@@ -138,6 +138,24 @@ describe("workstation-shell", () => {
     expect(screen.getByDisplayValue("20")).toBeTruthy();
   });
 
+  it("clamps the bpm and loop length transport inputs to the supported UI range", () => {
+    renderWorkstationShell();
+
+    const bpmInput = screen.getByLabelText("BPM");
+    const loopLengthInput = screen.getByLabelText("Loop Length");
+
+    fireEvent.focus(bpmInput);
+    fireEvent.change(bpmInput, { target: { value: "1001" } });
+    fireEvent.blur(bpmInput);
+
+    fireEvent.focus(loopLengthInput);
+    fireEvent.change(loopLengthInput, { target: { value: "2" } });
+    fireEvent.blur(loopLengthInput);
+
+    expect(screen.getByDisplayValue("1000")).toBeTruthy();
+    expect(screen.getByDisplayValue("4")).toBeTruthy();
+  });
+
   it("extends and safely shrinks the pattern from the ruler without prompting when no content is lost", () => {
     renderWorkstationShell(createEmptySongDocument());
 
@@ -683,7 +701,29 @@ describe("workstation-shell", () => {
       throw new Error("Expected Pulse I arrangement text to be a textarea.");
     }
 
+    expect(textarea.value).toBe("1: C5 @12.5%, 5: E5 @25%, 9: G5, 13: E5 @25%");
+  });
+
+  it("switches arrangement text between compact and multiline formats", () => {
+    renderWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+
+    const textarea = screen.getByLabelText("Pulse I arrangement text");
+
+    if (!(textarea instanceof HTMLTextAreaElement)) {
+      throw new Error("Expected Pulse I arrangement text to be a textarea.");
+    }
+
+    expect(textarea.value).toBe("1: C5 @12.5%, 5: E5 @25%, 9: G5, 13: E5 @25%");
+
+    fireEvent.click(screen.getByRole("button", { name: "Use multiline arrangement text" }));
+
     expect(textarea.value).toBe("1: C5 @12.5%\n5: E5 @25%\n9: G5\n13: E5 @25%");
+
+    fireEvent.click(screen.getByRole("button", { name: "Use compact arrangement text" }));
+
+    expect(textarea.value).toBe("1: C5 @12.5%, 5: E5 @25%, 9: G5, 13: E5 @25%");
   });
 
   it("applies a pasted voice arrangement and ignores steps beyond the loop length", () => {
@@ -699,7 +739,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(textarea, {
       target: {
-        value: "1: e4 @25%\n3: g4\n5: a4 @75%\n17: c5",
+        value: "1: e4 @25%, 3: g4, 5: a4 @75%, 17: c5",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
@@ -715,7 +755,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected Pulse I arrangement text to be a textarea.");
     }
 
-    expect(verifyTextarea.value).toBe("1: E4 @25%\n3: G4\n5: A4 @75%");
+    expect(verifyTextarea.value).toBe("1: E4 @25%, 3: G4, 5: A4 @75%");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -778,7 +818,7 @@ describe("workstation-shell", () => {
     }
 
     expect(textarea.value).toBe(
-      "1: short P3\n3: long P8\n5: short P3\n7: long P8\n9: short P3\n11: long P8\n13: short P3\n15: long P8",
+      "1: short P3, 3: long P8, 5: short P3, 7: long P8, 9: short P3, 11: long P8, 13: short P3, 15: long P8",
     );
   });
 
@@ -795,7 +835,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(noiseTextarea, {
       target: {
-        value: "2: short P1\n4: long P12\n18: short P3",
+        value: "2: short P1, 4: long P12, 18: short P3",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
@@ -811,7 +851,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected Noise trigger text to be a textarea.");
     }
 
-    expect(verifyNoiseTextarea.value).toBe("2: short P1\n4: long P12");
+    expect(verifyNoiseTextarea.value).toBe("2: short P1, 4: long P12");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -833,7 +873,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(pcmTextarea, {
       target: {
-        value: "2: vox-hit>D5\n6: mic-001>A#2\n20: vox-hit",
+        value: "2: vox-hit>D5, 6: mic-001>A#2, 20: vox-hit",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
@@ -849,7 +889,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected PCM trigger text to be a textarea.");
     }
 
-    expect(verifyPcmTextarea.value).toBe("2: mic-001>D5\n6: mic-001>A#2");
+    expect(verifyPcmTextarea.value).toBe("2: mic-001>D5, 6: mic-001>A#2");
   });
 
   it("describes the noise text format with explicit mode and period values", () => {
@@ -1182,7 +1222,7 @@ describe("workstation-shell", () => {
       throw new Error("Expected PCM trigger text to be a textarea.");
     }
 
-    expect(pcmTextarea.value).toBe("8: mic-002>C4\n16: mic-002>C4");
+    expect(pcmTextarea.value).toBe("8: mic-002>C4, 16: mic-002>C4");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 

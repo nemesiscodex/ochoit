@@ -3,11 +3,11 @@ import { defaultDpcmRate } from "@/features/audio/dpcm";
 
 export const SONG_BPM_RANGE = {
   min: 40,
-  max: 240,
+  max: 1000,
 } as const;
 
 export const SONG_LOOP_LENGTH_RANGE = {
-  min: 8,
+  min: 4,
   max: SONG_MAX_LOOP_LENGTH,
   step: 4,
 } as const;

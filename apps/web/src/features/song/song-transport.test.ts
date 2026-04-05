@@ -14,8 +14,8 @@ import {
 describe("song-transport", () => {
   it("clamps bpm and loop length to the supported transport ranges", () => {
     expect(clampSongBpm(20)).toBe(40);
-    expect(clampSongBpm(251)).toBe(240);
-    expect(clampSongLoopLength(6)).toBe(8);
+    expect(clampSongBpm(1001)).toBe(1000);
+    expect(clampSongLoopLength(2)).toBe(4);
     expect(clampSongLoopLength(19)).toBe(20);
     expect(clampSongLoopLength(66)).toBe(68);
     expect(clampSongLoopLength(140)).toBe(128);

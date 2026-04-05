@@ -369,6 +369,9 @@ describe("song-pattern", () => {
     const sustainedSong = updateMelodicTrackStep(song, "pulse1", 0, { length: 3 });
 
     expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1)).toBe("1-3: C5 @12.5%\n5: E5 @25%\n9: G5\n13: E5 @25%");
+    expect(serializeMelodicTrackArrangement(sustainedSong.tracks.pulse1, "compact")).toBe(
+      "1-3: C5 @12.5%, 5: E5 @25%, 9: G5, 13: E5 @25%",
+    );
   });
 
   it("serializes the enabled noise and sample arrangements", () => {
@@ -377,8 +380,14 @@ describe("song-pattern", () => {
     expect(serializeNoiseTrackArrangement(song.tracks.noise)).toBe(
       "1: short P3\n3: long P8\n5: short P3\n7: long P8\n9: short P3\n11: long P8\n13: short P3\n15: long P8",
     );
+    expect(serializeNoiseTrackArrangement(song.tracks.noise, "compact")).toBe(
+      "1: short P3, 3: long P8, 5: short P3, 7: long P8, 9: short P3, 11: long P8, 13: short P3, 15: long P8",
+    );
     expect(serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode)).toBe(
       "8: mic-001>C4\n16: mic-001>C4",
+    );
+    expect(serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode, "compact")).toBe(
+      "8: mic-001>C4, 16: mic-001>C4",
     );
   });
 
@@ -390,6 +399,32 @@ describe("song-pattern", () => {
       entries: [
         { stepIndex: 0, note: "E4", length: 3, duty: 0.25 },
         { stepIndex: 4, note: "G4", length: 1 },
+      ],
+    });
+  });
+
+  it("parses comma-separated arrangements in compact mode", () => {
+    const song = createDefaultSongDocument();
+
+    expect(parseMelodicTrackArrangement("1-3: e4 @25%, 5: g4, 17-20: c5 @75%", 16, "pulse1")).toEqual({
+      ok: true,
+      entries: [
+        { stepIndex: 0, note: "E4", length: 3, duty: 0.25 },
+        { stepIndex: 4, note: "G4", length: 1 },
+      ],
+    });
+    expect(parseNoiseTrackArrangement("1: short P1, 3: long P12, 17: snare", 16)).toEqual({
+      ok: true,
+      entries: [
+        { stepIndex: 0, mode: "short", periodIndex: 1 },
+        { stepIndex: 2, mode: "long", periodIndex: 12 },
+      ],
+    });
+    expect(parseSampleTrackArrangement("1: vox-hit@0.75x, 3: mic-001@1.5, 17: vox-hit", 16, song.samples)).toEqual({
+      ok: true,
+      entries: [
+        { stepIndex: 0, sampleId: "mic-001", note: "C4", playbackRate: 0.75 },
+        { stepIndex: 2, sampleId: "mic-001", note: "C4", playbackRate: 1.5 },
       ],
     });
   });

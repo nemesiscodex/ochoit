@@ -18,7 +18,7 @@ const pulseDutySchema = z.union([
   z.literal(0.5),
   z.literal(0.75),
 ]);
-const loopLengthSchema = z.number().int().min(8).max(SONG_MAX_LOOP_LENGTH).multipleOf(4);
+const loopLengthSchema = z.number().int().min(4).max(SONG_MAX_LOOP_LENGTH).multipleOf(4);
 const melodicStepLengthSchema = z.number().int().min(1).max(SONG_MAX_LOOP_LENGTH);
 const trackSettingsSchema = z.object({
   muted: z.boolean(),
@@ -61,7 +61,7 @@ const pulseTrackSchema = z.object({
   kind: z.literal("pulse"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(pulseStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
+  steps: z.array(pulseStepSchema).min(4).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const triangleTrackSchema = z.object({
@@ -69,7 +69,7 @@ const triangleTrackSchema = z.object({
   kind: z.literal("triangle"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(triangleStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
+  steps: z.array(triangleStepSchema).min(4).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const noiseTrackSchema = z.object({
@@ -77,7 +77,7 @@ const noiseTrackSchema = z.object({
   kind: z.literal("noise"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(noiseStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
+  steps: z.array(noiseStepSchema).min(4).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const sampleTrackSchema = z.object({
@@ -85,7 +85,7 @@ const sampleTrackSchema = z.object({
   kind: z.literal("sample"),
   label: z.string().min(1),
   ...trackSettingsSchema.shape,
-  steps: z.array(sampleStepSchema).min(8).max(SONG_MAX_LOOP_LENGTH),
+  steps: z.array(sampleStepSchema).min(4).max(SONG_MAX_LOOP_LENGTH),
 });
 
 const serializedSampleAssetSchema = z

@@ -51,6 +51,24 @@ describe("song-document", () => {
     expect(parsedSong.mixer.oldSpeakerMode).toBe(false);
   });
 
+  it("accepts four-step songs and bpm values up to the editor limit", () => {
+    const song = createEmptySongDocument();
+
+    song.transport.loopLength = 4;
+    song.transport.bpm = 1000;
+    song.tracks.pulse1.steps = song.tracks.pulse1.steps.slice(0, 4);
+    song.tracks.pulse2.steps = song.tracks.pulse2.steps.slice(0, 4);
+    song.tracks.triangle.steps = song.tracks.triangle.steps.slice(0, 4);
+    song.tracks.noise.steps = song.tracks.noise.steps.slice(0, 4);
+    song.tracks.sample.steps = song.tracks.sample.steps.slice(0, 4);
+
+    const parsedSong = parseSongDocument(song);
+
+    expect(parsedSong.transport.loopLength).toBe(4);
+    expect(parsedSong.transport.bpm).toBe(1000);
+    expect(trackOrder.every((trackId) => parsedSong.tracks[trackId].steps.length === 4)).toBe(true);
+  });
+
   it("creates a valid empty song document for starting from scratch", () => {
     const song = createEmptySongDocument();
 
