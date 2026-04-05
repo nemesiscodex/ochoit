@@ -57,6 +57,58 @@ describe("song-wav", () => {
     expect(filteredRender.pcm.some((sample, index) => sample !== cleanRender.pcm[index])).toBe(true);
   });
 
+  it("renders a stepped triangle in authentic mode", () => {
+    const inspiredSong = createEmptySongDocument();
+    const authenticSong = createEmptySongDocument();
+
+    inspiredSong.tracks.triangle.steps[0] = {
+      ...inspiredSong.tracks.triangle.steps[0],
+      enabled: true,
+      note: "C3",
+      length: 4,
+    };
+    authenticSong.tracks.triangle.steps[0] = {
+      ...authenticSong.tracks.triangle.steps[0],
+      enabled: true,
+      note: "C3",
+      length: 4,
+    };
+    authenticSong.meta.engineMode = "authentic";
+
+    const inspiredRender = renderSongToPcm(inspiredSong, { sampleRate: 8_000 });
+    const authenticRender = renderSongToPcm(authenticSong, { sampleRate: 8_000 });
+
+    expect(authenticRender.pcm).toHaveLength(inspiredRender.pcm.length);
+    expect(authenticRender.pcm.some((sample, index) => sample !== inspiredRender.pcm[index])).toBe(true);
+  });
+
+  it("renders a stepped pulse in authentic mode", () => {
+    const inspiredSong = createEmptySongDocument();
+    const authenticSong = createEmptySongDocument();
+
+    inspiredSong.tracks.pulse1.steps[0] = {
+      ...inspiredSong.tracks.pulse1.steps[0],
+      enabled: true,
+      note: "C4",
+      duty: 0.25,
+      length: 4,
+    };
+    authenticSong.tracks.pulse1.steps[0] = {
+      ...authenticSong.tracks.pulse1.steps[0],
+      enabled: true,
+      note: "C4",
+      duty: 0.25,
+      length: 4,
+    };
+    authenticSong.meta.engineMode = "authentic";
+
+    const inspiredRender = renderSongToPcm(inspiredSong, { sampleRate: 8_000 });
+    const authenticRender = renderSongToPcm(authenticSong, { sampleRate: 8_000 });
+
+    expect(authenticRender.pcm).toHaveLength(inspiredRender.pcm.length);
+    expect(authenticRender.pcm.some((sample, index) => sample !== inspiredRender.pcm[index])).toBe(true);
+  });
+
   it("creates stable wav filenames from song metadata", () => {
     const song = createEmptySongDocument();
 

@@ -1,6 +1,6 @@
 import type { TransportConfig } from "@/features/audio/transport-worklet-shared";
 import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import type { PulseTrack } from "@/features/song/song-document";
+import type { PulseTrack, SongDocument } from "@/features/song/song-document";
 
 const pulseCycleFrameCount = 2048;
 const noteAttackSeconds = 0.002;
@@ -11,13 +11,45 @@ const silentGainFloor = 0.0001;
 type PulseDuty = PulseTrack["steps"][number]["duty"];
 
 const dutyThresholdByFrameCount = new Map<string, number>();
+const authenticPulseSequenceByDuty: Record<PulseDuty, readonly number[]> = {
+  0.125: [0, 1, 0, 0, 0, 0, 0, 0],
+  0.25: [0, 1, 1, 0, 0, 0, 0, 0],
+  0.5: [0, 1, 1, 1, 1, 0, 0, 0],
+  0.75: [1, 0, 0, 1, 1, 1, 1, 1],
+};
 
-export function createPulseCycle(duty: PulseDuty, frameCount = pulseCycleFrameCount) {
+export function createPulseCycle(
+  duty: PulseDuty,
+  frameCount = pulseCycleFrameCount,
+  engineMode: SongDocument["meta"]["engineMode"] = "inspired",
+) {
+  if (engineMode === "authentic") {
+    return createAuthenticPulseCycle(duty, frameCount);
+  }
+
+  return createInspiredPulseCycle(duty, frameCount);
+}
+
+function createInspiredPulseCycle(duty: PulseDuty, frameCount: number) {
   const waveform = new Float32Array(frameCount);
   const threshold = getDutyThreshold(duty, frameCount);
 
   for (let index = 0; index < frameCount; index += 1) {
     waveform[index] = index < threshold ? 1 : -1;
+  }
+
+  return waveform;
+}
+
+function createAuthenticPulseCycle(duty: PulseDuty, frameCount: number) {
+  const waveform = new Float32Array(frameCount);
+  const sequence = authenticPulseSequenceByDuty[duty];
+  const averageLevel = sequence.reduce((sum, level) => sum + level, 0) / sequence.length;
+
+  for (let index = 0; index < frameCount; index += 1) {
+    const sequenceIndex = Math.floor((index / frameCount) * sequence.length) % sequence.length;
+    const level = sequence[sequenceIndex] ?? 0;
+    waveform[index] = level - averageLevel;
   }
 
   return waveform;
@@ -39,16 +71,22 @@ function getDutyThreshold(duty: PulseDuty, frameCount: number) {
 export class PulseVoice {
   private track: PulseTrack | null = null;
   private stepDuration = 0.125;
-  private readonly waveBufferByDuty = new Map<PulseDuty, AudioBuffer>();
+  private engineMode: SongDocument["meta"]["engineMode"] = "inspired";
+  private readonly waveBufferByDutyAndMode = new Map<string, AudioBuffer>();
 
   constructor(
     private readonly context: AudioContext,
     private readonly output: AudioNode,
   ) {}
 
-  configure(track: PulseTrack, transport: TransportConfig) {
+  configure(
+    track: PulseTrack,
+    transport: TransportConfig,
+    engineMode: SongDocument["meta"]["engineMode"] = "inspired",
+  ) {
     this.track = track;
     this.stepDuration = 60 / transport.bpm / transport.stepsPerBeat;
+    this.engineMode = engineMode;
   }
 
   scheduleStep(stepIndex: number, time: number) {
@@ -71,7 +109,8 @@ export class PulseVoice {
   }
 
   private getWaveBuffer(duty: PulseDuty) {
-    const cachedBuffer = this.waveBufferByDuty.get(duty);
+    const cacheKey = `${this.engineMode}:${duty}`;
+    const cachedBuffer = this.waveBufferByDutyAndMode.get(cacheKey);
 
     if (cachedBuffer !== undefined) {
       return cachedBuffer;
@@ -79,8 +118,8 @@ export class PulseVoice {
 
     const buffer = this.context.createBuffer(1, pulseCycleFrameCount, this.context.sampleRate);
     const channel = buffer.getChannelData(0);
-    channel.set(createPulseCycle(duty, pulseCycleFrameCount));
-    this.waveBufferByDuty.set(duty, buffer);
+    channel.set(createPulseCycle(duty, pulseCycleFrameCount, this.engineMode));
+    this.waveBufferByDutyAndMode.set(cacheKey, buffer);
     return buffer;
   }
 

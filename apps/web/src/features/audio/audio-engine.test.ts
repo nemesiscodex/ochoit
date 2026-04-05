@@ -12,11 +12,11 @@ const audioEngineMocks = vi.hoisted(() => {
   };
   const unsubscribeTransport = vi.fn<() => void>();
   const pulseVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
-  const pulseConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
+  const pulseConfigure = vi.fn<(track: unknown, transport: unknown, engineMode: unknown) => void>();
   const pulseScheduleStep = vi.fn<(step: number, time: number) => void>();
   const pulsePreviewNote = vi.fn<(note: string, duty?: number, durationMs?: number, volume?: number) => void>();
   const triangleVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
-  const triangleConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
+  const triangleConfigure = vi.fn<(track: unknown, transport: unknown, engineMode: unknown) => void>();
   const triangleScheduleStep = vi.fn<(step: number, time: number) => void>();
   const noiseVoiceConstructor = vi.fn<(context: AudioContext, output: AudioNode) => void>();
   const noiseConfigure = vi.fn<(track: unknown, transport: unknown) => void>();
@@ -33,8 +33,8 @@ const audioEngineMocks = vi.hoisted(() => {
       pulseVoiceConstructor(context, output);
     }
 
-    configure(track: unknown, transport: unknown) {
-      pulseConfigure(track, transport);
+    configure(track: unknown, transport: unknown, engineMode: unknown) {
+      pulseConfigure(track, transport, engineMode);
     }
 
     scheduleStep(step: number, time: number) {
@@ -51,8 +51,8 @@ const audioEngineMocks = vi.hoisted(() => {
       triangleVoiceConstructor(context, output);
     }
 
-    configure(track: unknown, transport: unknown) {
-      triangleConfigure(track, transport);
+    configure(track: unknown, transport: unknown, engineMode: unknown) {
+      triangleConfigure(track, transport, engineMode);
     }
 
     scheduleStep(step: number, time: number) {
@@ -359,16 +359,19 @@ describe("audio-engine", () => {
       1,
       mutedTriangleSong.tracks.pulse1,
       mutedTriangleSong.transport,
+      mutedTriangleSong.meta.engineMode,
     );
     expect(audioEngineMocks.pulseConfigure).toHaveBeenNthCalledWith(
       2,
       mutedTriangleSong.tracks.pulse2,
       mutedTriangleSong.transport,
+      mutedTriangleSong.meta.engineMode,
     );
     expect(audioEngineMocks.transport.configure).toHaveBeenCalledWith(mutedTriangleSong.transport);
     expect(audioEngineMocks.triangleConfigure).toHaveBeenCalledWith(
       mutedTriangleSong.tracks.triangle,
       mutedTriangleSong.transport,
+      mutedTriangleSong.meta.engineMode,
     );
     expect(audioEngineMocks.noiseConfigure).toHaveBeenCalledWith(
       mutedTriangleSong.tracks.noise,

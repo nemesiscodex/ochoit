@@ -29,9 +29,9 @@ const sampleNoteReleaseSeconds = 0.012;
 const silentGainFloor = 0.0001;
 const defaultWavFileName = "ochoit-arrangement.wav";
 
-const triangleCycle = createTriangleCycle(triangleCycleFrameCount);
-const pulseCycleByDuty = new Map<PulseTrack["steps"][number]["duty"], Float32Array>();
+const pulseCycleByDutyAndMode = new Map<string, Float32Array>();
 const noiseCycleByMode = new Map<NoiseTrack["steps"][number]["mode"], Float32Array>();
+const triangleCycleByMode = new Map<SongDocument["meta"]["engineMode"], Float32Array>();
 
 export type RenderSongToPcmOptions = {
   sampleRate?: number;
@@ -104,7 +104,7 @@ function renderPulseTrack(
     }
 
     const durationSeconds = Math.max(stepDurationSeconds * step.length - pulseNoteAttackSeconds, pulseNoteAttackSeconds);
-    const cycle = getPulseCycle(step.duty);
+    const cycle = getPulseCycle(step.duty, song.meta.engineMode);
     const phaseIncrement = (getFrequencyForNote(step.note) * cycle.length) / sampleRate;
     const gain = getTriangleOutputGain(song.mixer.masterVolume * track.volume * step.volume);
 
@@ -131,6 +131,8 @@ function renderTriangleTrack(
   if (track.muted) {
     return;
   }
+
+  const triangleCycle = getTriangleCycle(song.meta.engineMode);
 
   for (let stepIndex = 0; stepIndex < track.steps.length; stepIndex += 1) {
     const step = track.steps[stepIndex];
@@ -357,15 +359,31 @@ function getEnvelopeGain(
   return 1 - releaseProgress * (1 - silentGainFloor);
 }
 
-function getPulseCycle(duty: PulseTrack["steps"][number]["duty"]) {
-  const cachedCycle = pulseCycleByDuty.get(duty);
+function getPulseCycle(
+  duty: PulseTrack["steps"][number]["duty"],
+  engineMode: SongDocument["meta"]["engineMode"],
+) {
+  const cacheKey = `${engineMode}:${duty}`;
+  const cachedCycle = pulseCycleByDutyAndMode.get(cacheKey);
 
   if (cachedCycle !== undefined) {
     return cachedCycle;
   }
 
-  const cycle = createPulseCycle(duty, pulseCycleFrameCount);
-  pulseCycleByDuty.set(duty, cycle);
+  const cycle = createPulseCycle(duty, pulseCycleFrameCount, engineMode);
+  pulseCycleByDutyAndMode.set(cacheKey, cycle);
+  return cycle;
+}
+
+function getTriangleCycle(engineMode: SongDocument["meta"]["engineMode"]) {
+  const cachedCycle = triangleCycleByMode.get(engineMode);
+
+  if (cachedCycle !== undefined) {
+    return cachedCycle;
+  }
+
+  const cycle = createTriangleCycle(triangleCycleFrameCount, engineMode);
+  triangleCycleByMode.set(engineMode, cycle);
   return cycle;
 }
 

@@ -194,9 +194,9 @@ export class AudioEngine {
     getOrderedTracks(song).forEach((track) => {
       this.setVoiceVolume(track.id, track.muted ? 0 : track.volume);
     });
-    this.pulseVoice1.configure(song.tracks.pulse1, song.transport);
-    this.pulseVoice2.configure(song.tracks.pulse2, song.transport);
-    this.triangleVoice.configure(song.tracks.triangle, song.transport);
+    this.pulseVoice1.configure(song.tracks.pulse1, song.transport, song.meta.engineMode);
+    this.pulseVoice2.configure(song.tracks.pulse2, song.transport, song.meta.engineMode);
+    this.triangleVoice.configure(song.tracks.triangle, song.transport, song.meta.engineMode);
     this.noiseVoice.configure(song.tracks.noise, song.transport);
     this.sampleVoice.configure(song.tracks.sample, song.samples, song.meta.engineMode);
     this.transport.configure({

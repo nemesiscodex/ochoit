@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import { createDefaultSongDocument } from "@/features/song/song-document";
-import { createPulseCycle, PulseVoice } from "@/features/audio/pulse-voice";
+import { getFrequencyForNote } from "../src/core/note-frequency.js";
+import { createDefaultSongDocument } from "../src/core/song-document.js";
+import { createPulseCycle, PulseVoice } from "../src/web/pulse-voice.js";
 
 class MockAudioParam {
   value = 1;
@@ -83,12 +83,6 @@ function createMockAudioContext() {
 }
 
 describe("pulse-voice", () => {
-  it("maps note names to equal-temperament frequencies", () => {
-    expect(getFrequencyForNote("A4")).toBe(440);
-    expect(getFrequencyForNote("C5")).toBeCloseTo(523.251, 3);
-    expect(getFrequencyForNote("Bb3")).toBeCloseTo(233.082, 3);
-  });
-
   it("creates a duty-cycle pulse waveform", () => {
     expect(Array.from(createPulseCycle(0.25, 8))).toEqual([1, 1, -1, -1, -1, -1, -1, -1]);
     expect(Array.from(createPulseCycle(0.75, 8))).toEqual([1, 1, 1, 1, 1, 1, -1, -1]);
