@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ./scripts/build-worklet.mjs",
     "check-types": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "pnpm run build && pnpm run verify",
     "test": "vitest run",
@@ -30,6 +30,7 @@
     "@ochoit/config": "workspace:*",
     "@types/node": "^25.5.0",
     "@types/pako": "^2.0.4",
+    "esbuild": "^0.25.11",
     "jsdom": "^26.0.0",
     "typescript": "^5",
     "vitest": "^4.1.0"
