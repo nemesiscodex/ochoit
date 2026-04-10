@@ -517,6 +517,30 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Share link copied to clipboard.")).toBeTruthy();
   });
 
+  it("copies a share link for a four-step song", async () => {
+    const song = createEmptySongDocument();
+    song.transport.loopLength = 4;
+    song.tracks.pulse1.steps = song.tracks.pulse1.steps.slice(0, 4);
+    song.tracks.pulse2.steps = song.tracks.pulse2.steps.slice(0, 4);
+    song.tracks.triangle.steps = song.tracks.triangle.steps.slice(0, 4);
+    song.tracks.noise.steps = song.tracks.noise.steps.slice(0, 4);
+    song.tracks.sample.steps = song.tracks.sample.steps.slice(0, 4);
+
+    renderWorkstationShell(song);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy shareable link to clipboard" }));
+    });
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain("song=");
+    });
+
+    expect(clipboardWriteText).toHaveBeenCalledTimes(1);
+    expect(clipboardWriteText.mock.calls[0]?.[0]).toContain("#song=v5.");
+    expect(screen.getByText("Share link copied to clipboard.")).toBeTruthy();
+  });
+
   it("downloads the current arrangement as a wav file", async () => {
     const setTimeoutSpy = vi.spyOn(window, "setTimeout");
     renderWorkstationShell();

@@ -1,8 +1,8 @@
-import { deflateRaw } from "pako";
+import { deflateRaw, inflateRaw } from "pako";
 import { describe, expect, it } from "vitest";
 
 import { defaultDpcmRate, normalizeDpcmRate } from "@/features/audio/dpcm";
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
 import {
   buildSongShareUrl,
   parseSongSharePayload,
@@ -13,14 +13,35 @@ import {
 } from "@/features/song/song-share";
 
 describe("song-share", () => {
-  it("serializes and parses a v4 payload with compact track data and embedded samples", () => {
+  it("serializes and parses the current payload format with compact track data and embedded samples", () => {
     const song = createDenseSongFixture();
 
     const payload = serializeSongSharePayload(song);
     const parsedSong = parseSongSharePayload(payload);
 
-    expect(payload.startsWith("v4.")).toBe(true);
+    expect(payload.startsWith("v5.")).toBe(true);
     expect(parsedSong).toEqual(song);
+  });
+
+  it("serializes and parses a four-step song", () => {
+    const song = createEmptySongDocument();
+
+    song.transport.loopLength = 4;
+    song.tracks.pulse1.steps = song.tracks.pulse1.steps.slice(0, 4);
+    song.tracks.pulse2.steps = song.tracks.pulse2.steps.slice(0, 4);
+    song.tracks.triangle.steps = song.tracks.triangle.steps.slice(0, 4);
+    song.tracks.noise.steps = song.tracks.noise.steps.slice(0, 4);
+    song.tracks.sample.steps = song.tracks.sample.steps.slice(0, 4);
+
+    const payload = serializeSongSharePayload(song);
+    const parsedSong = parseSongSharePayload(payload);
+
+    expect(payload.startsWith("v5.")).toBe(true);
+    expect(parsedSong.transport.loopLength).toBe(4);
+    expect(parsedSong.transport.bpm).toBe(song.transport.bpm);
+    expect(parsedSong.transport.stepsPerBeat).toBe(song.transport.stepsPerBeat);
+    expect(parsedSong.tracks.pulse1.steps).toHaveLength(4);
+    expect(parsedSong.tracks.sample.steps).toHaveLength(4);
   });
 
   it("reads a song from the URL hash", () => {
@@ -72,7 +93,18 @@ describe("song-share", () => {
     const reserializedPayload = serializeSongSharePayload(parsedSong);
 
     expect(parsedSong).toEqual(song);
-    expect(reserializedPayload.startsWith("v4.")).toBe(true);
+    expect(reserializedPayload.startsWith("v5.")).toBe(true);
+  });
+
+  it("parses existing v4 payloads and reserializes them as v5", () => {
+    const song = createDenseSongFixture();
+    const legacyV4Payload = serializeSongSharePayloadV4(song);
+
+    const parsedSong = parseSongSharePayload(legacyV4Payload);
+    const reserializedPayload = serializeSongSharePayload(parsedSong);
+
+    expect(parsedSong).toEqual(song);
+    expect(reserializedPayload.startsWith("v5.")).toBe(true);
   });
 
   it("parses legacy raw base64 json payloads and reserializes them as v4", () => {
@@ -83,7 +115,7 @@ describe("song-share", () => {
     const reserializedPayload = serializeSongSharePayload(parsedSong);
 
     expect(parsedSong).toEqual(song);
-    expect(reserializedPayload.startsWith("v4.")).toBe(true);
+    expect(reserializedPayload.startsWith("v5.")).toBe(true);
   });
 
   it("preserves song equality across legacy json to v4 migration", () => {
@@ -234,6 +266,42 @@ function serializeSongSharePayloadV3(song: ReturnType<typeof createDefaultSongDo
   return `v3.${encodeBase64Url(deflateRaw(new TextEncoder().encode(serializeSongShareText(song))))}`;
 }
 
+function serializeSongSharePayloadV4(song: ReturnType<typeof createDefaultSongDocument>) {
+  const v5PayloadMatch = /^v5\.(.+)$/u.exec(serializeSongSharePayload(song));
+
+  if (v5PayloadMatch === null) {
+    throw new Error("Expected the current share payload to use the v5 prefix.");
+  }
+
+  const binary = inflateRaw(decodeBase64Url(v5PayloadMatch[1] ?? ""));
+  const headerFlags = binary[0];
+
+  if (headerFlags === undefined) {
+    throw new Error("Expected a v5 payload header byte.");
+  }
+
+  let offset = 1;
+  const bpm = readVarUint(binary, offset);
+  offset = bpm.nextOffset;
+  const stepsPerBeat = readVarUint(binary, offset);
+  offset = stepsPerBeat.nextOffset;
+  const loopLength = readVarUint(binary, offset);
+
+  if (loopLength.value < 1) {
+    throw new Error("Cannot convert a four-step v5 payload into legacy v4 format.");
+  }
+
+  const convertedBinary = Uint8Array.from([
+    headerFlags,
+    ...writeVarUint(bpm.value),
+    ...writeVarUint(stepsPerBeat.value),
+    ...writeVarUint(loopLength.value - 1),
+    ...binary.slice(loopLength.nextOffset),
+  ]);
+
+  return `v4.${encodeBase64Url(deflateRaw(convertedBinary))}`;
+}
+
 function encodeLegacyBase64Url(value: string) {
   let binary = "";
 
@@ -252,4 +320,57 @@ function encodeBase64Url(value: Uint8Array) {
   });
 
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function decodeBase64Url(value: string) {
+  const normalizedValue = value.replaceAll("-", "+").replaceAll("_", "/");
+  const paddedValue = normalizedValue.padEnd(Math.ceil(normalizedValue.length / 4) * 4, "=");
+  const decodedValue = atob(paddedValue);
+
+  return Uint8Array.from(decodedValue, (character) => character.charCodeAt(0));
+}
+
+function readVarUint(value: Uint8Array, offset: number) {
+  let currentOffset = offset;
+  let result = 0;
+  let shift = 0;
+
+  while (true) {
+    const currentByte = value[currentOffset];
+
+    if (currentByte === undefined) {
+      throw new Error("Unexpected end of legacy v4 test payload.");
+    }
+
+    currentOffset += 1;
+    result |= (currentByte & 0x7f) << shift;
+
+    if ((currentByte & 0x80) === 0) {
+      return { value: result, nextOffset: currentOffset };
+    }
+
+    shift += 7;
+  }
+}
+
+function writeVarUint(value: number) {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error("Expected a non-negative integer for the legacy v4 payload helper.");
+  }
+
+  const bytes: number[] = [];
+  let remaining = value;
+
+  do {
+    let currentByte = remaining & 0x7f;
+    remaining >>>= 7;
+
+    if (remaining > 0) {
+      currentByte |= 0x80;
+    }
+
+    bytes.push(currentByte);
+  } while (remaining > 0);
+
+  return bytes;
 }

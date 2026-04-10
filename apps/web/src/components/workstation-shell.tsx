@@ -431,15 +431,22 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       return;
     }
 
-    const shareUrl = buildSongShareUrl(window.location.href, song);
-    window.history.replaceState(window.history.state, "", shareUrl);
+    try {
+      const shareUrl = buildSongShareUrl(window.location.href, song);
+      window.history.replaceState(window.history.state, "", shareUrl);
 
-    const didCopy = await copyTextToClipboard(shareUrl);
+      const didCopy = await copyTextToClipboard(shareUrl);
 
-    setShareStatus({
-      tone: "neutral",
-      message: didCopy ? "Share link copied to clipboard." : "Share link is now in the address bar.",
-    });
+      setShareStatus({
+        tone: "neutral",
+        message: didCopy ? "Share link copied to clipboard." : "Share link is now in the address bar.",
+      });
+    } catch (error) {
+      setShareStatus({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Could not generate a share link for the current song.",
+      });
+    }
   };
 
   const saveArrangementAsWav = async () => {

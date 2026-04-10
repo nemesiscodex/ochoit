@@ -31,7 +31,8 @@ import {
 
 export const SONG_SHARE_HASH_KEY = "song";
 
-const SHARE_FORMAT_VERSION = 4;
+const SHARE_FORMAT_VERSION = 5;
+const LEGACY_BINARY_SHARE_FORMAT_VERSION = 4;
 const LEGACY_COMPRESSED_SHARE_FORMAT_VERSION = 3;
 const SHARE_PAYLOAD_PREFIX = `v${SHARE_FORMAT_VERSION}.`;
 const shareLineBreak = "\n";
@@ -206,7 +207,7 @@ export type SongShareLoadResult =
     };
 
 export function serializeSongSharePayload(song: SongDocument) {
-  return serializeSongSharePayloadV4(song);
+  return serializeSongSharePayloadV5(song);
 }
 
 export function parseSongSharePayload(payload: string) {
@@ -217,6 +218,10 @@ export function parseSongSharePayload(payload: string) {
     const payloadBody = compressedPayloadMatch[2] ?? "";
 
     if (version === SHARE_FORMAT_VERSION) {
+      return parseSongSharePayloadV5(payloadBody);
+    }
+
+    if (version === LEGACY_BINARY_SHARE_FORMAT_VERSION) {
       return parseSongSharePayloadV4(payloadBody);
     }
 
@@ -360,7 +365,7 @@ export function parseSongShareText(input: string) {
   return parseSongDocument(sharedSong);
 }
 
-function serializeSongSharePayloadV4(song: SongDocument) {
+function serializeSongSharePayloadV5(song: SongDocument) {
   const writer = new ByteWriter();
   const headerFlags =
     (song.meta.engineMode === "authentic" ? 1 : 0) |
@@ -373,7 +378,7 @@ function serializeSongSharePayloadV4(song: SongDocument) {
   writer.writeByte(headerFlags);
   writer.writeVarUint(song.transport.bpm - 40);
   writer.writeVarUint(song.transport.stepsPerBeat - 1);
-  writer.writeVarUint(song.transport.loopLength / 4 - 2);
+  writer.writeVarUint(song.transport.loopLength / 4 - 1);
   writer.writeByte(quantizeLevel(song.mixer.masterVolume));
 
   if ((headerFlags & (1 << 2)) !== 0) {
@@ -400,6 +405,66 @@ function serializeSongSharePayloadV4(song: SongDocument) {
   writeSampleTrack(writer, song.tracks.sample, song.samples, song.meta.engineMode);
 
   return `${SHARE_PAYLOAD_PREFIX}${encodeBase64Url(deflateRaw(writer.toUint8Array()))}`;
+}
+
+function parseSongSharePayloadV5(payloadBody: string) {
+  const reader = new ByteReader(inflateRaw(decodeBase64UrlToBytes(payloadBody)));
+  return parseSongSharePayloadV5FromReader(reader);
+}
+
+function parseSongSharePayloadV5FromReader(reader: ByteReader) {
+  const defaultSong = createDefaultSongDocument();
+  const headerFlags = reader.readByte();
+  const bpm = reader.readVarUint() + 40;
+  const stepsPerBeat = reader.readVarUint() + 1;
+  const loopLength = (reader.readVarUint() + 1) * 4;
+  const masterVolume = dequantizeLevel(reader.readByte());
+
+  const name = (headerFlags & (1 << 2)) !== 0 ? reader.readString() : defaultSharedMeta.name;
+  const author = (headerFlags & (1 << 3)) !== 0 ? reader.readString() : defaultSharedMeta.author;
+  const createdAt = (headerFlags & (1 << 4)) !== 0 ? reader.readString() : defaultSharedMeta.createdAt;
+  const updatedAt = (headerFlags & (1 << 5)) !== 0 ? reader.readString() : defaultSharedMeta.updatedAt;
+  const engineMode = (headerFlags & 1) !== 0 ? "authentic" : "inspired";
+  const oldSpeakerMode = (headerFlags & (1 << 1)) !== 0;
+
+  const samples = readSamples(reader);
+  const pulse1 = readPulseTrack(reader, defaultSong.tracks.pulse1, loopLength);
+  const pulse2 = readPulseTrack(reader, defaultSong.tracks.pulse2, loopLength);
+  const triangle = readTriangleTrack(reader, defaultSong.tracks.triangle, loopLength);
+  const noise = readNoiseTrack(reader, defaultSong.tracks.noise, loopLength);
+  const sample = readSampleTrack(reader, defaultSong.tracks.sample, loopLength, samples);
+
+  reader.assertFullyConsumed();
+
+  return parseSongDocument({
+    kind: defaultSong.kind,
+    version: defaultSong.version,
+    meta: {
+      ...defaultSong.meta,
+      name,
+      author,
+      createdAt,
+      updatedAt,
+      engineMode,
+    },
+    transport: {
+      bpm,
+      stepsPerBeat,
+      loopLength,
+    },
+    mixer: {
+      masterVolume,
+      oldSpeakerMode,
+    },
+    tracks: {
+      pulse1,
+      pulse2,
+      triangle,
+      noise,
+      sample,
+    },
+    samples,
+  });
 }
 
 function parseSongSharePayloadV4(payloadBody: string) {
