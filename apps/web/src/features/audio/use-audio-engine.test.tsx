@@ -1,19 +1,23 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createDefaultSongDocument, type SongDocument } from "ochoit-lib";
+import type { AudioTransportEvent } from "ochoit-lib/web";
 
 const webAudioMocks = vi.hoisted(() => {
-  const context = {} as AudioContext;
+  const context = {
+    currentTime: 1,
+  } as AudioContext;
 
   const unsubscribeTransport = vi.fn<() => void>();
-  const transportSubscribe = vi.fn<(listener: (event: unknown) => void) => () => void>().mockReturnValue(
+  const transportSubscribe = vi.fn<(listener: (event: AudioTransportEvent) => void) => () => void>().mockReturnValue(
     unsubscribeTransport,
   );
   const engine = {
     close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     configureSong: vi.fn<(song: SongDocument) => void>(),
+    context,
     resume: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     startTransport: vi.fn<(startTime?: number, step?: number) => void>(),
     state: "running" as const,
@@ -78,6 +82,10 @@ describe("use-audio-engine", () => {
     webAudioMocks.unsubscribeTransport.mockClear();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("initializes the engine through ochoit.start and the shared context", async () => {
     const song = createDefaultSongDocument();
     render(<HookHarness song={song} onValue={(value) => void (latestValue = value)} />);
@@ -132,5 +140,64 @@ describe("use-audio-engine", () => {
     expect(webAudioMocks.start).toHaveBeenCalledTimes(1);
     expect(webAudioMocks.create).toHaveBeenCalledTimes(1);
     expect(webAudioMocks.engine.startTransport).toHaveBeenCalledWith(undefined, 5);
+  });
+
+  it("publishes scheduled transport steps when their audio time arrives", async () => {
+    vi.useFakeTimers();
+    const song = createDefaultSongDocument();
+    render(<HookHarness song={song} onValue={(value) => void (latestValue = value)} />);
+
+    if (latestValue === null) {
+      throw new Error("Expected the hook harness to expose the audio hook value.");
+    }
+
+    await act(async () => {
+      await latestValue?.initializeAudio();
+    });
+
+    const transportListener = webAudioMocks.transportSubscribe.mock.calls[0]?.[0];
+
+    if (transportListener === undefined) {
+      throw new Error("Expected useAudioEngine to subscribe to transport events.");
+    }
+
+    act(() => {
+      transportListener({
+        type: "playback-state",
+        snapshot: {
+          playbackState: "playing",
+          nextStep: 8,
+          nextStepTime: 1.1,
+          loopCount: 2,
+        },
+      });
+    });
+
+    expect(latestValue?.transportState).toEqual({
+      playbackState: "playing",
+      nextStep: 0,
+      nextStepTime: null,
+      loopCount: 0,
+    });
+
+    act(() => {
+      transportListener({
+        type: "scheduled-steps",
+        steps: [{ step: 4, time: 1.05, loopCount: 2 }],
+      });
+    });
+
+    expect(latestValue?.transportState.nextStep).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+
+    expect(latestValue?.transportState).toEqual({
+      playbackState: "playing",
+      nextStep: 4,
+      nextStepTime: 1.05,
+      loopCount: 2,
+    });
   });
 });

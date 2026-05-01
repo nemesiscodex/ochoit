@@ -4,7 +4,7 @@ import { Button } from "@ochoit/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ArrangementTextFormat,
   SONG_MAX_SAMPLE_COUNT,
@@ -1540,25 +1540,7 @@ function StatusChip({ label, value, active = false }: { label: string; value: st
 
 /* ─────────── Sample Deck ─────────── */
 
-function SampleDeck({
-  engineMode,
-  samples,
-  sample,
-  selectedSampleId,
-  recorderErrorMessage,
-  recorderPermissionState,
-  recorderStatus,
-  recordingDurationMs,
-  onDeleteSample,
-  onApplyTrim,
-  onPreviewSample,
-  onMoveTrimWindow,
-  onResizeTrimWindow,
-  onSetSampleBaseNote,
-  onSelectSample,
-  onStartRecording,
-  onStopRecording,
-}: {
+type SampleDeckProps = {
   engineMode: SongDocument["meta"]["engineMode"];
   samples: SongDocument["samples"];
   sample: SongDocument["samples"][number] | null;
@@ -1576,13 +1558,43 @@ function SampleDeck({
   onSelectSample: (sampleId: string) => void;
   onStartRecording: () => Promise<void>;
   onStopRecording: () => void;
-}) {
+};
+
+const SampleDeck = memo(function SampleDeck({
+  engineMode,
+  samples,
+  sample,
+  selectedSampleId,
+  recorderErrorMessage,
+  recorderPermissionState,
+  recorderStatus,
+  recordingDurationMs,
+  onDeleteSample,
+  onApplyTrim,
+  onPreviewSample,
+  onMoveTrimWindow,
+  onResizeTrimWindow,
+  onSetSampleBaseNote,
+  onSelectSample,
+  onStartRecording,
+  onStopRecording,
+}: SampleDeckProps) {
   const isRecording = recorderStatus === "recording";
   const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
   const sampleLimitReached = samples.length >= SONG_MAX_SAMPLE_COUNT;
-  const trimmedPcm = sample === null ? [] : getTrimmedSamplePcm(sample);
-  const waveform = createWaveformFromPcm(trimmedPcm);
-  const trimmedFrameCount = sample === null ? 0 : getTrimmedFrameCount(sample);
+  const trimmedPcm = useMemo(() => (sample === null ? [] : getTrimmedSamplePcm(sample)), [sample]);
+  const waveform = useMemo(() => createWaveformFromPcm(trimmedPcm), [trimmedPcm]);
+  const sampleClipPreviews = useMemo(
+    () =>
+      [...samples].reverse().map((entry) => ({
+        entry,
+        waveform: createWaveformFromPcm(getTrimmedSamplePcm(entry), 48),
+        trimmedDurationMs:
+          entry.sampleRate <= 0 ? 0 : Math.round((getTrimmedFrameCount(entry) / entry.sampleRate) * 1000),
+      })),
+    [samples],
+  );
+  const trimmedFrameCount = useMemo(() => (sample === null ? 0 : getTrimmedFrameCount(sample)), [sample]);
   const trimWindowMaxStart = sample === null ? 0 : Math.max(0, sample.frameCount - trimmedFrameCount);
   const hasPendingTrim = sample !== null && (sample.trim.startFrame > 0 || sample.trim.endFrame < sample.frameCount);
   const sampleDurationMs =
@@ -1775,11 +1787,8 @@ function SampleDeck({
               Record something to build your PCM clip list.
             </div>
           ) : (
-            [...samples].reverse().map((entry) => {
-              const waveform = createWaveformFromPcm(getTrimmedSamplePcm(entry), 48);
+            sampleClipPreviews.map(({ entry, waveform, trimmedDurationMs }) => {
               const isSelected = entry.id === selectedSampleId;
-              const trimmedDurationMs =
-                entry.sampleRate <= 0 ? 0 : Math.round((getTrimmedFrameCount(entry) / entry.sampleRate) * 1000);
 
               return (
                 <div
@@ -1842,6 +1851,22 @@ function SampleDeck({
         </div>
       </div>
     </div>
+  );
+}, areSampleDeckPropsEqual);
+
+function areSampleDeckPropsEqual(
+  previousProps: Readonly<SampleDeckProps>,
+  nextProps: Readonly<SampleDeckProps>,
+) {
+  return (
+    previousProps.engineMode === nextProps.engineMode &&
+    previousProps.samples === nextProps.samples &&
+    previousProps.sample === nextProps.sample &&
+    previousProps.selectedSampleId === nextProps.selectedSampleId &&
+    previousProps.recorderErrorMessage === nextProps.recorderErrorMessage &&
+    previousProps.recorderPermissionState === nextProps.recorderPermissionState &&
+    previousProps.recorderStatus === nextProps.recorderStatus &&
+    previousProps.recordingDurationMs === nextProps.recordingDurationMs
   );
 }
 
@@ -1951,21 +1976,23 @@ function downloadBlobFile(blob: Blob, fileName: string) {
 
 /* ─────────── Song Metadata ─────────── */
 
-function SongMeta({
-  song,
-  engineState,
-  onUpdateEngineMode,
-  onUpdateSongAuthor,
-  onUpdateSongName,
-  trackCount,
-}: {
+type SongMetaProps = {
   song: SongDocument;
   engineState: AudioBootstrapState;
   onUpdateEngineMode: (engineMode: EngineMode) => void;
   onUpdateSongAuthor: (author: string) => void;
   onUpdateSongName: (name: string) => void;
   trackCount: number;
-}) {
+};
+
+const SongMeta = memo(function SongMeta({
+  song,
+  engineState,
+  onUpdateEngineMode,
+  onUpdateSongAuthor,
+  onUpdateSongName,
+  trackCount,
+}: SongMetaProps) {
   return (
     <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-4">
       <h2 className="mb-3 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">
@@ -2050,6 +2077,14 @@ function SongMeta({
         <p className="mt-1 text-[10px] leading-5 text-white/55">{getPcmModeSummary(song.meta.engineMode)}</p>
       </div>
     </div>
+  );
+}, areSongMetaPropsEqual);
+
+function areSongMetaPropsEqual(previousProps: Readonly<SongMetaProps>, nextProps: Readonly<SongMetaProps>) {
+  return (
+    previousProps.song === nextProps.song &&
+    previousProps.engineState === nextProps.engineState &&
+    previousProps.trackCount === nextProps.trackCount
   );
 }
 

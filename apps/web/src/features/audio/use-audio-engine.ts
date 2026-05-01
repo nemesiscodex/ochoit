@@ -31,6 +31,8 @@ function toBootstrapState(engine: AudioEngine | null): AudioBootstrapState {
 export function useAudioEngine(song: SongDocument) {
   const engineRef = useRef<AudioEngine | null>(null);
   const unsubscribeTransportRef = useRef<(() => void) | null>(null);
+  const scheduledTransportTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const transportTimerGenerationRef = useRef(0);
   const [engineState, setEngineState] = useState<AudioBootstrapState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transportState, setTransportState] = useState<AudioTransportSnapshot>({
@@ -47,12 +49,57 @@ export function useAudioEngine(song: SongDocument) {
   };
 
   const syncTransportState = (event: AudioTransportEvent) => {
-    if (event.type !== "playback-state") {
+    if (event.type === "scheduled-steps") {
+      const engine = engineRef.current;
+
+      if (engine === null) {
+        return;
+      }
+
+      const generation = transportTimerGenerationRef.current;
+
+      event.steps.forEach((step) => {
+        const delayMs = Math.max(0, (step.time - engine.context.currentTime) * 1000);
+        const timerId = setTimeout(() => {
+          scheduledTransportTimersRef.current = scheduledTransportTimersRef.current.filter((timer) => timer !== timerId);
+
+          if (transportTimerGenerationRef.current !== generation) {
+            return;
+          }
+
+          startTransition(() => {
+            setTransportState({
+              playbackState: "playing",
+              nextStep: step.step,
+              nextStepTime: step.time,
+              loopCount: step.loopCount,
+            });
+          });
+        }, delayMs);
+
+        scheduledTransportTimersRef.current.push(timerId);
+      });
+      return;
+    }
+
+    if (event.snapshot.playbackState === "stopped") {
+      transportTimerGenerationRef.current += 1;
+      clearScheduledTransportTimers(scheduledTransportTimersRef.current);
+      startTransition(() => {
+        setTransportState(event.snapshot);
+      });
       return;
     }
 
     startTransition(() => {
-      setTransportState(event.snapshot);
+      setTransportState((currentState) =>
+        currentState.playbackState === event.snapshot.playbackState
+          ? currentState
+          : {
+              ...currentState,
+              playbackState: event.snapshot.playbackState,
+            },
+      );
     });
   };
 
@@ -143,6 +190,8 @@ export function useAudioEngine(song: SongDocument) {
 
       unsubscribeTransportRef.current?.();
       unsubscribeTransportRef.current = null;
+      transportTimerGenerationRef.current += 1;
+      clearScheduledTransportTimers(scheduledTransportTimersRef.current);
 
       if (engine === null) {
         return;
@@ -167,4 +216,11 @@ export function useAudioEngine(song: SongDocument) {
     startTransportAtStep,
     stopTransport,
   };
+}
+
+function clearScheduledTransportTimers(timers: ReturnType<typeof setTimeout>[]) {
+  timers.forEach((timerId) => {
+    clearTimeout(timerId);
+  });
+  timers.length = 0;
 }

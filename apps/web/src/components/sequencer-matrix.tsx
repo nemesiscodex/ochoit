@@ -2,7 +2,7 @@ import { Button } from "@ochoit/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Circle, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   getFrequencyForNote,
   getOrderedTracks,
@@ -2229,16 +2229,31 @@ function CompactStepGrid({
   const gridRef = useRef<HTMLDivElement | null>(null);
   const columnCount = useStepColumnCount();
   const [hoveredMelodicOriginStepIndex, setHoveredMelodicOriginStepIndex] = useState<number | null>(null);
+  const selectedStepIndexSet = useMemo(() => new Set(selectedStepIndexes), [selectedStepIndexes]);
+  const melodicTrack = track.kind === "pulse" || track.kind === "triangle" ? track : null;
+  const melodicStepStates = useMemo(
+    () => (melodicTrack === null ? [] : melodicTrack.steps.map((_, index) => getMelodicStepState(melodicTrack, index))),
+    [melodicTrack],
+  );
+  const baseMelodicEntries = useMemo(
+    () =>
+      melodicTrack === null
+        ? []
+        : getMelodicArrangementEntries(melodicTrack).map((entry) => ({
+            ...entry,
+            label: entry.note,
+            volume: melodicTrack.steps[entry.stepIndex]?.volume ?? 0,
+            isPreview: false,
+            isPreviewInvalid: false,
+          })),
+    [melodicTrack],
+  );
 
   if (track.kind === "pulse" || track.kind === "triangle") {
-    const melodicEntries = getMelodicArrangementEntries(track).map((entry) => ({
+    const melodicEntries = baseMelodicEntries.map((entry) => ({
       ...entry,
-      label: entry.note,
-      volume: track.steps[entry.stepIndex]?.volume ?? 0,
-      isSelected: selectedStepIndexes.includes(entry.stepIndex),
+      isSelected: selectedStepIndexSet.has(entry.stepIndex),
       isHovered: hoveredMelodicOriginStepIndex === entry.stepIndex,
-      isPreview: false,
-      isPreviewInvalid: false,
       activeStepIndex:
         playbackState === "playing" && nextStep >= entry.stepIndex && nextStep < entry.stepIndex + entry.length
           ? nextStep
@@ -2262,12 +2277,12 @@ function CompactStepGrid({
         <div className="grid grid-cols-8 gap-1 md:grid-cols-16">
           {track.steps.map((_, index) => {
             const isQuarterBoundary = index % 4 === 0;
-            const melodicState = getMelodicStepState(track, index);
+            const melodicState = melodicStepStates[index];
             const isCovered = melodicState.kind === "hold";
             const isOrigin = melodicState.kind === "start";
             const isOccupiedByNote = isCovered || isOrigin;
             const isActive = playbackState === "playing" && nextStep === index && !isCovered && !isOrigin;
-            const isSelectedOrigin = selectedStepIndexes.includes(index);
+            const isSelectedOrigin = selectedStepIndexSet.has(index);
 
             return (
             <button

@@ -1360,4 +1360,25 @@ describe("workstation-shell", () => {
     await Promise.resolve();
     expect(previewSampleTrigger).toHaveBeenCalledWith("mic-002", 1, 500);
   });
+
+  it("does not rebuild sample deck waveforms on transport-only rerenders", () => {
+    const waveformSpy = vi.spyOn(sampleRecorderModule, "createWaveformFromPcm");
+    const song = createDefaultSongDocument();
+    const transportOnlyUpdate = createUseAudioEngineResult("playing");
+    transportOnlyUpdate.transportState = {
+      playbackState: "playing",
+      nextStep: 4,
+      nextStepTime: 1,
+      loopCount: 0,
+    };
+
+    const { rerender } = renderWorkstationShell(song);
+    const callCountAfterInitialRender = waveformSpy.mock.calls.length;
+
+    mockUseAudioEngine.mockReturnValue(transportOnlyUpdate);
+    rerender(createWorkstationShellElement(song));
+
+    expect(waveformSpy).toHaveBeenCalledTimes(callCountAfterInitialRender);
+    waveformSpy.mockRestore();
+  });
 });
