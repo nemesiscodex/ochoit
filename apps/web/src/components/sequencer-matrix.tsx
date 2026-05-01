@@ -1,6 +1,7 @@
 import { Button } from "@ochoit/ui/components/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Volume2, VolumeX } from "lucide-react";
+import { Circle, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   getFrequencyForNote,
@@ -113,6 +114,15 @@ type ClipboardState =
       entries: CopiedSampleEntry[];
     };
 
+type QuantizedRecordingState = {
+  trackId: MelodicTrackId | "sample";
+  startedAtLoopCount: number;
+  activeNotesByKey: Map<string, {
+    note: NoteValue;
+    stepIndex: number;
+  }>;
+};
+
 type GridMetrics = {
   pointerStartX: number;
   pointerStartY: number;
@@ -180,6 +190,7 @@ export function SequencerMatrix({
   song,
   playbackState,
   nextStep,
+  loopCount,
   onToggleTrackMute,
   onRequestLoopLengthChange,
   onUpdateTrackVolume,
@@ -192,6 +203,7 @@ export function SequencerMatrix({
   onMoveSampleSelection,
   onUpdateNoiseStep,
   onUpdateSampleStep,
+  onStartTransportAtStep,
 }: {
   defaultSampleId: string | null;
   engine: AudioEngine | null;
@@ -200,6 +212,7 @@ export function SequencerMatrix({
   song: SongDocument;
   playbackState: "stopped" | "playing";
   nextStep: number;
+  loopCount: number;
   onToggleTrackMute: (trackId: TrackId) => void;
   onRequestLoopLengthChange: (nextLoopLength: number) => void;
   onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
@@ -217,6 +230,7 @@ export function SequencerMatrix({
   onMoveSampleSelection: (selectedStepIndexes: number[], delta: number) => void;
   onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
   onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
+  onStartTransportAtStep: (step: number) => Promise<void>;
 }) {
   const [selectionState, setSelectionState] = useState<StepSelectionState | null>(null);
   const [clipboardState, setClipboardState] = useState<ClipboardState | null>(null);
@@ -224,10 +238,15 @@ export function SequencerMatrix({
   const [keyboardModeEnabled, setKeyboardModeEnabled] = useState(false);
   const [keyboardBaseOctave, setKeyboardBaseOctave] = useState(3);
   const [activeKeyboardKey, setActiveKeyboardKey] = useState<string | null>(null);
+  const [recordingTrackId, setRecordingTrackId] = useState<QuantizedRecordingState["trackId"] | null>(null);
   const suppressClickRef = useRef(false);
   const dragStateRef = useRef<DragState | null>(null);
   const keyboardKeyResetTimeoutRef = useRef<number | null>(null);
   const songRef = useRef(song);
+  const recordingStateRef = useRef<QuantizedRecordingState | null>(null);
+  const activeNoteLoopCountsByKeyRef = useRef<Map<string, number>>(new Map());
+  const lastObservedNextStepRef = useRef(nextStep);
+  const lastObservedLoopCountRef = useRef(loopCount);
   const moveMelodicSelectionRef = useRef(onMoveMelodicSelection);
   const moveNoiseSelectionRef = useRef(onMoveNoiseSelection);
   const moveSampleSelectionRef = useRef(onMoveSampleSelection);
@@ -238,6 +257,8 @@ export function SequencerMatrix({
   moveNoiseSelectionRef.current = onMoveNoiseSelection;
   moveSampleSelectionRef.current = onMoveSampleSelection;
   resizeMelodicStepRef.current = onResizeMelodicStep;
+  lastObservedNextStepRef.current = nextStep;
+  lastObservedLoopCountRef.current = loopCount;
 
   const keyboardNoteTarget = getKeyboardNoteTarget(song, selectionState);
   const keyboardBindings = buildKeyboardNoteBindings(keyboardBaseOctave);
@@ -357,6 +378,151 @@ export function SequencerMatrix({
       note,
       playbackRate: song.tracks.sample.steps[target.stepIndex]?.playbackRate ?? defaultSampleTrigger.playbackRate,
     });
+  };
+
+  const stopQuantizedRecording = () => {
+    recordingStateRef.current = null;
+    activeNoteLoopCountsByKeyRef.current.clear();
+    setRecordingTrackId(null);
+  };
+
+  const startQuantizedRecording = (trackId: MelodicTrackId | "sample") => {
+    if (!isQuantizedRecordTarget(song, trackId)) {
+      return;
+    }
+
+    recordingStateRef.current = {
+      trackId,
+      startedAtLoopCount: loopCount,
+      activeNotesByKey: new Map(),
+    };
+    activeNoteLoopCountsByKeyRef.current.clear();
+    setRecordingTrackId(trackId);
+    setSelectionState({
+      trackId,
+      anchorStepIndex: 0,
+      selectedStepIndexes: [0],
+    });
+    void onStartTransportAtStep(0);
+  };
+
+  const toggleQuantizedRecording = (trackId: MelodicTrackId | "sample") => {
+    if (recordingTrackId === trackId) {
+      stopQuantizedRecording();
+      return;
+    }
+
+    startQuantizedRecording(trackId);
+  };
+
+  const previewRecordingNote = (trackId: MelodicTrackId | "sample", stepIndex: number, note: NoteValue) => {
+    if (trackId === "sample") {
+      previewKeyboardInputNote({
+        trackId: "sample",
+        stepIndex,
+        note,
+        enabled: true,
+        kind: "sample",
+        label: `PCM step ${stepIndex + 1}`,
+        sampleId: song.tracks.sample.steps[stepIndex]?.sampleId ?? null,
+      }, note);
+      return;
+    }
+
+    previewKeyboardInputNote({
+      trackId,
+      stepIndex,
+      note,
+      enabled: true,
+      kind: "melodic",
+      label: `${labelByTrackId[trackId]} step ${stepIndex + 1}`,
+    }, note);
+  };
+
+  const recordQuantizedNoteStart = (key: string, note: NoteValue) => {
+    const currentRecordingState = recordingStateRef.current;
+
+    if (currentRecordingState === null || currentRecordingState.activeNotesByKey.has(key)) {
+      return false;
+    }
+
+    const trackId = currentRecordingState.trackId;
+    const stepIndex = clampStepIndex(lastObservedNextStepRef.current, song.transport.loopLength);
+    currentRecordingState.activeNotesByKey.set(key, { note, stepIndex });
+    activeNoteLoopCountsByKeyRef.current.set(key, lastObservedLoopCountRef.current);
+
+    const bindingKey = getKeyboardBindingKeyForNote(note, keyboardBindings);
+
+    if (bindingKey !== null) {
+      flashKeyboardKey(bindingKey);
+    }
+
+    previewRecordingNote(trackId, stepIndex, note);
+
+    if (trackId === "sample") {
+      const selectedStep = song.tracks.sample.steps[stepIndex];
+      const defaultSampleTrigger = getDefaultSampleTrigger(song.samples, defaultSampleId);
+      onUpdateSampleStep(stepIndex, {
+        enabled: true,
+        sampleId: selectedStep.sampleId ?? defaultSampleTrigger.sampleId,
+        note,
+        playbackRate: selectedStep.playbackRate ?? defaultSampleTrigger.playbackRate,
+      });
+      return true;
+    }
+
+    getConflictingMelodicOriginStepIndexes(song.tracks[trackId], stepIndex, stepIndex + 1).forEach((originStepIndex) => {
+      onUpdateMelodicStep(trackId, originStepIndex, { enabled: false });
+    });
+
+    const selectedStep = song.tracks[trackId].steps[stepIndex];
+    const updates: MelodicStepUpdates = {
+      enabled: true,
+      note,
+      length: 1,
+      volume: selectedStep?.volume ?? song.tracks[trackId].volume,
+    };
+
+    const recordingTrack = song.tracks[trackId];
+
+    if (recordingTrack.kind === "pulse") {
+      updates.duty = recordingTrack.steps[stepIndex]?.duty ?? 0.5;
+    }
+
+    onUpdateMelodicStep(trackId, stepIndex, updates);
+    return true;
+  };
+
+  const recordQuantizedNoteEnd = (key: string) => {
+    const currentRecordingState = recordingStateRef.current;
+
+    if (currentRecordingState === null || currentRecordingState.trackId === "sample") {
+      return false;
+    }
+
+    const activeNote = currentRecordingState.activeNotesByKey.get(key);
+
+    if (activeNote === undefined) {
+      return false;
+    }
+
+    const trackId = currentRecordingState.trackId;
+    const loopLength = song.transport.loopLength;
+    const releaseStep = clampStepIndex(lastObservedNextStepRef.current, loopLength);
+    const activeNoteLoopCount = activeNoteLoopCountsByKeyRef.current.get(key) ?? currentRecordingState.startedAtLoopCount;
+    const elapsedLoops = Math.max(0, lastObservedLoopCountRef.current - activeNoteLoopCount);
+    const rawDistance = elapsedLoops * loopLength + releaseStep - activeNote.stepIndex;
+    const length = Math.max(1, Math.min(loopLength - activeNote.stepIndex, rawDistance));
+
+    getConflictingMelodicOriginStepIndexes(song.tracks[trackId], activeNote.stepIndex, activeNote.stepIndex + length)
+      .filter((originStepIndex) => originStepIndex !== activeNote.stepIndex)
+      .forEach((originStepIndex) => {
+        onUpdateMelodicStep(trackId, originStepIndex, { enabled: false });
+      });
+    onUpdateMelodicStep(trackId, activeNote.stepIndex, { length });
+    currentRecordingState.activeNotesByKey.delete(key);
+    activeNoteLoopCountsByKeyRef.current.delete(key);
+    return true;
   };
 
   const toggleKeyboardMode = () => {
@@ -723,6 +889,22 @@ export function SequencerMatrix({
         return;
       }
 
+      const normalizedRecordKey = normalizeKeyboardNoteKey(event.key);
+
+      if (
+        recordingStateRef.current !== null &&
+        !event.altKey &&
+        normalizedRecordKey !== null
+      ) {
+        const resolvedNote = resolveKeyboardNoteFromKey(event.key, keyboardBaseOctave);
+
+        if (resolvedNote !== null) {
+          recordQuantizedNoteStart(normalizedRecordKey, resolvedNote);
+          event.preventDefault();
+          return;
+        }
+      }
+
       if (event.metaKey || event.ctrlKey) {
         const loweredKey = event.key.toLowerCase();
 
@@ -901,6 +1083,7 @@ export function SequencerMatrix({
     keyboardBindings,
     keyboardModeEnabled,
     keyboardNoteTarget,
+    recordingTrackId,
     onUpdateMelodicStep,
     onUpdateNoiseStep,
     onUpdateSampleStep,
@@ -908,6 +1091,42 @@ export function SequencerMatrix({
     song,
     song.transport.loopLength,
   ]);
+
+  useEffect(() => {
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (isKeyboardTargetEditable(event.target)) {
+        return;
+      }
+
+      const normalizedRecordKey = normalizeKeyboardNoteKey(event.key);
+
+      if (normalizedRecordKey === null) {
+        return;
+      }
+
+      if (recordQuantizedNoteEnd(normalizedRecordKey)) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      document.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [song.transport.loopLength]);
+
+  useEffect(() => {
+    if (playbackState === "stopped" && recordingStateRef.current !== null) {
+      stopQuantizedRecording();
+    }
+  }, [playbackState]);
+
+  useEffect(() => {
+    if (recordingTrackId !== null && !isQuantizedRecordTarget(song, recordingTrackId)) {
+      stopQuantizedRecording();
+    }
+  }, [recordingTrackId, song]);
 
   useEffect(() => {
     return () => {
@@ -968,12 +1187,14 @@ export function SequencerMatrix({
           onRequestLoopLengthChange={onRequestLoopLengthChange}
           onToggleKeyboardMode={toggleKeyboardMode}
           playbackState={playbackState}
+          recordingTrackId={recordingTrackId}
         />
       ) : null}
       {tracks.map((track) => {
         const selectedStepIndex = selectionState?.trackId === track.id ? selectionState.anchorStepIndex : null;
         const selectedStepIndexes = selectionState?.trackId === track.id ? selectionState.selectedStepIndexes : [];
         const currentDragState = dragState?.trackId === track.id ? dragState : null;
+        const recordTarget = isQuantizedRecordTarget(song, track.id) ? track.id : null;
 
         return (
           <SequencerRow
@@ -988,6 +1209,7 @@ export function SequencerMatrix({
             onDragPointerMove={updateDragPreview}
             onDragPointerEnd={finishDrag}
             dragState={currentDragState}
+            isRecording={recordingTrackId === track.id}
             onResizeMelodicStepStart={(stepIndex, edge, metrics) => {
               const melodicTrack = song.tracks[track.id];
 
@@ -1076,6 +1298,9 @@ export function SequencerMatrix({
               setDragState(nextDragState);
             }}
             onToggleTrackMute={onToggleTrackMute}
+            onToggleQuantizedRecording={recordTarget === null ? null : () => {
+              toggleQuantizedRecording(recordTarget);
+            }}
             onUpdateTrackVolume={onUpdateTrackVolume}
             onUpdateMelodicStep={onUpdateMelodicStep}
             onUpdateNoiseStep={onUpdateNoiseStep}
@@ -1116,6 +1341,33 @@ function getTrackSelectableStepIndexes(track: Track) {
   }
 
   return track.steps.flatMap((step, index) => (step.enabled ? [index] : []));
+}
+
+function isQuantizedRecordTarget(
+  song: SongDocument,
+  trackId: TrackId,
+): trackId is QuantizedRecordingState["trackId"] {
+  return trackId === "pulse1" || trackId === "pulse2" || trackId === "triangle" || (
+    trackId === "sample" && song.meta.engineMode === "inspired"
+  );
+}
+
+function clampStepIndex(stepIndex: number, loopLength: number) {
+  if (loopLength <= 0) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(loopLength - 1, stepIndex));
+}
+
+function getConflictingMelodicOriginStepIndexes(
+  track: Extract<Track, { kind: "pulse" | "triangle" }>,
+  startStepIndex: number,
+  endStepIndex: number,
+) {
+  return getMelodicArrangementEntries(track)
+    .filter((entry) => rangesOverlap(entry.stepIndex, entry.stepIndex + entry.length, startStepIndex, endStepIndex))
+    .map((entry) => entry.stepIndex);
 }
 
 function validateMovePreview(song: SongDocument, track: Track, selectedStepIndexes: number[], delta: number) {
@@ -1228,6 +1480,7 @@ function StepRuler({
   onRequestLoopLengthChange,
   onToggleKeyboardMode,
   playbackState,
+  recordingTrackId,
 }: {
   activeKeyboardKey: string | null;
   keyboardBaseOctave: number;
@@ -1242,13 +1495,16 @@ function StepRuler({
   onRequestLoopLengthChange: (nextLoopLength: number) => void;
   onToggleKeyboardMode: () => void;
   playbackState: "stopped" | "playing";
+  recordingTrackId: QuantizedRecordingState["trackId"] | null;
 }) {
   const canDecrease = loopLength > SONG_LOOP_LENGTH_RANGE.min;
   const canIncrease = loopLength < SONG_LOOP_LENGTH_RANGE.max;
   const canLowerKeyboardOctave = keyboardBaseOctave > keyboardBaseOctaveMin;
   const canRaiseKeyboardOctave = keyboardBaseOctave < keyboardBaseOctaveMax;
   const keyboardTargetSummary =
-    keyboardTarget === null
+    recordingTrackId !== null
+      ? `Recording ${labelByTrackId[recordingTrackId]}. Play keyboard notes.`
+      : keyboardTarget === null
       ? "Select a melodic or inspired PCM step to use note-entry mode."
       : keyboardModeEnabled
         ? `${keyboardTarget.label} is armed for keyboard note entry.`
@@ -1499,6 +1755,7 @@ function SequencerRow({
   dragState,
   engine,
   hoverPreviewEnabled,
+  isRecording,
   nextStep,
   onDeselectStep,
   onDragPointerEnd,
@@ -1509,6 +1766,7 @@ function SequencerRow({
   onResizeMelodicStepStart,
   onStartDrag,
   onToggleTrackMute,
+  onToggleQuantizedRecording,
   onUpdateTrackVolume,
   onUpdateMelodicStep,
   onUpdateNoiseStep,
@@ -1524,6 +1782,7 @@ function SequencerRow({
   dragState: DragState | null;
   engine: AudioEngine | null;
   hoverPreviewEnabled: boolean;
+  isRecording: boolean;
   nextStep: number;
   onDeselectStep: () => void;
   onDragPointerEnd: () => void;
@@ -1534,6 +1793,7 @@ function SequencerRow({
   onResizeMelodicStepStart: (stepIndex: number, edge: "left" | "right", metrics: GridMetrics) => void;
   onStartDrag: (stepIndex: number, metrics: GridMetrics, shiftKey: boolean) => void;
   onToggleTrackMute: (trackId: TrackId) => void;
+  onToggleQuantizedRecording: (() => void) | null;
   onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
   onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
@@ -1633,7 +1893,10 @@ function SequencerRow({
 
   return (
     <div
-      className="oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]"
+      className={cn(
+        "oc-voice-row grid gap-0 overflow-hidden rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] backdrop-blur lg:grid-cols-[200px_minmax(0,1fr)]",
+        isRecording && "ring-2 ring-[var(--oc-play)]/45",
+      )}
       style={{ borderLeftColor: voiceColorByTrackId[track.id], borderLeftWidth: "3px" }}
     >
       {/* Voice info panel */}
@@ -1673,6 +1936,31 @@ function SequencerRow({
             >
               {track.muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
             </Button>
+            {onToggleQuantizedRecording !== null ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`${isRecording ? "Stop recording" : "Record"} ${labelByTrackId[track.id]}`}
+                      aria-pressed={isRecording}
+                      className={cn(
+                        "size-7 text-white/40 hover:bg-white/[0.06] hover:text-white",
+                        isRecording && "text-[var(--oc-play)] hover:text-[var(--oc-play)]",
+                      )}
+                      onClick={onToggleQuantizedRecording}
+                    />
+                  }
+                >
+                  <Circle className={cn("size-3.5", isRecording && "fill-current")} />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {isRecording ? `Stop recording ${labelByTrackId[track.id]}` : `Record ${labelByTrackId[track.id]}`}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
         </div>
 

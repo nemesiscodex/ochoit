@@ -132,7 +132,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
   deckSampleIdRef.current = deckSampleId;
-  const { engine, engineState, errorMessage, initializeAudio, startTransport, stopTransport, transportState } =
+  const { engine, engineState, errorMessage, initializeAudio, startTransport, startTransportAtStep, stopTransport, transportState } =
     useAudioEngine(song);
   const {
     errorMessage: recorderErrorMessage,
@@ -1037,9 +1037,11 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               onMoveSampleSelection={moveSampleSelection}
               onUpdateNoiseStep={updateNoiseStep}
               onUpdateSampleStep={updateSampleStep}
+              onStartTransportAtStep={startTransportAtStep}
               song={song}
               playbackState={transportState.playbackState}
               nextStep={transportState.nextStep}
+              loopCount={transportState.loopCount}
             />
           </div>
 

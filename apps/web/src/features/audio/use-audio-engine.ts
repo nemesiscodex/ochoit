@@ -107,6 +107,16 @@ export function useAudioEngine(song: SongDocument) {
     engine.startTransport();
   };
 
+  const startTransportAtStep = async (step: number) => {
+    const engine = await initializeAudio();
+
+    if (engine === null) {
+      return;
+    }
+
+    engine.startTransport(undefined, step);
+  };
+
   const stopTransport = () => {
     const engine = engineRef.current;
 
@@ -154,6 +164,7 @@ export function useAudioEngine(song: SongDocument) {
     initializeAudio,
     suspendAudio,
     startTransport,
+    startTransportAtStep,
     stopTransport,
   };
 }

@@ -47,6 +47,7 @@ function createUseAudioEngineResult(
     initializeAudio: vi.fn(async () => null),
     suspendAudio: vi.fn(async () => undefined),
     startTransport: vi.fn(async () => undefined),
+    startTransportAtStep: vi.fn(async () => undefined),
     stopTransport: vi.fn(),
   };
 }

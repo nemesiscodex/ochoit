@@ -15,7 +15,7 @@ const webAudioMocks = vi.hoisted(() => {
     close: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     configureSong: vi.fn<(song: SongDocument) => void>(),
     resume: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    startTransport: vi.fn<() => void>(),
+    startTransport: vi.fn<(startTime?: number, step?: number) => void>(),
     state: "running" as const,
     stopTransport: vi.fn<() => void>(),
     suspend: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -115,5 +115,22 @@ describe("use-audio-engine", () => {
     expect(webAudioMocks.start).toHaveBeenCalledTimes(1);
     expect(webAudioMocks.create).toHaveBeenCalledTimes(1);
     expect(webAudioMocks.engine.startTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts transport at a specific sequencer step", async () => {
+    const song = createDefaultSongDocument();
+    render(<HookHarness song={song} onValue={(value) => void (latestValue = value)} />);
+
+    if (latestValue === null) {
+      throw new Error("Expected the hook harness to expose the audio hook value.");
+    }
+
+    await act(async () => {
+      await latestValue?.startTransportAtStep(5);
+    });
+
+    expect(webAudioMocks.start).toHaveBeenCalledTimes(1);
+    expect(webAudioMocks.create).toHaveBeenCalledTimes(1);
+    expect(webAudioMocks.engine.startTransport).toHaveBeenCalledWith(undefined, 5);
   });
 });

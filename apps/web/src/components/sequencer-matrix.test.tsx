@@ -60,6 +60,8 @@ function renderMatrix(overrides: Record<string, unknown> = {}) {
     song: createDefaultSongDocument(),
     playbackState: "stopped" as const,
     nextStep: 0,
+    loopCount: 0,
+    onStartTransportAtStep: vi.fn(async () => undefined),
     ...overrides,
   };
 
@@ -130,6 +132,204 @@ describe("sequencer-matrix", () => {
       1,
       expect.objectContaining({ enabled: true, note: "D4" }),
     );
+  });
+
+  it("starts quantized recording on a voice at step 1", () => {
+    const onStartTransportAtStep = vi.fn(async () => undefined);
+
+    renderMatrix({ onStartTransportAtStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+
+    expect(onStartTransportAtStep).toHaveBeenCalledWith(0);
+    expect(screen.getByRole("button", { name: "Stop recording Pulse I" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Recording Pulse I. Play keyboard notes.")).toBeTruthy();
+  });
+
+  it("renders quantized record controls only for note-capable record targets", () => {
+    renderMatrix();
+
+    expect(screen.getByRole("button", { name: "Record Pulse I" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Record Pulse II" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Record Triangle" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Record PCM" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Record Noise" })).toBeNull();
+  });
+
+  it("does not render the PCM record control in authentic mode", () => {
+    const song = createDefaultSongDocument();
+    song.meta.engineMode = "authentic";
+
+    renderMatrix({ song });
+
+    expect(screen.queryByRole("button", { name: "Record PCM" })).toBeNull();
+  });
+
+  it("records keyboard notes to the active voice at the current quantized step", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith(
+      "pulse1",
+      3,
+      expect.objectContaining({ enabled: true, note: "C3", length: 1 }),
+    );
+  });
+
+  it("ignores repeated keydown for a held recording key", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+    fireEvent.keyDown(document, { key: "z", repeat: true });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledTimes(1);
+  });
+
+  it("extends a recorded melodic note length on keyup by elapsed quantized steps", () => {
+    const onUpdateMelodicStep = vi.fn();
+    const { props, rerender } = renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    rerender(<SequencerMatrix {...props} nextStep={6} />);
+    fireEvent.keyUp(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 3 });
+  });
+
+  it("records a quick melodic tap with minimum length 1", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+    fireEvent.keyUp(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 1 });
+  });
+
+  it("wraps recording duration safely and clamps to the loop end", () => {
+    const onUpdateMelodicStep = vi.fn();
+    const { props, rerender } = renderMatrix({ nextStep: 14, loopCount: 0, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    rerender(<SequencerMatrix {...props} nextStep={3} loopCount={1} />);
+    fireEvent.keyUp(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 14, { length: 2 });
+  });
+
+  it("records into one voice without updating another voice", () => {
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Triangle" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith(
+      "triangle",
+      3,
+      expect.objectContaining({ enabled: true, note: "C3", length: 1 }),
+    );
+    expect(onUpdateMelodicStep).not.toHaveBeenCalledWith(
+      "pulse1",
+      expect.any(Number),
+      expect.any(Object),
+    );
+  });
+
+  it("clears overlapping melodic notes on the active record target only", () => {
+    const onUpdateMelodicStep = vi.fn();
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[4] = {
+      ...song.tracks.pulse1.steps[4],
+      enabled: true,
+      length: 2,
+      note: "E4",
+    };
+    song.tracks.pulse2.steps[4] = {
+      ...song.tracks.pulse2.steps[4],
+      enabled: true,
+      length: 2,
+      note: "G4",
+    };
+    const { props, rerender } = renderMatrix({ nextStep: 3, onUpdateMelodicStep, song });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    rerender(<SequencerMatrix {...props} nextStep={6} />);
+    fireEvent.keyUp(document, { key: "z" });
+
+    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 4, { enabled: false });
+    expect(onUpdateMelodicStep).not.toHaveBeenCalledWith("pulse2", 4, { enabled: false });
+  });
+
+  it("records inspired PCM as a sample note trigger without melodic length", () => {
+    const onUpdateSampleStep = vi.fn();
+    const onUpdateMelodicStep = vi.fn();
+
+    renderMatrix({ nextStep: 3, onUpdateMelodicStep, onUpdateSampleStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record PCM" }));
+    fireEvent.keyDown(document, { key: "x" });
+    fireEvent.keyUp(document, { key: "x" });
+
+    expect(onUpdateSampleStep).toHaveBeenCalledWith(
+      3,
+      expect.objectContaining({ enabled: true, sampleId: "mic-001", note: "D3" }),
+    );
+    expect(onUpdateMelodicStep).not.toHaveBeenCalled();
+  });
+
+  it("stops quantized recording when clicking the active record button again", () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop recording Pulse I" }));
+
+    expect(screen.getByRole("button", { name: "Record Pulse I" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("stops quantized recording when transport stops", () => {
+    const { props, rerender } = renderMatrix({ playbackState: "playing" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    expect(screen.getByRole("button", { name: "Stop recording Pulse I" })).toBeTruthy();
+
+    rerender(<SequencerMatrix {...props} playbackState="stopped" />);
+
+    expect(screen.getByRole("button", { name: "Record Pulse I" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("ignores recording keyboard input while typing in editable fields", () => {
+    const onUpdateMelodicStep = vi.fn();
+    const input = document.createElement("input");
+    document.body.append(input);
+
+    try {
+      renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+      fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+      input.focus();
+      fireEvent.keyDown(input, { key: "z" });
+
+      expect(onUpdateMelodicStep).not.toHaveBeenCalled();
+    } finally {
+      input.remove();
+    }
   });
 
   it("calls the mute toggle callback for a specific voice", () => {
