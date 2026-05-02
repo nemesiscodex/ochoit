@@ -680,7 +680,7 @@ describe("workstation-shell", () => {
     expect(latestSong.meta.author).toBe("Julio");
   });
 
-  it("clears the current song, recordings, and share link after confirmation", async () => {
+  it("starts a new song, clearing recordings and share link after confirmation", async () => {
     const sharedSong = createDefaultSongDocument();
 
     window.history.replaceState({}, "", buildSongShareUrl(window.location.href, sharedSong));
@@ -691,17 +691,17 @@ describe("workstation-shell", () => {
       expect(window.location.hash).toContain("song=");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear song" }));
+    fireEvent.click(screen.getByRole("button", { name: "New song" }));
 
     expect(confirmDialog).toHaveBeenCalledWith(
-      "Are you sure? This will clear all notes, recordings, and the current song link.",
+      "Start a new song? This will clear all notes, recordings, and the current song link.",
     );
 
     await waitFor(() => {
       expect(window.location.hash).toBe("");
     });
 
-    expect(screen.getByText("Cleared the current song and removed the shared link.")).toBeTruthy();
+    expect(screen.getByText("Started a new song and removed the shared link.")).toBeTruthy();
     expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));

@@ -3,7 +3,7 @@ import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Download, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
+import { Download, FilePlus2, Link, Mic, Pause, Play, Sparkles, Square, Trash2, Upload, Volume2, Zap } from "lucide-react";
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ArrangementTextFormat,
@@ -403,7 +403,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const resetSong = () => {
     if (typeof window !== "undefined") {
       const confirmed = window.confirm(
-        "Are you sure? This will clear all notes, recordings, and the current song link.",
+        "Start a new song? This will clear all notes, recordings, and the current song link.",
       );
 
       if (!confirmed) {
@@ -422,7 +422,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     });
     setShareStatus({
       tone: "neutral",
-      message: "Cleared the current song and removed the shared link.",
+      message: "Started a new song and removed the shared link.",
     });
   };
 
@@ -976,7 +976,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
             {/* Spacer pushes destructive action to the end */}
             <div className="hidden flex-1 lg:block" />
 
-            {/* Destructive: Clear */}
+            {/* Destructive: New */}
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -984,15 +984,15 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
                     type="button"
                     variant="outline"
                     className="h-9 rounded-md border-[var(--oc-noise)]/15 bg-[var(--oc-noise)]/[0.04] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-noise)]/60 hover:border-[var(--oc-noise)]/30 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
-                    aria-label="Clear song"
+                    aria-label="New song"
                     onClick={resetSong}
                   />
                 }
               >
-                <Trash2 className="mr-1 size-3" />
-                <span className="hidden sm:inline">Clear</span>
+                <FilePlus2 className="mr-1 size-3" />
+                <span className="hidden sm:inline">New</span>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Reset song &amp; clear all data</TooltipContent>
+              <TooltipContent side="bottom">Start a new song</TooltipContent>
             </Tooltip>
           </div>
 
