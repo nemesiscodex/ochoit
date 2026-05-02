@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultDpcmRate } from "@/features/audio/dpcm";
-import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
+import { defaultDpcmRate } from "../src/core/dpcm";
+import { createDefaultSongDocument, createEmptySongDocument } from "../src/core/song-document";
 import {
   canUpdateSongStepsPerBeat,
   clampSongBpm,
@@ -12,7 +12,7 @@ import {
   songLoopLengthWouldTrimContent,
   updateSongStepsPerBeat,
   updateSongTransport,
-} from "@/features/song/song-transport";
+} from "../src/core/song-transport";
 
 describe("song-transport", () => {
   it("clamps bpm and loop length to the supported transport ranges", () => {

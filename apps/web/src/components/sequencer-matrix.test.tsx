@@ -48,6 +48,7 @@ function renderMatrix(overrides: Record<string, unknown> = {}) {
     onOpenMelodicTrackEditor: vi.fn(),
     onOpenTriggerTrackEditor: vi.fn(),
     onRequestLoopLengthChange: vi.fn(),
+    onRequestStepsPerBeatChange: vi.fn(),
     onMoveMelodicSelection: vi.fn(),
     onResizeMelodicStep: vi.fn(),
     onMoveNoiseSelection: vi.fn(),
@@ -146,6 +147,61 @@ describe("sequencer-matrix", () => {
     expect(screen.getByText("Recording Pulse I. Play keyboard notes.")).toBeTruthy();
   });
 
+  it("switches recording timing between beat grid and 1/8 grid", () => {
+    const onRequestStepsPerBeatChange = vi.fn();
+
+    renderMatrix({ onRequestStepsPerBeatChange });
+
+    fireEvent.click(screen.getByRole("button", { name: "Use 1/8 grid recording" }));
+
+    expect(onRequestStepsPerBeatChange).toHaveBeenCalledWith(8);
+  });
+
+  it("shows 1/8 grid in the recording status when active", () => {
+    const song = createDefaultSongDocument();
+    song.transport.stepsPerBeat = 8;
+    song.transport.loopLength = 32;
+    song.tracks.pulse1.steps = Array.from({ length: 32 }, (_, index) => song.tracks.pulse1.steps[index] ?? {
+      enabled: false,
+      note: "C4",
+      volume: song.tracks.pulse1.volume,
+      duty: 0.5,
+      length: 1,
+    });
+    song.tracks.pulse2.steps = Array.from({ length: 32 }, (_, index) => song.tracks.pulse2.steps[index] ?? {
+      enabled: false,
+      note: "C4",
+      volume: song.tracks.pulse2.volume,
+      duty: 0.5,
+      length: 1,
+    });
+    song.tracks.triangle.steps = Array.from({ length: 32 }, (_, index) => song.tracks.triangle.steps[index] ?? {
+      enabled: false,
+      note: "C3",
+      volume: song.tracks.triangle.volume,
+      length: 1,
+    });
+    song.tracks.noise.steps = Array.from({ length: 32 }, (_, index) => song.tracks.noise.steps[index] ?? {
+      enabled: false,
+      volume: song.tracks.noise.volume,
+      mode: "long",
+      periodIndex: 8,
+    });
+    song.tracks.sample.steps = Array.from({ length: 32 }, (_, index) => song.tracks.sample.steps[index] ?? {
+      enabled: false,
+      volume: song.tracks.sample.volume,
+      sampleId: null,
+      note: "C4",
+      playbackRate: 1,
+    });
+
+    renderMatrix({ song });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+
+    expect(screen.getByText("Recording Pulse I at 1/8 grid. Play keyboard notes.")).toBeTruthy();
+  });
+
   it("renders quantized record controls only for note-capable record targets", () => {
     renderMatrix();
 
@@ -203,6 +259,39 @@ describe("sequencer-matrix", () => {
     fireEvent.keyUp(document, { key: "z" });
 
     expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 3 });
+  });
+
+  it("renders a held recording note by extending its length before keyup", () => {
+    const onUpdateMelodicStep = vi.fn();
+    const { props, rerender } = renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    rerender(<SequencerMatrix {...props} nextStep={6} />);
+
+    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 3 });
+  });
+
+  it("uses sustained audio feedback while recording a held melodic note", () => {
+    const stopSustainedPreview = vi.fn();
+    const startSustainedPreviewNote = vi.fn(() => stopSustainedPreview);
+    const engine = {
+      getWaveform: vi.fn(() => new Uint8Array([128])),
+      startSustainedPreviewNote,
+    } as unknown as AudioEngine;
+
+    renderMatrix({ engine, nextStep: 3 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "z" });
+
+    expect(startSustainedPreviewNote).toHaveBeenCalledWith("pulse1", "C3", 0.5, 1);
+    expect(stopSustainedPreview).not.toHaveBeenCalled();
+
+    fireEvent.keyUp(document, { key: "z" });
+
+    expect(stopSustainedPreview).toHaveBeenCalledTimes(1);
   });
 
   it("records a quick melodic tap with minimum length 1", () => {

@@ -3,6 +3,7 @@ export * from "./core/note-frequency.js";
 export * from "./core/song-document.js";
 export * from "./core/song-pattern.js";
 export * from "./core/song-share.js";
+export * from "./core/song-transport.js";
 export * from "./core/transport-scheduler.js";
 export * from "./core/transport-worklet-shared.js";
 export * from "./core/voice-song.js";

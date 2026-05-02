@@ -79,12 +79,16 @@ import {
   resizeSampleTrimWindow,
 } from "@/features/song/song-samples";
 import {
+  canUpdateSongStepsPerBeat,
   clampSongLoopLength,
   resolveSongBpmInput,
   resolveSongLoopLengthInput,
   SONG_BPM_RANGE,
+  SONG_EIGHTH_GRID_STEPS_PER_BEAT,
   SONG_LOOP_LENGTH_RANGE,
+  type SongTimingResolution,
   songLoopLengthWouldTrimContent,
+  updateSongStepsPerBeat,
   updateSongTransport,
 } from "@/features/song/song-transport";
 
@@ -263,6 +267,25 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     }
 
     setSong((currentSong) => updateSongTransport(currentSong, { loopLength: resolvedLoopLength }));
+  };
+
+  const requestStepsPerBeatChange = (nextStepsPerBeat: SongTimingResolution) => {
+    if (song.transport.stepsPerBeat === nextStepsPerBeat) {
+      return;
+    }
+
+    if (!canUpdateSongStepsPerBeat(song, nextStepsPerBeat)) {
+      setShareStatus({
+        tone: "error",
+        message:
+          nextStepsPerBeat === SONG_EIGHTH_GRID_STEPS_PER_BEAT
+            ? "1/8 grid would exceed the maximum pattern length."
+            : "Grid mode is only available when recorded notes and triggers align to the beat grid.",
+      });
+      return;
+    }
+
+    setSong((currentSong) => updateSongStepsPerBeat(currentSong, nextStepsPerBeat));
   };
 
   const updateEngineMode = (engineMode: EngineMode) => {
@@ -1028,6 +1051,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               onOpenMelodicTrackEditor={openMelodicTrackEditor}
               onOpenTriggerTrackEditor={openTriggerTrackEditor}
               onRequestLoopLengthChange={requestLoopLengthChange}
+              onRequestStepsPerBeatChange={requestStepsPerBeatChange}
               onToggleTrackMute={toggleTrackMute}
               onUpdateTrackVolume={setTrackVolume}
               onUpdateMelodicStep={updateMelodicStep}

@@ -1,5 +1,5 @@
-import { DEFAULT_PULSE_DUTY, SONG_MAX_LOOP_LENGTH, type SongDocument } from "@/features/song/song-document";
-import { defaultDpcmRate } from "@/features/audio/dpcm";
+import { defaultDpcmRate } from "./dpcm.js";
+import { DEFAULT_PULSE_DUTY, SONG_MAX_LOOP_LENGTH, type SongDocument } from "./song-document.js";
 
 export type SongTimingResolution = 1 | 2 | 4 | 8;
 

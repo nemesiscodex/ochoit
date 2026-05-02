@@ -271,6 +271,22 @@ export class AudioEngine {
     oscillator.stop(now + durationSec + 0.01);
   }
 
+  startSustainedPreviewNote(trackId: MelodicTrackId, note: NoteValue, duty: PulseDutyValue = 0.5, volume = 0.25) {
+    if (this.context.state !== "running") {
+      return null;
+    }
+
+    if (trackId === "pulse1") {
+      return this.pulseVoice1.startSustainedPreviewNote(note, duty, volume);
+    }
+
+    if (trackId === "pulse2") {
+      return this.pulseVoice2.startSustainedPreviewNote(note, duty, volume);
+    }
+
+    return this.triangleVoice.startSustainedPreviewNote(note, volume);
+  }
+
   previewNoiseTrigger(presetId: NoiseTriggerPresetId, durationMs = 120) {
     if (this.context.state !== "running") {
       return;

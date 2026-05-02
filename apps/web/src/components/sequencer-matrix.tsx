@@ -37,7 +37,13 @@ import {
   resolveKeyboardNoteFromKey,
 } from "@/features/song/song-keyboard-input";
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
-import { SONG_LOOP_LENGTH_RANGE } from "@/features/song/song-transport";
+import {
+  canUpdateSongStepsPerBeat,
+  SONG_BEAT_GRID_STEPS_PER_BEAT,
+  SONG_EIGHTH_GRID_STEPS_PER_BEAT,
+  SONG_LOOP_LENGTH_RANGE,
+  type SongTimingResolution,
+} from "@/features/song/song-transport";
 
 import {
   accentByTrackId,
@@ -114,13 +120,16 @@ type ClipboardState =
       entries: CopiedSampleEntry[];
     };
 
+type ActiveRecordingNote = {
+    note: NoteValue;
+    stepIndex: number;
+    length: number;
+};
+
 type QuantizedRecordingState = {
   trackId: MelodicTrackId | "sample";
   startedAtLoopCount: number;
-  activeNotesByKey: Map<string, {
-    note: NoteValue;
-    stepIndex: number;
-  }>;
+  activeNotesByKey: Map<string, ActiveRecordingNote>;
 };
 
 type GridMetrics = {
@@ -193,6 +202,7 @@ export function SequencerMatrix({
   loopCount,
   onToggleTrackMute,
   onRequestLoopLengthChange,
+  onRequestStepsPerBeatChange,
   onUpdateTrackVolume,
   onOpenMelodicTrackEditor,
   onOpenTriggerTrackEditor,
@@ -215,6 +225,7 @@ export function SequencerMatrix({
   loopCount: number;
   onToggleTrackMute: (trackId: TrackId) => void;
   onRequestLoopLengthChange: (nextLoopLength: number) => void;
+  onRequestStepsPerBeatChange: (nextStepsPerBeat: SongTimingResolution) => void;
   onUpdateTrackVolume: (trackId: TrackId, volume: number) => void;
   onOpenMelodicTrackEditor: (trackId: MelodicTrackId) => void;
   onOpenTriggerTrackEditor: (trackId: TriggerTrackId) => void;
@@ -245,6 +256,7 @@ export function SequencerMatrix({
   const songRef = useRef(song);
   const recordingStateRef = useRef<QuantizedRecordingState | null>(null);
   const activeNoteLoopCountsByKeyRef = useRef<Map<string, number>>(new Map());
+  const activeRecordingPreviewStopsByKeyRef = useRef<Map<string, () => void>>(new Map());
   const lastObservedNextStepRef = useRef(nextStep);
   const lastObservedLoopCountRef = useRef(loopCount);
   const moveMelodicSelectionRef = useRef(onMoveMelodicSelection);
@@ -381,6 +393,10 @@ export function SequencerMatrix({
   };
 
   const stopQuantizedRecording = () => {
+    activeRecordingPreviewStopsByKeyRef.current.forEach((stopPreview) => {
+      stopPreview();
+    });
+    activeRecordingPreviewStopsByKeyRef.current.clear();
     recordingStateRef.current = null;
     activeNoteLoopCountsByKeyRef.current.clear();
     setRecordingTrackId(null);
@@ -415,7 +431,7 @@ export function SequencerMatrix({
     startQuantizedRecording(trackId);
   };
 
-  const previewRecordingNote = (trackId: MelodicTrackId | "sample", stepIndex: number, note: NoteValue) => {
+  const previewRecordingNote = (key: string, trackId: MelodicTrackId | "sample", stepIndex: number, note: NoteValue) => {
     if (trackId === "sample") {
       previewKeyboardInputNote({
         trackId: "sample",
@@ -426,6 +442,17 @@ export function SequencerMatrix({
         label: `PCM step ${stepIndex + 1}`,
         sampleId: song.tracks.sample.steps[stepIndex]?.sampleId ?? null,
       }, note);
+      return;
+    }
+
+    const recordingTrack = song.tracks[trackId];
+    const recordingStep = recordingTrack.steps[stepIndex];
+    const volume = recordingStep?.volume ?? recordingTrack.volume;
+    const duty = recordingTrack.kind === "pulse" ? recordingTrack.steps[stepIndex]?.duty ?? 0.5 : 0.5;
+    const stopPreview = engine?.startSustainedPreviewNote(trackId, note, duty, volume);
+
+    if (stopPreview !== null && stopPreview !== undefined) {
+      activeRecordingPreviewStopsByKeyRef.current.set(key, stopPreview);
       return;
     }
 
@@ -448,7 +475,7 @@ export function SequencerMatrix({
 
     const trackId = currentRecordingState.trackId;
     const stepIndex = clampStepIndex(lastObservedNextStepRef.current, song.transport.loopLength);
-    currentRecordingState.activeNotesByKey.set(key, { note, stepIndex });
+    currentRecordingState.activeNotesByKey.set(key, { note, stepIndex, length: 1 });
     activeNoteLoopCountsByKeyRef.current.set(key, lastObservedLoopCountRef.current);
 
     const bindingKey = getKeyboardBindingKeyForNote(note, keyboardBindings);
@@ -457,7 +484,7 @@ export function SequencerMatrix({
       flashKeyboardKey(bindingKey);
     }
 
-    previewRecordingNote(trackId, stepIndex, note);
+    previewRecordingNote(key, trackId, stepIndex, note);
 
     if (trackId === "sample") {
       const selectedStep = song.tracks.sample.steps[stepIndex];
@@ -507,22 +534,36 @@ export function SequencerMatrix({
     }
 
     const trackId = currentRecordingState.trackId;
-    const loopLength = song.transport.loopLength;
-    const releaseStep = clampStepIndex(lastObservedNextStepRef.current, loopLength);
-    const activeNoteLoopCount = activeNoteLoopCountsByKeyRef.current.get(key) ?? currentRecordingState.startedAtLoopCount;
-    const elapsedLoops = Math.max(0, lastObservedLoopCountRef.current - activeNoteLoopCount);
-    const rawDistance = elapsedLoops * loopLength + releaseStep - activeNote.stepIndex;
-    const length = Math.max(1, Math.min(loopLength - activeNote.stepIndex, rawDistance));
+    const stopPreview = activeRecordingPreviewStopsByKeyRef.current.get(key);
 
-    getConflictingMelodicOriginStepIndexes(song.tracks[trackId], activeNote.stepIndex, activeNote.stepIndex + length)
-      .filter((originStepIndex) => originStepIndex !== activeNote.stepIndex)
-      .forEach((originStepIndex) => {
-        onUpdateMelodicStep(trackId, originStepIndex, { enabled: false });
-      });
-    onUpdateMelodicStep(trackId, activeNote.stepIndex, { length });
+    if (stopPreview !== undefined) {
+      stopPreview();
+      activeRecordingPreviewStopsByKeyRef.current.delete(key);
+    }
+
+    const length = getActiveRecordingNoteLength(
+      activeNote,
+      activeNoteLoopCountsByKeyRef.current.get(key) ?? currentRecordingState.startedAtLoopCount,
+      lastObservedNextStepRef.current,
+      lastObservedLoopCountRef.current,
+      song.transport.loopLength,
+    );
+
+    commitRecordedMelodicLength(trackId, activeNote.stepIndex, length);
     currentRecordingState.activeNotesByKey.delete(key);
     activeNoteLoopCountsByKeyRef.current.delete(key);
     return true;
+  };
+
+  const commitRecordedMelodicLength = (trackId: MelodicTrackId, stepIndex: number, length: number) => {
+    const currentSong = songRef.current;
+
+    getConflictingMelodicOriginStepIndexes(currentSong.tracks[trackId], stepIndex, stepIndex + length)
+      .filter((originStepIndex) => originStepIndex !== stepIndex)
+      .forEach((originStepIndex) => {
+        onUpdateMelodicStep(trackId, originStepIndex, { enabled: false });
+      });
+    onUpdateMelodicStep(trackId, stepIndex, { length });
   };
 
   const toggleKeyboardMode = () => {
@@ -1093,6 +1134,33 @@ export function SequencerMatrix({
   ]);
 
   useEffect(() => {
+    const currentRecordingState = recordingStateRef.current;
+
+    if (currentRecordingState === null || currentRecordingState.trackId === "sample") {
+      return;
+    }
+
+    const trackId = currentRecordingState.trackId;
+
+    currentRecordingState.activeNotesByKey.forEach((activeNote, key) => {
+      const nextLength = getActiveRecordingNoteLength(
+        activeNote,
+        activeNoteLoopCountsByKeyRef.current.get(key) ?? currentRecordingState.startedAtLoopCount,
+        nextStep,
+        loopCount,
+        song.transport.loopLength,
+      );
+
+      if (nextLength === activeNote.length) {
+        return;
+      }
+
+      activeNote.length = nextLength;
+      commitRecordedMelodicLength(trackId, activeNote.stepIndex, nextLength);
+    });
+  }, [loopCount, nextStep, song.transport.loopLength]);
+
+  useEffect(() => {
     const handleKeyUp = (event: KeyboardEvent) => {
       if (isKeyboardTargetEditable(event.target)) {
         return;
@@ -1185,9 +1253,11 @@ export function SequencerMatrix({
             setKeyboardBaseOctave((currentValue) => clampKeyboardBaseOctave(currentValue + 1));
           }}
           onRequestLoopLengthChange={onRequestLoopLengthChange}
+          onRequestStepsPerBeatChange={onRequestStepsPerBeatChange}
           onToggleKeyboardMode={toggleKeyboardMode}
           playbackState={playbackState}
           recordingTrackId={recordingTrackId}
+          song={song}
         />
       ) : null}
       {tracks.map((track) => {
@@ -1360,6 +1430,20 @@ function clampStepIndex(stepIndex: number, loopLength: number) {
   return Math.max(0, Math.min(loopLength - 1, stepIndex));
 }
 
+function getActiveRecordingNoteLength(
+  activeNote: ActiveRecordingNote,
+  activeNoteLoopCount: number,
+  nextStep: number,
+  loopCount: number,
+  loopLength: number,
+) {
+  const releaseStep = clampStepIndex(nextStep, loopLength);
+  const elapsedLoops = Math.max(0, loopCount - activeNoteLoopCount);
+  const rawDistance = elapsedLoops * loopLength + releaseStep - activeNote.stepIndex;
+
+  return Math.max(1, Math.min(loopLength - activeNote.stepIndex, rawDistance));
+}
+
 function getConflictingMelodicOriginStepIndexes(
   track: Extract<Track, { kind: "pulse" | "triangle" }>,
   startStepIndex: number,
@@ -1478,9 +1562,11 @@ function StepRuler({
   onKeyboardBaseOctaveDecrease,
   onKeyboardBaseOctaveIncrease,
   onRequestLoopLengthChange,
+  onRequestStepsPerBeatChange,
   onToggleKeyboardMode,
   playbackState,
   recordingTrackId,
+  song,
 }: {
   activeKeyboardKey: string | null;
   keyboardBaseOctave: number;
@@ -1493,17 +1579,23 @@ function StepRuler({
   onKeyboardBaseOctaveDecrease: () => void;
   onKeyboardBaseOctaveIncrease: () => void;
   onRequestLoopLengthChange: (nextLoopLength: number) => void;
+  onRequestStepsPerBeatChange: (nextStepsPerBeat: SongTimingResolution) => void;
   onToggleKeyboardMode: () => void;
   playbackState: "stopped" | "playing";
   recordingTrackId: QuantizedRecordingState["trackId"] | null;
+  song: SongDocument;
 }) {
   const canDecrease = loopLength > SONG_LOOP_LENGTH_RANGE.min;
   const canIncrease = loopLength < SONG_LOOP_LENGTH_RANGE.max;
+  const canUseBeatGrid = canUpdateSongStepsPerBeat(song, SONG_BEAT_GRID_STEPS_PER_BEAT);
+  const canUseEighthGrid = canUpdateSongStepsPerBeat(song, SONG_EIGHTH_GRID_STEPS_PER_BEAT);
+  const isBeatGrid = song.transport.stepsPerBeat === SONG_BEAT_GRID_STEPS_PER_BEAT;
+  const isEighthGrid = song.transport.stepsPerBeat === SONG_EIGHTH_GRID_STEPS_PER_BEAT;
   const canLowerKeyboardOctave = keyboardBaseOctave > keyboardBaseOctaveMin;
   const canRaiseKeyboardOctave = keyboardBaseOctave < keyboardBaseOctaveMax;
   const keyboardTargetSummary =
     recordingTrackId !== null
-      ? `Recording ${labelByTrackId[recordingTrackId]}. Play keyboard notes.`
+      ? `Recording ${labelByTrackId[recordingTrackId]}${isEighthGrid ? " at 1/8 grid" : ""}. Play keyboard notes.`
       : keyboardTarget === null
       ? "Select a melodic or inspired PCM step to use note-entry mode."
       : keyboardModeEnabled
@@ -1525,6 +1617,46 @@ function StepRuler({
         </div>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center justify-end gap-1">
+            <div className="mr-1 flex h-7 overflow-hidden rounded-md border border-white/[0.08] bg-black/20">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Use beat grid recording"
+                aria-pressed={isBeatGrid}
+                disabled={!canUseBeatGrid}
+                className={cn(
+                  "h-7 rounded-none border-0 px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
+                  isBeatGrid
+                    ? "bg-[var(--oc-play)]/12 text-[var(--oc-play)]"
+                    : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+                )}
+                onClick={() => {
+                  onRequestStepsPerBeatChange(SONG_BEAT_GRID_STEPS_PER_BEAT);
+                }}
+              >
+                Grid
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label="Use 1/8 grid recording"
+                aria-pressed={isEighthGrid}
+                disabled={!canUseEighthGrid}
+                className={cn(
+                  "h-7 rounded-none border-0 border-l border-white/[0.08] px-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]",
+                  isEighthGrid
+                    ? "bg-[var(--oc-play)]/12 text-[var(--oc-play)]"
+                    : "text-white/45 hover:bg-white/[0.06] hover:text-white/75",
+                )}
+                onClick={() => {
+                  onRequestStepsPerBeatChange(SONG_EIGHTH_GRID_STEPS_PER_BEAT);
+                }}
+              >
+                1/8
+              </Button>
+            </div>
             <Button
               type="button"
               variant="outline"

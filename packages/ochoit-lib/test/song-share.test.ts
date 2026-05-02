@@ -44,6 +44,57 @@ describe("song-share", () => {
     expect(parsedSong.tracks.sample.steps).toHaveLength(4);
   });
 
+  it("round-trips songs that use the 1/8 recording grid", () => {
+    const song = createEmptySongDocument();
+    song.transport.stepsPerBeat = 8;
+    song.transport.loopLength = 32;
+    song.tracks.pulse1.steps = Array.from({ length: 32 }, (_, index) => song.tracks.pulse1.steps[index] ?? {
+      enabled: false,
+      note: "C4",
+      volume: song.tracks.pulse1.volume,
+      duty: 0.5,
+      length: 1,
+    });
+    song.tracks.pulse1.steps[6] = {
+      ...song.tracks.pulse1.steps[6],
+      enabled: true,
+      note: "D4",
+      length: 4,
+    };
+    song.tracks.pulse2.steps = Array.from({ length: 32 }, (_, index) => song.tracks.pulse2.steps[index] ?? {
+      enabled: false,
+      note: "C4",
+      volume: song.tracks.pulse2.volume,
+      duty: 0.5,
+      length: 1,
+    });
+    song.tracks.triangle.steps = Array.from({ length: 32 }, (_, index) => song.tracks.triangle.steps[index] ?? {
+      enabled: false,
+      note: "C3",
+      volume: song.tracks.triangle.volume,
+      length: 1,
+    });
+    song.tracks.noise.steps = Array.from({ length: 32 }, (_, index) => song.tracks.noise.steps[index] ?? {
+      enabled: false,
+      volume: song.tracks.noise.volume,
+      mode: "long",
+      periodIndex: 8,
+    });
+    song.tracks.sample.steps = Array.from({ length: 32 }, (_, index) => song.tracks.sample.steps[index] ?? {
+      enabled: false,
+      volume: song.tracks.sample.volume,
+      sampleId: null,
+      note: "C4",
+      playbackRate: defaultDpcmRate,
+    });
+
+    const parsedSong = parseSongSharePayload(serializeSongSharePayload(song));
+
+    expect(parsedSong.transport.stepsPerBeat).toBe(8);
+    expect(parsedSong.transport.loopLength).toBe(32);
+    expect(parsedSong.tracks.pulse1.steps[6]).toMatchObject({ enabled: true, note: "D4", length: 4 });
+  });
+
   it("reads a song from the URL hash", () => {
     const song = createDefaultSongDocument();
     song.meta.name = "Shared Loop";

@@ -8,6 +8,11 @@ const noteReleaseSeconds = 0.02;
 const sourceStopPaddingSeconds = 0.01;
 const silentGainFloor = 0.0001;
 export const TRIANGLE_OUTPUT_GAIN = 1.7;
+type ActiveTriangleNote = {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  releaseLevel: number;
+};
 const authenticTriangleSequence = [
   15, 14, 13, 12, 11, 10, 9, 8,
   7, 6, 5, 4, 3, 2, 1, 0,
@@ -96,36 +101,23 @@ export class TriangleVoice {
       return;
     }
 
-    const source = this.context.createBufferSource();
-    const gain = this.context.createGain();
-    const buffer = this.getWaveBuffer();
     const noteDuration = Math.max(this.stepDuration * step.length - noteAttackSeconds, noteAttackSeconds);
     const noteEndTime = time + noteDuration;
     const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
-    const playbackRate = (getFrequencyForNote(step.note) * buffer.length) / buffer.sampleRate;
-
-    source.buffer = buffer;
-    source.loop = true;
-    source.playbackRate.setValueAtTime(playbackRate, time);
-
-    gain.gain.cancelScheduledValues(time);
-    gain.gain.setValueAtTime(0, time);
     const outputGain = getTriangleOutputGain(step.volume);
 
-    gain.gain.linearRampToValueAtTime(outputGain, time + noteAttackSeconds);
-    gain.gain.setValueAtTime(outputGain, releaseStartTime);
-    gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
+    const activeNote = this.startNote(step.note, outputGain, time);
+    activeNote.gain.gain.setValueAtTime(outputGain, releaseStartTime);
+    activeNote.gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
+    activeNote.source.stop(noteEndTime + sourceStopPaddingSeconds);
+  }
 
-    source.connect(gain);
-    gain.connect(this.output);
+  startSustainedPreviewNote(note: string, volume = 0.25) {
+    const activeNote = this.startNote(note, getTriangleOutputGain(volume), this.context.currentTime);
 
-    source.onended = () => {
-      source.disconnect();
-      gain.disconnect();
+    return () => {
+      this.releaseNote(activeNote, this.context.currentTime);
     };
-
-    source.start(time);
-    source.stop(noteEndTime + sourceStopPaddingSeconds);
   }
 
   private getWaveBuffer() {
@@ -140,5 +132,43 @@ export class TriangleVoice {
     channel.set(createTriangleCycle(triangleCycleFrameCount, this.engineMode));
     this.waveBufferByMode.set(this.engineMode, buffer);
     return buffer;
+  }
+
+  private startNote(note: string, outputGain: number, time: number): ActiveTriangleNote {
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    const buffer = this.getWaveBuffer();
+    const playbackRate = (getFrequencyForNote(note) * buffer.length) / buffer.sampleRate;
+
+    source.buffer = buffer;
+    source.loop = true;
+    source.playbackRate.setValueAtTime(playbackRate, time);
+
+    gain.gain.cancelScheduledValues(time);
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(outputGain, time + noteAttackSeconds);
+
+    source.connect(gain);
+    gain.connect(this.output);
+
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+    };
+
+    source.start(time);
+
+    return {
+      source,
+      gain,
+      releaseLevel: outputGain,
+    };
+  }
+
+  private releaseNote(activeNote: ActiveTriangleNote, time: number) {
+    activeNote.gain.gain.cancelScheduledValues(time);
+    activeNote.gain.gain.setValueAtTime(activeNote.releaseLevel, time);
+    activeNote.gain.gain.linearRampToValueAtTime(silentGainFloor, time + noteReleaseSeconds);
+    activeNote.source.stop(time + noteReleaseSeconds + sourceStopPaddingSeconds);
   }
 }

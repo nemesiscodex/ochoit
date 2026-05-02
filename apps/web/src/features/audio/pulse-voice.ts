@@ -9,6 +9,11 @@ const sourceStopPaddingSeconds = 0.01;
 const silentGainFloor = 0.0001;
 
 type PulseDuty = PulseTrack["steps"][number]["duty"];
+type ActivePulseNote = {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  releaseLevel: number;
+};
 
 const dutyThresholdByFrameCount = new Map<string, number>();
 const authenticPulseSequenceByDuty: Record<PulseDuty, readonly number[]> = {
@@ -108,6 +113,14 @@ export class PulseVoice {
     this.playNote(note, duty, volume, this.context.currentTime, durationMs / 1000);
   }
 
+  startSustainedPreviewNote(note: string, duty: PulseDuty, volume = 0.25) {
+    const activeNote = this.startNote(note, duty, volume, this.context.currentTime);
+
+    return () => {
+      this.releaseNote(activeNote, this.context.currentTime);
+    };
+  }
+
   private getWaveBuffer(duty: PulseDuty) {
     const cacheKey = `${this.engineMode}:${duty}`;
     const cachedBuffer = this.waveBufferByDutyAndMode.get(cacheKey);
@@ -124,12 +137,20 @@ export class PulseVoice {
   }
 
   private playNote(note: string, duty: PulseDuty, volume: number, time: number, durationSeconds: number) {
-    const source = this.context.createBufferSource();
-    const gain = this.context.createGain();
-    const buffer = this.getWaveBuffer(duty);
+    const activeNote = this.startNote(note, duty, volume, time);
     const noteDuration = Math.max(durationSeconds, noteAttackSeconds);
     const noteEndTime = time + noteDuration;
     const releaseStartTime = Math.max(time + noteAttackSeconds, noteEndTime - noteReleaseSeconds);
+
+    activeNote.gain.gain.setValueAtTime(volume, releaseStartTime);
+    activeNote.gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
+    activeNote.source.stop(noteEndTime + sourceStopPaddingSeconds);
+  }
+
+  private startNote(note: string, duty: PulseDuty, volume: number, time: number): ActivePulseNote {
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    const buffer = this.getWaveBuffer(duty);
     const playbackRate = (getFrequencyForNote(note) * buffer.length) / buffer.sampleRate;
 
     source.buffer = buffer;
@@ -139,8 +160,6 @@ export class PulseVoice {
     gain.gain.cancelScheduledValues(time);
     gain.gain.setValueAtTime(0, time);
     gain.gain.linearRampToValueAtTime(volume, time + noteAttackSeconds);
-    gain.gain.setValueAtTime(volume, releaseStartTime);
-    gain.gain.linearRampToValueAtTime(silentGainFloor, noteEndTime);
 
     source.connect(gain);
     gain.connect(this.output);
@@ -151,6 +170,18 @@ export class PulseVoice {
     };
 
     source.start(time);
-    source.stop(noteEndTime + sourceStopPaddingSeconds);
+
+    return {
+      source,
+      gain,
+      releaseLevel: volume,
+    };
+  }
+
+  private releaseNote(activeNote: ActivePulseNote, time: number) {
+    activeNote.gain.gain.cancelScheduledValues(time);
+    activeNote.gain.gain.setValueAtTime(activeNote.releaseLevel, time);
+    activeNote.gain.gain.linearRampToValueAtTime(silentGainFloor, time + noteReleaseSeconds);
+    activeNote.source.stop(time + noteReleaseSeconds + sourceStopPaddingSeconds);
   }
 }

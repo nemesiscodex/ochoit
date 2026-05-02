@@ -169,6 +169,36 @@ describe("workstation-shell", () => {
     expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
+  it("switches the sequencer between beat grid and 1/8 recording grid", () => {
+    renderWorkstationShell(createEmptySongDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Use 1/8 grid recording" }));
+
+    expect(screen.getByText("32 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+
+    let latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.transport.stepsPerBeat).toBe(8);
+    expect(latestSong.transport.loopLength).toBe(32);
+
+    fireEvent.click(screen.getByRole("button", { name: "Use beat grid recording" }));
+
+    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+
+    latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.transport.stepsPerBeat).toBe(4);
+    expect(latestSong.transport.loopLength).toBe(16);
+  });
+
   it("confirms before shrinking the pattern when content would be removed", () => {
     const song = createEmptySongDocument();
     song.tracks.pulse1.steps[12] = {
