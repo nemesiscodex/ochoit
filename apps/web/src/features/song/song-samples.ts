@@ -1,4 +1,4 @@
-import type { SerializedSampleAsset, SongDocument } from "@/features/song/song-document";
+import type { SerializedSampleAsset, SongDocument } from "ochoit-lib";
 
 export type SampleTrimUpdate = {
   endFrame?: number;

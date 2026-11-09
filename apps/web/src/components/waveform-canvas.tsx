@@ -1,134 +1,45 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { cn } from "@ochoit/ui/lib/utils";
+import type { TrackId } from "ochoit-lib";
+import type { AudioEngine } from "ochoit-lib/web";
 
-type WaveformCanvasProps = {
+import { WAVEFORM_SAMPLE_SIZE, createFlatWaveform } from "@/features/audio/waveform-data";
+import {
+  createWaveformPainter,
+  defaultWaveformColors,
+  sameSamples,
+  type WaveformColors,
+} from "@/features/audio/waveform-painter";
+
+const liveWaveformIntervalMs = 1000 / 30;
+const frameJitterMs = 2;
+
+type WaveformCanvasProps = Partial<WaveformColors> & {
   ariaLabel: string;
   samples: ArrayLike<number>;
   className?: string;
-  backgroundColor?: string;
-  glowColor?: string;
-  gridColor?: string;
-  lineColor?: string;
 };
 
-type DrawConfig = Required<Pick<WaveformCanvasProps, "backgroundColor" | "glowColor" | "gridColor" | "lineColor">> & {
-  samples: ArrayLike<number>;
+type TrackWaveformCanvasProps = Partial<WaveformColors> & {
+  ariaLabel: string;
+  engine: AudioEngine | null;
+  trackId: TrackId;
+  fallbackWaveform?: Uint8Array;
+  sampleSize?: number;
+  className?: string;
 };
 
-const defaultDrawConfig: DrawConfig = {
-  samples: new Uint8Array([128]),
-  backgroundColor: "rgba(5, 8, 22, 0.94)",
-  glowColor: "rgba(139, 211, 255, 0.28)",
-  gridColor: "rgba(255, 255, 255, 0.12)",
-  lineColor: "#8bd3ff",
-};
-
-function getCanvasSize(canvas: HTMLCanvasElement) {
-  const bounds = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.round(bounds.width || canvas.clientWidth || 320));
-  const height = Math.max(1, Math.round(bounds.height || canvas.clientHeight || 80));
-
-  return { width, height };
-}
-
-function toWaveformY(sample: number, height: number) {
-  const normalizedSample = (sample - 128) / 128;
-  const amplitude = (height / 2) * 0.82;
-  return height / 2 - normalizedSample * amplitude;
-}
-
-export function WaveformCanvas({
-  ariaLabel,
-  samples,
-  className,
-  backgroundColor = defaultDrawConfig.backgroundColor,
-  glowColor = defaultDrawConfig.glowColor,
-  gridColor = defaultDrawConfig.gridColor,
-  lineColor = defaultDrawConfig.lineColor,
-}: WaveformCanvasProps) {
+function useWaveformSurface(colors: WaveformColors) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawConfigRef = useRef<DrawConfig>(defaultDrawConfig);
+  const painterRef = useRef<ReturnType<typeof createWaveformPainter> | null>(null);
+  const samplesRef = useRef<ArrayLike<number> | null>(null);
+  const colorsRef = useRef(colors);
+  colorsRef.current = colors;
 
-  drawConfigRef.current = {
-    samples,
-    backgroundColor,
-    glowColor,
-    gridColor,
-    lineColor,
-  };
-
-  const drawCanvas = useCallback((canvas: HTMLCanvasElement) => {
-    if (typeof CanvasRenderingContext2D === "undefined") {
-      return;
-    }
-
-    let context: CanvasRenderingContext2D | null = null;
-
-    try {
-      context = canvas.getContext("2d");
-    } catch {
-      return;
-    }
-
-    if (context === null) {
-      return;
-    }
-
-    const { width, height } = getCanvasSize(canvas);
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    const { samples: nextSamples, backgroundColor, glowColor, gridColor, lineColor } = drawConfigRef.current;
-
-    canvas.width = Math.max(1, Math.round(width * devicePixelRatio));
-    canvas.height = Math.max(1, Math.round(height * devicePixelRatio));
-
-    context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    context.clearRect(0, 0, width, height);
-    context.fillStyle = backgroundColor;
-    context.fillRect(0, 0, width, height);
-
-    context.beginPath();
-    context.strokeStyle = gridColor;
-    context.lineWidth = 1;
-    context.moveTo(0, height / 2);
-    context.lineTo(width, height / 2);
-    context.stroke();
-
-    if (nextSamples.length === 0) {
-      return;
-    }
-
-    const lastSampleIndex = nextSamples.length - 1;
-
-    const drawWavePath = () => {
-      context.beginPath();
-
-      for (let index = 0; index < nextSamples.length; index += 1) {
-        const sample = nextSamples[index] ?? 128;
-        const x = lastSampleIndex === 0 ? 0 : (index / lastSampleIndex) * width;
-        const y = toWaveformY(sample, height);
-
-        if (index === 0) {
-          context.moveTo(x, y);
-          continue;
-        }
-
-        context.lineTo(x, y);
-      }
-    };
-
-    context.save();
-    context.globalAlpha = 0.45;
-    context.strokeStyle = glowColor;
-    context.lineWidth = 3;
-    drawWavePath();
-    context.stroke();
-    context.restore();
-
-    context.strokeStyle = lineColor;
-    context.lineWidth = 1.5;
-    drawWavePath();
-    context.stroke();
+  const draw = useCallback((samples: ArrayLike<number>) => {
+    samplesRef.current = samples;
+    painterRef.current?.paint(samples, colorsRef.current);
   }, []);
 
   useEffect(() => {
@@ -138,37 +49,140 @@ export function WaveformCanvas({
       return;
     }
 
-    drawCanvas(canvas);
-  }, [drawCanvas, samples, backgroundColor, glowColor, gridColor, lineColor]);
+    const painter = createWaveformPainter(canvas);
+    painterRef.current = painter;
+    painter.measure();
+
+    if (samplesRef.current !== null) {
+      painter.paint(samplesRef.current, colorsRef.current);
+    }
+
+    const handleResize = () => {
+      if (painter.measure() && samplesRef.current !== null) {
+        painter.paint(samplesRef.current, colorsRef.current);
+      }
+    };
+
+    let cleanup: () => void;
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(handleResize);
+      observer.observe(canvas);
+      cleanup = () => observer.disconnect();
+    } else {
+      window.addEventListener("resize", handleResize);
+      cleanup = () => window.removeEventListener("resize", handleResize);
+    }
+
+    return () => {
+      cleanup();
+      painterRef.current = null;
+    };
+  }, []);
+
+  const { backgroundColor, glowColor, gridColor, lineColor } = colors;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    if (samplesRef.current !== null) {
+      painterRef.current?.paint(samplesRef.current, colorsRef.current);
+    }
+  }, [backgroundColor, glowColor, gridColor, lineColor]);
 
-    if (canvas === null) {
+  return { canvasRef, draw };
+}
+
+function resolveColors(colors: Partial<WaveformColors>): WaveformColors {
+  return {
+    backgroundColor: colors.backgroundColor ?? defaultWaveformColors.backgroundColor,
+    glowColor: colors.glowColor ?? defaultWaveformColors.glowColor,
+    gridColor: colors.gridColor ?? defaultWaveformColors.gridColor,
+    lineColor: colors.lineColor ?? defaultWaveformColors.lineColor,
+  };
+}
+
+export function WaveformCanvas({ ariaLabel, samples, className, ...colorOverrides }: WaveformCanvasProps) {
+  const { backgroundColor, glowColor, gridColor, lineColor } = resolveColors(colorOverrides);
+  const colors = useMemo(
+    () => ({ backgroundColor, glowColor, gridColor, lineColor }),
+    [backgroundColor, glowColor, gridColor, lineColor],
+  );
+  const { canvasRef, draw } = useWaveformSurface(colors);
+
+  useEffect(() => {
+    draw(samples);
+  }, [draw, samples]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={ariaLabel}
+      className={cn("block h-full w-full rounded-none", className)}
+    />
+  );
+}
+
+export function TrackWaveformCanvas({
+  ariaLabel,
+  engine,
+  trackId,
+  fallbackWaveform,
+  sampleSize = WAVEFORM_SAMPLE_SIZE,
+  className,
+  ...colorOverrides
+}: TrackWaveformCanvasProps) {
+  const { backgroundColor, glowColor, gridColor, lineColor } = resolveColors(colorOverrides);
+  const colors = useMemo(
+    () => ({ backgroundColor, glowColor, gridColor, lineColor }),
+    [backgroundColor, glowColor, gridColor, lineColor],
+  );
+  const { canvasRef, draw } = useWaveformSurface(colors);
+  const idleWaveform = useMemo(
+    () => fallbackWaveform ?? createFlatWaveform(sampleSize),
+    [fallbackWaveform, sampleSize],
+  );
+
+  useEffect(() => {
+    if (engine === null) {
+      draw(idleWaveform);
       return;
     }
 
-    const redraw = () => {
-      drawCanvas(canvas);
+    let isActive = true;
+    let lastCaptureAt = -Infinity;
+    let frameId: number | null = null;
+    let previous = engine.getWaveform(trackId, sampleSize);
+
+    draw(previous);
+
+    const capture = (time: number) => {
+      if (!isActive) {
+        return;
+      }
+
+      if (time - lastCaptureAt >= liveWaveformIntervalMs - frameJitterMs) {
+        lastCaptureAt = time;
+        const next = engine.getWaveform(trackId, sampleSize);
+
+        if (!sameSamples(previous, next)) {
+          previous = next;
+          draw(next);
+        }
+      }
+
+      frameId = window.requestAnimationFrame(capture);
     };
 
-    redraw();
-
-    if (typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(redraw);
-      observer.observe(canvas);
-
-      return () => {
-        observer.disconnect();
-      };
-    }
-
-    window.addEventListener("resize", redraw);
+    frameId = window.requestAnimationFrame(capture);
 
     return () => {
-      window.removeEventListener("resize", redraw);
+      isActive = false;
+
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
     };
-  }, [drawCanvas]);
+  }, [draw, engine, idleWaveform, sampleSize, trackId]);
 
   return (
     <canvas

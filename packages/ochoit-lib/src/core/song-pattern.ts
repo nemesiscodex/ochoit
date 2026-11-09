@@ -468,26 +468,43 @@ export function resizeMelodicTrackStep(
 
   const track = song.tracks[trackId];
   const entries = getMelodicTrackEntriesWithVolume(track);
-  const entryIndex = entries.findIndex((entry) => entry.stepIndex === stepIndex);
+  const currentEntry = entries.find((entry) => entry.stepIndex === stepIndex);
+  const resizedSpan = getResizedMelodicNote(track, stepIndex, nextStartStepIndex, nextLength);
 
-  if (entryIndex === -1) {
+  if (
+    currentEntry === undefined ||
+    resizedSpan === null ||
+    (resizedSpan.stepIndex === currentEntry.stepIndex && resizedSpan.length === currentEntry.length)
+  ) {
     return song;
   }
 
+  const nextEntries = entries.filter((entry) => entry !== currentEntry);
+  return replaceMelodicTrack(trackId, song, buildMelodicTrack(track, [...nextEntries, { ...currentEntry, ...resizedSpan }]));
+}
+
+/** The span a resize of the note starting at `stepIndex` lands on, or null when no note starts there. */
+export function getResizedMelodicNote(
+  track: MelodicTrack,
+  stepIndex: number,
+  nextStartStepIndex: number,
+  nextLength: number,
+): { stepIndex: number; length: number } | null {
+  const entries = getMelodicArrangementEntries(track);
+  const entryIndex = entries.findIndex((entry) => entry.stepIndex === stepIndex);
   const currentEntry = entries[entryIndex];
 
   if (currentEntry === undefined) {
-    return song;
+    return null;
   }
 
   const previousEntry = entryIndex > 0 ? entries[entryIndex - 1] ?? null : null;
-  const nextEntry = entryIndex < entries.length - 1 ? entries[entryIndex + 1] ?? null : null;
   const requestedStart = Math.round(nextStartStepIndex);
   const requestedLength = Math.max(minMelodicStepLength, Math.round(nextLength));
   const requestedEndExclusive = requestedStart + requestedLength;
   const currentEndExclusive = currentEntry.stepIndex + currentEntry.length;
   const minimumStart = previousEntry === null ? 0 : previousEntry.stepIndex + previousEntry.length;
-  const maximumEndExclusive = nextEntry === null ? track.steps.length : nextEntry.stepIndex;
+  const maximumEndExclusive = currentEntry.stepIndex + getMelodicTrackMaxLength(track, currentEntry.stepIndex);
   const clampedStart = Math.max(
     minimumStart,
     Math.min(requestedStart, Math.min(currentEndExclusive - minMelodicStepLength, track.steps.length - 1)),
@@ -496,21 +513,8 @@ export function resizeMelodicTrackStep(
     clampedStart + minMelodicStepLength,
     Math.min(requestedEndExclusive, maximumEndExclusive, track.steps.length),
   );
-  const resizedEntry: MelodicTrackEntryWithVolume = {
-    ...currentEntry,
-    stepIndex: clampedStart,
-    length: clampedEndExclusive - clampedStart,
-  };
 
-  if (
-    resizedEntry.stepIndex === currentEntry.stepIndex &&
-    resizedEntry.length === currentEntry.length
-  ) {
-    return song;
-  }
-
-  const nextEntries = entries.filter((_, index) => index !== entryIndex);
-  return replaceMelodicTrack(trackId, song, buildMelodicTrack(track, [...nextEntries, resizedEntry]));
+  return { stepIndex: clampedStart, length: clampedEndExclusive - clampedStart };
 }
 
 export function moveNoiseTrackEntries(song: SongDocument, selectedStepIndexes: number[], delta: number): SongDocument {

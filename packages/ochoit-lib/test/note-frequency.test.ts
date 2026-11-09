@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getFrequencyForNote } from "@/features/audio/note-frequency";
+import { getFrequencyForNote } from "../src/core/note-frequency.js";
 
 describe("note-frequency", () => {
   it("uses A4 as the 440 Hz reference pitch", () => {

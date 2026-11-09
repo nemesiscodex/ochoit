@@ -3,6 +3,8 @@ import { startTransition, useEffect, useRef, useState } from "react";
 import { type SongDocument } from "ochoit-lib";
 import { AudioEngine, ochoit, type AudioTransportEvent, type AudioTransportSnapshot } from "ochoit-lib/web";
 
+import { createPlayheadStore } from "@/features/audio/playhead-store";
+
 export type AudioBootstrapState =
   | "idle"
   | "initializing"
@@ -35,12 +37,8 @@ export function useAudioEngine(song: SongDocument) {
   const transportTimerGenerationRef = useRef(0);
   const [engineState, setEngineState] = useState<AudioBootstrapState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [transportState, setTransportState] = useState<AudioTransportSnapshot>({
-    playbackState: "stopped",
-    nextStep: 0,
-    nextStepTime: null,
-    loopCount: 0,
-  });
+  const [playbackState, setPlaybackState] = useState<AudioTransportSnapshot["playbackState"]>("stopped");
+  const [playhead] = useState(createPlayheadStore);
 
   const syncState = (engine: AudioEngine | null) => {
     startTransition(() => {
@@ -67,14 +65,7 @@ export function useAudioEngine(song: SongDocument) {
             return;
           }
 
-          startTransition(() => {
-            setTransportState({
-              playbackState: "playing",
-              nextStep: step.step,
-              nextStepTime: step.time,
-              loopCount: step.loopCount,
-            });
-          });
+          playhead.set({ nextStep: step.step, loopCount: step.loopCount });
         }, delayMs);
 
         scheduledTransportTimersRef.current.push(timerId);
@@ -82,25 +73,15 @@ export function useAudioEngine(song: SongDocument) {
       return;
     }
 
+    // Not a transition: React 19 batches this default-lane update with the playhead store's sync
+    // re-render, so no frame shows the reset step while playback still reads as playing.
+    setPlaybackState(event.snapshot.playbackState);
+
     if (event.snapshot.playbackState === "stopped") {
       transportTimerGenerationRef.current += 1;
       clearScheduledTransportTimers(scheduledTransportTimersRef.current);
-      startTransition(() => {
-        setTransportState(event.snapshot);
-      });
-      return;
+      playhead.set({ nextStep: event.snapshot.nextStep, loopCount: event.snapshot.loopCount });
     }
-
-    startTransition(() => {
-      setTransportState((currentState) =>
-        currentState.playbackState === event.snapshot.playbackState
-          ? currentState
-          : {
-              ...currentState,
-              playbackState: event.snapshot.playbackState,
-            },
-      );
-    });
   };
 
   const initializeAudio = async () => {
@@ -209,7 +190,8 @@ export function useAudioEngine(song: SongDocument) {
     engine: engineRef.current,
     engineState,
     errorMessage,
-    transportState,
+    playbackState,
+    playhead,
     initializeAudio,
     suspendAudio,
     startTransport,

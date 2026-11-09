@@ -1,22 +1,19 @@
 import { Button } from "@ochoit/ui/components/button";
 import { cn } from "@ochoit/ui/lib/utils";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import {
   formatNoiseConfigLabel,
   formatPlaybackRateLabel,
   formatPulseDutyLabel,
-  getDefaultSampleTrigger,
   getFrequencyForNote,
   getMelodicStepState,
   getMelodicTrackMaxLength,
   getNoiseTriggerPresetForStep,
-  isMelodicTrackId,
   noiseTriggerPresets,
   pulseDutyOptions,
   sampleDpcmRateOptions,
   type MelodicStepUpdates,
-  type MelodicTrackId,
   type NoiseStepUpdates,
   type NoiseTrack,
   type NoteValue,
@@ -24,7 +21,8 @@ import {
   type SampleStepUpdates,
   type SampleTrack,
   type SongDocument,
-  type TrackId,
+  type SongEdit,
+  type Track,
   type TriangleTrack,
 } from "ochoit-lib";
 import type { AudioEngine } from "ochoit-lib/web";
@@ -33,90 +31,79 @@ import type { EngineMode } from "@/features/song/pcm-mode";
 import { labelByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
 
-export type StepSelection = {
-  trackId: TrackId;
-  stepIndex: number;
-};
-
 const STEP_VOLUME_PERCENT_MAX = 100;
 const noiseModes = ["long", "short"] as const satisfies readonly NoiseTrack["steps"][number]["mode"][];
 const noisePeriodRange = { min: 0, max: 15 } as const;
 
-export function StepDetailPanel({
-  defaultSampleId,
+/** Takes the selected row's own track so an edit or drag on another row, or a drag preview, skips it. */
+export const StepDetailPanel = memo(function StepDetailPanel({
   engine,
+  engineMode,
   onDeselect,
-  onUpdateMelodicStep,
-  onUpdateNoiseStep,
-  onUpdateSampleStep,
+  onEdit,
   samples,
-  selection,
-  song,
+  stepDurationMs,
+  stepIndex,
+  track,
 }: {
-  defaultSampleId: string | null;
   engine: AudioEngine | null;
+  engineMode: EngineMode;
   onDeselect: () => void;
-  onUpdateMelodicStep: (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => void;
-  onUpdateNoiseStep: (stepIndex: number, updates: NoiseStepUpdates) => void;
-  onUpdateSampleStep: (stepIndex: number, updates: SampleStepUpdates) => void;
+  onEdit: (edit: SongEdit) => void;
   samples: SongDocument["samples"];
-  selection: StepSelection;
-  song: SongDocument;
+  stepDurationMs: number;
+  stepIndex: number;
+  track: Track;
 }) {
-  const accentColor = waveformLineColorByTrackId[selection.trackId];
-  const trackLabel = labelByTrackId[selection.trackId];
+  const accentColor = waveformLineColorByTrackId[track.id];
+  const trackLabel = labelByTrackId[track.id];
 
-  if (isMelodicTrackId(selection.trackId)) {
-    const melodicTrackId = selection.trackId;
-    const melodicTrack = song.tracks[melodicTrackId];
+  switch (track.kind) {
+    case "pulse":
+    case "triangle": {
+      const trackId = track.id;
 
-    return (
-      <MelodicStepDetail
-        accentColor={accentColor}
-        engine={engine}
-        onDeselect={onDeselect}
-        onUpdate={(updates) => onUpdateMelodicStep(melodicTrackId, selection.stepIndex, updates)}
-        song={song}
-        stepIndex={selection.stepIndex}
-        track={melodicTrack}
-        trackLabel={trackLabel}
-      />
-    );
+      return (
+        <MelodicStepDetail
+          accentColor={accentColor}
+          engine={engine}
+          onDeselect={onDeselect}
+          onUpdate={(changes) => onEdit({ type: "update-step", trackId, stepIndex, changes })}
+          stepDurationMs={stepDurationMs}
+          stepIndex={stepIndex}
+          track={track}
+          trackLabel={trackLabel}
+        />
+      );
+    }
+    case "noise":
+      return (
+        <NoiseStepDetail
+          accentColor={accentColor}
+          engine={engine}
+          onDeselect={onDeselect}
+          onUpdate={(changes) => onEdit({ type: "update-step", trackId: "noise", stepIndex, changes })}
+          stepIndex={stepIndex}
+          track={track}
+          trackLabel={trackLabel}
+        />
+      );
+    case "sample":
+      return (
+        <SampleStepDetail
+          accentColor={accentColor}
+          engineMode={engineMode}
+          engine={engine}
+          onDeselect={onDeselect}
+          onUpdate={(changes) => onEdit({ type: "update-step", trackId: "sample", stepIndex, changes })}
+          samples={samples}
+          stepIndex={stepIndex}
+          track={track}
+          trackLabel={trackLabel}
+        />
+      );
   }
-
-  if (selection.trackId === "noise") {
-    return (
-      <NoiseStepDetail
-        accentColor={accentColor}
-        engine={engine}
-        onDeselect={onDeselect}
-        onUpdate={(updates) => onUpdateNoiseStep(selection.stepIndex, updates)}
-        stepIndex={selection.stepIndex}
-        track={song.tracks.noise}
-        trackLabel={trackLabel}
-      />
-    );
-  }
-
-  if (selection.trackId === "sample") {
-    return (
-      <SampleStepDetail
-        accentColor={accentColor}
-        defaultSampleId={defaultSampleId}
-        engineMode={song.meta.engineMode}
-        engine={engine}
-        onDeselect={onDeselect}
-        onUpdate={(updates) => onUpdateSampleStep(selection.stepIndex, updates)}
-        samples={samples}
-        stepIndex={selection.stepIndex}
-        track={song.tracks.sample}
-        trackLabel={trackLabel}
-      />
-    );
-  }
-
-  return null;
-}
+});
 
 /* ─────────── Melodic Step Detail (Pulse + Triangle) ─────────── */
 
@@ -125,7 +112,7 @@ function MelodicStepDetail({
   engine,
   onDeselect,
   onUpdate,
-  song,
+  stepDurationMs,
   stepIndex,
   track,
   trackLabel,
@@ -134,7 +121,7 @@ function MelodicStepDetail({
   engine: AudioEngine | null;
   onDeselect: () => void;
   onUpdate: (updates: MelodicStepUpdates) => void;
-  song: SongDocument;
+  stepDurationMs: number;
   stepIndex: number;
   track: PulseTrack | TriangleTrack;
   trackLabel: string;
@@ -144,7 +131,7 @@ function MelodicStepDetail({
   const maxLength = melodicState.kind === "start" ? getMelodicTrackMaxLength(track, stepIndex) : 1;
   const isPulse = track.kind === "pulse";
   const pulseStep = isPulse ? track.steps[stepIndex] : null;
-  const previewDurationMs = (60_000 / song.transport.bpm / song.transport.stepsPerBeat) * Math.max(step.length, 1);
+  const previewDurationMs = stepDurationMs * Math.max(step.length, 1);
   const previewVolume = step.volume;
 
   return (
@@ -226,7 +213,7 @@ function MelodicStepDetail({
               disabled={!step.enabled || step.length <= 1}
               className="h-6 min-w-0 rounded-md px-2 font-[var(--oc-mono)] text-xs font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
               onClick={() => {
-                onUpdate({ length: Math.max(1, step.length - 1) });
+                onUpdate({ length: step.length - 1 });
               }}
             >
               -
@@ -245,7 +232,7 @@ function MelodicStepDetail({
               disabled={!step.enabled || step.length >= maxLength}
               className="h-6 min-w-0 rounded-md px-2 font-[var(--oc-mono)] text-xs font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white"
               onClick={() => {
-                onUpdate({ length: Math.min(maxLength, step.length + 1) });
+                onUpdate({ length: step.length + 1 });
               }}
             >
               +
@@ -424,7 +411,6 @@ function NoiseStepDetail({
 
 function SampleStepDetail({
   accentColor,
-  defaultSampleId,
   engineMode,
   engine,
   onDeselect,
@@ -435,7 +421,6 @@ function SampleStepDetail({
   trackLabel,
 }: {
   accentColor: string;
-  defaultSampleId: string | null;
   engineMode: EngineMode;
   engine: AudioEngine | null;
   onDeselect: () => void;
@@ -457,28 +442,12 @@ function SampleStepDetail({
     }
   };
 
-  const handleToggleEnabled = () => {
-    if (step.enabled) {
-      onUpdate({ enabled: false });
-      return;
-    }
-
-    const defaultTrigger = getDefaultSampleTrigger(samples, defaultSampleId);
-
-    onUpdate({
-      enabled: true,
-      sampleId: step.sampleId ?? defaultTrigger.sampleId,
-      note: (step.note as NoteValue) ?? defaultTrigger.note,
-      playbackRate: step.playbackRate ?? defaultTrigger.playbackRate,
-    });
-  };
-
   return (
     <DetailPanelFrame
       accentColor={accentColor}
       enabled={step.enabled}
       onClose={onDeselect}
-      onToggleEnabled={handleToggleEnabled}
+      onToggleEnabled={() => onUpdate({ enabled: !step.enabled })}
       stepIndex={stepIndex}
       trackLabel={trackLabel}
     >

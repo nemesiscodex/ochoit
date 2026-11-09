@@ -1,4 +1,4 @@
-import type { NoteValue } from "@/features/song/song-pattern";
+import type { NoteValue } from "ochoit-lib";
 
 const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
 const minMidiNote = 12;

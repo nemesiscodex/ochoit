@@ -10,9 +10,11 @@ import {
   createEmptySongDocument,
   SONG_MAX_SAMPLE_COUNT,
   type SongDocument,
-} from "@/features/song/song-document";
-import { buildSongShareUrl, serializeSongShareText } from "@/features/song/song-share";
+  buildSongShareUrl,
+  serializeSongShareText,
+} from "ochoit-lib";
 import * as useAudioEngineModule from "@/features/audio/use-audio-engine";
+import { createPlayheadStore } from "@/features/audio/playhead-store";
 import * as sampleRecorderModule from "@/features/audio/sample-recorder";
 
 vi.mock("@/features/audio/use-audio-engine", () => ({
@@ -38,12 +40,8 @@ function createUseAudioEngineResult(
     engine: null,
     engineState,
     errorMessage: null,
-    transportState: {
-      playbackState,
-      nextStep: 0,
-      nextStepTime: null,
-      loopCount: 0,
-    },
+    playbackState,
+    playhead: createPlayheadStore(),
     initializeAudio: vi.fn(async () => null),
     suspendAudio: vi.fn(async () => undefined),
     startTransport: vi.fn(async () => undefined),
@@ -215,6 +213,71 @@ describe("workstation-shell", () => {
       "Reduce the pattern to 12 steps? This will delete or shorten notes and triggers beyond the new end.",
     );
     expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+  });
+
+  it("confirms before the Loop field shrinks the pattern and keeps the song when declined", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[12] = {
+      ...song.tracks.pulse1.steps[12],
+      enabled: true,
+    };
+    confirmDialog.mockReturnValueOnce(false);
+
+    renderWorkstationShell(song);
+
+    const loopLengthInput = screen.getByLabelText("Loop Length");
+
+    if (!(loopLengthInput instanceof HTMLInputElement)) {
+      throw new Error("Expected Loop Length to be an input.");
+    }
+
+    fireEvent.focus(loopLengthInput);
+    fireEvent.change(loopLengthInput, { target: { value: "12" } });
+    fireEvent.blur(loopLengthInput);
+
+    expect(confirmDialog).toHaveBeenCalledWith(
+      "Reduce the pattern to 12 steps? This will delete or shorten notes and triggers beyond the new end.",
+    );
+    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(loopLengthInput.value).toBe("16");
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.transport.loopLength).toBe(16);
+    expect(latestSong.tracks.pulse1.steps[12]?.enabled).toBe(true);
+  });
+
+  it("trims the pattern from the Loop field once the shrink is confirmed", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[12] = {
+      ...song.tracks.pulse1.steps[12],
+      enabled: true,
+    };
+
+    renderWorkstationShell(song);
+
+    const loopLengthInput = screen.getByLabelText("Loop Length");
+
+    fireEvent.focus(loopLengthInput);
+    fireEvent.change(loopLengthInput, { target: { value: "12" } });
+    fireEvent.blur(loopLengthInput);
+
+    expect(confirmDialog).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("12 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.transport.loopLength).toBe(12);
+    expect(latestSong.tracks.pulse1.steps).toHaveLength(12);
+    expect(latestSong.tracks.pulse1.steps.some((step) => step.enabled)).toBe(false);
   });
 
   it("updates the global volume from the transport bar", () => {
@@ -495,6 +558,8 @@ describe("workstation-shell", () => {
     sharedSong.transport.bpm = 172;
 
     window.history.replaceState({}, "", buildSongShareUrl(window.location.href, sharedSong));
+    const engineResult = createUseAudioEngineResult();
+    mockUseAudioEngine.mockReturnValue(engineResult);
 
     renderWorkstationShell();
 
@@ -503,9 +568,15 @@ describe("workstation-shell", () => {
       expect(screen.getByText("172 bpm")).toBeTruthy();
       expect(screen.getByText("Loaded shared song from the current link.")).toBeTruthy();
     });
+    expect(window.location.hash).toContain("song=");
+    expect(engineResult.stopTransport).not.toHaveBeenCalled();
   });
 
   it("loads a built-in example from the examples dialog", async () => {
+    window.history.replaceState({}, "", buildSongShareUrl(window.location.href, createDefaultSongDocument()));
+    const engineResult = createUseAudioEngineResult();
+    mockUseAudioEngine.mockReturnValue(engineResult);
+
     renderEmptyWorkstationShell();
 
     fireEvent.click(screen.getByRole("button", { name: "Open examples" }));
@@ -516,6 +587,9 @@ describe("workstation-shell", () => {
       expect(screen.getByDisplayValue("nemesiscodex")).toBeTruthy();
       expect(screen.getByText("Loaded example: Mario Theme.")).toBeTruthy();
     });
+    expect(screen.queryByRole("button", { name: "Load example Mario Theme" })).toBeNull();
+    expect(window.location.hash).toBe("");
+    expect(engineResult.stopTransport).toHaveBeenCalledTimes(1);
   });
 
   it("loads the Zelda Medley example from the examples dialog", async () => {
@@ -639,6 +713,9 @@ describe("workstation-shell", () => {
     sharedSong.meta.name = "DSL Tune";
     sharedSong.transport.bpm = 180;
     sharedSong.tracks.pulse1.muted = true;
+    window.history.replaceState({}, "", "/#song=kept");
+    const engineResult = createUseAudioEngineResult();
+    mockUseAudioEngine.mockReturnValue(engineResult);
 
     renderWorkstationShell();
 
@@ -664,6 +741,9 @@ describe("workstation-shell", () => {
       expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
       expect(screen.getByText("Loaded song from share DSL.")).toBeTruthy();
     });
+    expect(screen.queryByLabelText("Share DSL text")).toBeNull();
+    expect(window.location.hash).toBe("#song=kept");
+    expect(engineResult.stopTransport).not.toHaveBeenCalled();
   });
 
   it("updates the song name from the song info panel", () => {
@@ -714,6 +794,8 @@ describe("workstation-shell", () => {
     const sharedSong = createDefaultSongDocument();
 
     window.history.replaceState({}, "", buildSongShareUrl(window.location.href, sharedSong));
+    const engineResult = createUseAudioEngineResult();
+    mockUseAudioEngine.mockReturnValue(engineResult);
 
     renderWorkstationShell();
 
@@ -722,6 +804,8 @@ describe("workstation-shell", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "New song" }));
+
+    expect(engineResult.stopTransport).toHaveBeenCalledTimes(1);
 
     expect(confirmDialog).toHaveBeenCalledWith(
       "Start a new song? This will clear all notes, recordings, and the current song link.",
@@ -945,6 +1029,33 @@ describe("workstation-shell", () => {
     }
 
     expect(verifyPcmTextarea.value).toBe("2: mic-001>D5, 6: mic-001>A#2");
+  });
+
+  it("keeps the arrangement editor open with the parse error and leaves the song alone", () => {
+    renderWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
+
+    const editor = screen.getByLabelText("Noise trigger text").closest(".fixed");
+
+    if (!(editor instanceof HTMLElement)) {
+      throw new Error("Expected the arrangement editor overlay.");
+    }
+
+    fireEvent.change(within(editor).getByLabelText("Noise trigger text"), { target: { value: "1: thunder" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Apply Arrangement" }));
+
+    expect(screen.getByLabelText("Noise trigger text")).toBeTruthy();
+    expect(within(editor).getByText(/^Line 1 has an invalid noise trigger/)).toBeTruthy();
+    expect(screen.getAllByText(/^Line 1 has an invalid noise trigger/)).toHaveLength(1);
+
+    const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
+
+    if (latestSong === undefined) {
+      throw new Error("Expected the audio engine hook to receive song state.");
+    }
+
+    expect(latestSong.tracks.noise.steps[0]).toMatchObject({ enabled: true, mode: "short", periodIndex: 3 });
   });
 
   it("describes the noise text format with explicit mode and period values", () => {
@@ -1395,20 +1506,36 @@ describe("workstation-shell", () => {
     const waveformSpy = vi.spyOn(sampleRecorderModule, "createWaveformFromPcm");
     const song = createDefaultSongDocument();
     const transportOnlyUpdate = createUseAudioEngineResult("playing");
-    transportOnlyUpdate.transportState = {
-      playbackState: "playing",
-      nextStep: 4,
-      nextStepTime: 1,
-      loopCount: 0,
-    };
 
     const { rerender } = renderWorkstationShell(song);
     const callCountAfterInitialRender = waveformSpy.mock.calls.length;
 
     mockUseAudioEngine.mockReturnValue(transportOnlyUpdate);
     rerender(createWorkstationShellElement(song));
+    act(() => {
+      transportOnlyUpdate.playhead.set({ nextStep: 4, loopCount: 0 });
+    });
 
     expect(waveformSpy).toHaveBeenCalledTimes(callCountAfterInitialRender);
     waveformSpy.mockRestore();
+  });
+
+  it("moves the sequencer playhead without re-rendering the workstation shell", () => {
+    const playing = createUseAudioEngineResult("playing");
+    mockUseAudioEngine.mockReturnValue(playing);
+
+    renderWorkstationShell(createEmptySongDocument());
+    // useAudioEngine runs once per shell render, so its call count is the shell's render count.
+    const shellRendersBeforePlayback = mockUseAudioEngine.mock.calls.length;
+
+    for (let nextStep = 1; nextStep <= 8; nextStep += 1) {
+      act(() => {
+        playing.playhead.set({ nextStep, loopCount: 0 });
+      });
+    }
+
+    expect(screen.getByLabelText("Noise step 9").getAttribute("aria-current")).toBe("step");
+    expect(screen.getByLabelText("Noise step 8").getAttribute("aria-current")).toBe(null);
+    expect(mockUseAudioEngine.mock.calls.length).toBe(shellRendersBeforePlayback);
   });
 });

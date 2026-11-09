@@ -1,9 +1,17 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState, type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { AudioEngine } from "ochoit-lib/web";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
-import { createDefaultSongDocument, createEmptySongDocument } from "@/features/song/song-document";
+import { createPlayheadStore } from "@/features/audio/playhead-store";
+import { applySongEdit, createDefaultSongDocument, createEmptySongDocument, type SongEdit } from "ochoit-lib";
+
+type MatrixProps = ComponentProps<typeof SequencerMatrix>;
+
+function atStep(nextStep: number, loopCount = 0) {
+  return createPlayheadStore({ nextStep, loopCount });
+}
 
 function setCellWidth(element: HTMLElement, width: number) {
   Object.defineProperty(element, "getBoundingClientRect", {
@@ -41,32 +49,55 @@ function setCellRect(element: HTMLElement, left: number, top: number, width: num
   });
 }
 
-function renderMatrix(overrides: Record<string, unknown> = {}) {
-  const props = {
+function renderMatrix(overrides: Partial<MatrixProps> = {}) {
+  const onEdit = vi.fn<(edit: SongEdit) => void>();
+  const props: MatrixProps = {
     defaultSampleId: null,
     engine: null,
-    onOpenMelodicTrackEditor: vi.fn(),
-    onOpenTriggerTrackEditor: vi.fn(),
-    onRequestLoopLengthChange: vi.fn(),
-    onRequestStepsPerBeatChange: vi.fn(),
-    onMoveMelodicSelection: vi.fn(),
-    onResizeMelodicStep: vi.fn(),
-    onMoveNoiseSelection: vi.fn(),
-    onMoveSampleSelection: vi.fn(),
-    onToggleTrackMute: vi.fn(),
-    onUpdateTrackVolume: vi.fn(),
-    onUpdateMelodicStep: vi.fn(),
-    onUpdateNoiseStep: vi.fn(),
-    onUpdateSampleStep: vi.fn(),
+    onOpenArrangementEditor: vi.fn(),
     song: createDefaultSongDocument(),
-    playbackState: "stopped" as const,
-    nextStep: 0,
-    loopCount: 0,
+    playbackState: "stopped",
+    playhead: createPlayheadStore(),
     onStartTransportAtStep: vi.fn(async () => undefined),
     ...overrides,
+    onEdit,
   };
+  let latestSong = props.song;
 
-  return { ...render(<SequencerMatrix {...props} />), props };
+  function MatrixWithSongState(harnessProps: MatrixProps) {
+    const [song, setSong] = useState(harnessProps.song);
+    latestSong = song;
+
+    return (
+      <SequencerMatrix
+        {...harnessProps}
+        song={song}
+        onEdit={(edit) => {
+          harnessProps.onEdit(edit);
+          setSong((currentSong) =>
+            applySongEdit(currentSong, edit, { defaultSampleId: harnessProps.defaultSampleId }).song,
+          );
+        }}
+      />
+    );
+  }
+
+  const view = render(<MatrixWithSongState {...props} />);
+
+  return {
+    ...view,
+    onEdit,
+    initialSong: props.song,
+    latestSong: () => latestSong,
+    rerender: (nextProps: Partial<MatrixProps>) => {
+      view.rerender(<MatrixWithSongState {...props} {...nextProps} />);
+    },
+    movePlayhead: (nextStep: number, loopCount = props.playhead.get().loopCount) => {
+      act(() => {
+        props.playhead.set({ nextStep, loopCount });
+      });
+    },
+  };
 }
 
 describe("sequencer-matrix", () => {
@@ -81,11 +112,52 @@ describe("sequencer-matrix", () => {
   });
 
   it("highlights the current playback step across the ruler and all rows", () => {
-    const { container } = renderMatrix({ playbackState: "playing", nextStep: 4 });
+    const { container } = renderMatrix({ playbackState: "playing", playhead: atStep(4) });
 
     expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(6);
     expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-current")).toBe("step");
     expect(screen.getByLabelText("PCM step 5").getAttribute("aria-current")).toBe("step");
+  });
+
+  it("moves the highlight when the playhead advances", () => {
+    const { container, movePlayhead } = renderMatrix({ playbackState: "playing", playhead: atStep(4) });
+
+    movePlayhead(5);
+
+    expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(6);
+    expect(screen.getByLabelText("PCM step 6").getAttribute("aria-current")).toBe("step");
+    expect(screen.getByLabelText("PCM step 5").getAttribute("aria-current")).toBe(null);
+  });
+
+  it("sweeps the playhead across a sustained note and back onto empty steps", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, note: "E4", length: 2 };
+    const { movePlayhead } = renderMatrix({ song, playbackState: "playing", playhead: atStep(4) });
+    const note = screen.getByLabelText("Pulse I step 5");
+    const sweep = () => note.querySelector<HTMLElement>('div[aria-hidden="true"]');
+
+    expect(note.getAttribute("aria-current")).toBe("step");
+    expect(sweep()?.style.left).toBe("0%");
+    expect(sweep()?.style.width).toBe("50%");
+
+    movePlayhead(5);
+
+    expect(note.getAttribute("aria-current")).toBe("step");
+    expect(sweep()?.style.left).toBe("50%");
+
+    movePlayhead(6);
+
+    expect(note.getAttribute("aria-current")).toBe(null);
+    expect(sweep()).toBe(null);
+    expect(screen.getByLabelText("Pulse I step 7").getAttribute("aria-current")).toBe("step");
+  });
+
+  it("highlights nothing while stopped even when the playhead moves", () => {
+    const { container, movePlayhead } = renderMatrix({ playbackState: "stopped", playhead: atStep(4) });
+
+    movePlayhead(5);
+
+    expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(0);
   });
 
   it("shows the empty-step creation hint in the pattern ruler", () => {
@@ -107,32 +179,25 @@ describe("sequencer-matrix", () => {
   });
 
   it("applies keyboard note input to a selected empty melodic step", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ onUpdateMelodicStep });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 2"));
     fireEvent.click(screen.getByRole("button", { name: "Enable keyboard note mode" }));
     fireEvent.keyDown(document, { key: "[" });
     fireEvent.keyDown(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 1, { enabled: true, note: "C3" });
+    expect(latestSong().tracks.pulse1.steps[1]).toMatchObject({ enabled: true, note: "C3", length: 1 });
     expect(screen.getByLabelText("Z keyboard note C3")).toBeTruthy();
   });
 
-  it("applies keyboard note input to inspired PCM steps", () => {
-    const onUpdateSampleStep = vi.fn();
-
-    renderMatrix({ onUpdateSampleStep });
+  it("applies keyboard note input to inspired PCM steps with the default sample", () => {
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("PCM step 2"));
     fireEvent.click(screen.getByRole("button", { name: "Enable keyboard note mode" }));
     fireEvent.keyDown(document, { key: "x" });
 
-    expect(onUpdateSampleStep).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ enabled: true, note: "D4" }),
-    );
+    expect(latestSong().tracks.sample.steps[1]).toMatchObject({ enabled: true, note: "D4", sampleId: "mic-001" });
   });
 
   it("starts quantized recording on a voice at step 1", () => {
@@ -148,13 +213,12 @@ describe("sequencer-matrix", () => {
   });
 
   it("switches recording timing between beat grid and 1/8 grid", () => {
-    const onRequestStepsPerBeatChange = vi.fn();
-
-    renderMatrix({ onRequestStepsPerBeatChange });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByRole("button", { name: "Use 1/8 grid recording" }));
 
-    expect(onRequestStepsPerBeatChange).toHaveBeenCalledWith(8);
+    expect(latestSong().transport).toMatchObject({ stepsPerBeat: 8, loopLength: 32 });
+    expect(screen.getByText("32 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
   it("shows 1/8 grid in the recording status when active", () => {
@@ -222,55 +286,45 @@ describe("sequencer-matrix", () => {
   });
 
   it("records keyboard notes to the active voice at the current quantized step", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+    const { latestSong } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith(
-      "pulse1",
-      3,
-      expect.objectContaining({ enabled: true, note: "C3", length: 1 }),
-    );
+    expect(latestSong().tracks.pulse1.steps[3]).toMatchObject({ enabled: true, note: "C3", length: 1 });
   });
 
   it("ignores repeated keydown for a held recording key", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+    const { onEdit } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
     fireEvent.keyDown(document, { key: "z", repeat: true });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledTimes(1);
   });
 
   it("extends a recorded melodic note length on keyup by elapsed quantized steps", () => {
-    const onUpdateMelodicStep = vi.fn();
-    const { props, rerender } = renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+    const { latestSong, movePlayhead } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
 
-    rerender(<SequencerMatrix {...props} nextStep={6} />);
+    movePlayhead(6);
     fireEvent.keyUp(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 3 });
+    expect(latestSong().tracks.pulse1.steps[3]).toMatchObject({ enabled: true, note: "C3", length: 3 });
   });
 
   it("renders a held recording note by extending its length before keyup", () => {
-    const onUpdateMelodicStep = vi.fn();
-    const { props, rerender } = renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+    const { latestSong, movePlayhead } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
 
-    rerender(<SequencerMatrix {...props} nextStep={6} />);
+    movePlayhead(6);
 
-    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 3 });
+    expect(latestSong().tracks.pulse1.steps[3]).toMatchObject({ enabled: true, note: "C3", length: 3 });
   });
 
   it("uses sustained audio feedback while recording a held melodic note", () => {
@@ -281,7 +335,7 @@ describe("sequencer-matrix", () => {
       startSustainedPreviewNote,
     } as unknown as AudioEngine;
 
-    renderMatrix({ engine, nextStep: 3 });
+    renderMatrix({ engine, playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
@@ -295,52 +349,38 @@ describe("sequencer-matrix", () => {
   });
 
   it("records a quick melodic tap with minimum length 1", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+    const { latestSong } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
     fireEvent.keyUp(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 3, { length: 1 });
+    expect(latestSong().tracks.pulse1.steps[3]).toMatchObject({ enabled: true, note: "C3", length: 1 });
   });
 
   it("wraps recording duration safely and clamps to the loop end", () => {
-    const onUpdateMelodicStep = vi.fn();
-    const { props, rerender } = renderMatrix({ nextStep: 14, loopCount: 0, onUpdateMelodicStep });
+    const { latestSong, movePlayhead } = renderMatrix({ playhead: atStep(14, 0) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
 
-    rerender(<SequencerMatrix {...props} nextStep={3} loopCount={1} />);
+    movePlayhead(3, 1);
     fireEvent.keyUp(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenLastCalledWith("pulse1", 14, { length: 2 });
+    expect(latestSong().tracks.pulse1.steps[14]).toMatchObject({ enabled: true, note: "C3", length: 2 });
   });
 
   it("records into one voice without updating another voice", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+    const { initialSong, latestSong } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Triangle" }));
     fireEvent.keyDown(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith(
-      "triangle",
-      3,
-      expect.objectContaining({ enabled: true, note: "C3", length: 1 }),
-    );
-    expect(onUpdateMelodicStep).not.toHaveBeenCalledWith(
-      "pulse1",
-      expect.any(Number),
-      expect.any(Object),
-    );
+    expect(latestSong().tracks.triangle.steps[3]).toMatchObject({ enabled: true, note: "C3", length: 1 });
+    expect(latestSong().tracks.pulse1).toEqual(initialSong.tracks.pulse1);
   });
 
   it("clears overlapping melodic notes on the active record target only", () => {
-    const onUpdateMelodicStep = vi.fn();
     const song = createEmptySongDocument();
     song.tracks.pulse1.steps[4] = {
       ...song.tracks.pulse1.steps[4],
@@ -354,33 +394,30 @@ describe("sequencer-matrix", () => {
       length: 2,
       note: "G4",
     };
-    const { props, rerender } = renderMatrix({ nextStep: 3, onUpdateMelodicStep, song });
+    const { latestSong, movePlayhead } = renderMatrix({ playhead: atStep(3), song });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     fireEvent.keyDown(document, { key: "z" });
 
-    rerender(<SequencerMatrix {...props} nextStep={6} />);
+    movePlayhead(6);
     fireEvent.keyUp(document, { key: "z" });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 4, { enabled: false });
-    expect(onUpdateMelodicStep).not.toHaveBeenCalledWith("pulse2", 4, { enabled: false });
+    expect(latestSong().tracks.pulse1.steps[3]).toMatchObject({ enabled: true, note: "C3", length: 3 });
+    expect(latestSong().tracks.pulse1.steps[4]?.enabled).toBe(false);
+    expect(latestSong().tracks.pulse2.steps[4]).toMatchObject({ enabled: true, note: "G4", length: 2 });
   });
 
   it("records inspired PCM as a sample note trigger without melodic length", () => {
-    const onUpdateSampleStep = vi.fn();
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ nextStep: 3, onUpdateMelodicStep, onUpdateSampleStep });
+    const { initialSong, latestSong } = renderMatrix({ playhead: atStep(3) });
 
     fireEvent.click(screen.getByRole("button", { name: "Record PCM" }));
     fireEvent.keyDown(document, { key: "x" });
     fireEvent.keyUp(document, { key: "x" });
 
-    expect(onUpdateSampleStep).toHaveBeenCalledWith(
-      3,
-      expect.objectContaining({ enabled: true, sampleId: "mic-001", note: "D3" }),
-    );
-    expect(onUpdateMelodicStep).not.toHaveBeenCalled();
+    expect(latestSong().tracks.sample.steps[3]).toMatchObject({ enabled: true, sampleId: "mic-001", note: "D3" });
+    expect(latestSong().tracks.pulse1).toEqual(initialSong.tracks.pulse1);
+    expect(latestSong().tracks.pulse2).toEqual(initialSong.tracks.pulse2);
+    expect(latestSong().tracks.triangle).toEqual(initialSong.tracks.triangle);
   });
 
   it("stops quantized recording when clicking the active record button again", () => {
@@ -393,58 +430,54 @@ describe("sequencer-matrix", () => {
   });
 
   it("stops quantized recording when transport stops", () => {
-    const { props, rerender } = renderMatrix({ playbackState: "playing" });
+    const { rerender } = renderMatrix({ playbackState: "playing" });
 
     fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
     expect(screen.getByRole("button", { name: "Stop recording Pulse I" })).toBeTruthy();
 
-    rerender(<SequencerMatrix {...props} playbackState="stopped" />);
+    rerender({ playbackState: "stopped" });
 
     expect(screen.getByRole("button", { name: "Record Pulse I" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("ignores recording keyboard input while typing in editable fields", () => {
-    const onUpdateMelodicStep = vi.fn();
     const input = document.createElement("input");
     document.body.append(input);
 
     try {
-      renderMatrix({ nextStep: 3, onUpdateMelodicStep });
+      const { onEdit } = renderMatrix({ playhead: atStep(3) });
 
       fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
       input.focus();
       fireEvent.keyDown(input, { key: "z" });
 
-      expect(onUpdateMelodicStep).not.toHaveBeenCalled();
+      expect(onEdit).not.toHaveBeenCalled();
     } finally {
       input.remove();
     }
   });
 
-  it("calls the mute toggle callback for a specific voice", () => {
-    const onToggleTrackMute = vi.fn();
-
-    renderMatrix({ onToggleTrackMute });
+  it("toggles mute for a specific voice", () => {
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByRole("button", { name: "Mute Pulse I" }));
 
-    expect(onToggleTrackMute).toHaveBeenCalledWith("pulse1");
+    expect(latestSong().tracks.pulse1.muted).toBe(true);
+    expect(latestSong().tracks.pulse2.muted).toBe(false);
+    expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
   });
 
-  it("calls the volume update callback for a specific voice", () => {
-    const onUpdateTrackVolume = vi.fn();
-
-    renderMatrix({ onUpdateTrackVolume });
+  it("updates the volume for a specific voice", () => {
+    const { latestSong } = renderMatrix();
 
     fireEvent.change(screen.getByLabelText("Pulse I volume"), { target: { value: "23" } });
 
-    expect(onUpdateTrackVolume).toHaveBeenCalledWith("pulse1", 0.23);
+    expect(latestSong().tracks.pulse1.volume).toBe(0.23);
+    expect(latestSong().tracks.pulse2.volume).toBe(1);
   });
 
   it("updates noise config via the step detail panel", () => {
-    const onUpdateNoiseStep = vi.fn();
-
-    renderMatrix({ onUpdateNoiseStep });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Noise step 1"));
 
@@ -452,45 +485,49 @@ describe("sequencer-matrix", () => {
 
     fireEvent.click(within(panel).getByRole("button", { name: "Set noise mode long" }));
 
-    expect(onUpdateNoiseStep).toHaveBeenCalledWith(0, { mode: "long" });
+    expect(latestSong().tracks.noise.steps[0]).toMatchObject({ enabled: true, mode: "long", periodIndex: 3 });
 
     fireEvent.change(within(panel).getByLabelText("Noise step 1 noise period"), {
       target: { value: "12" },
     });
 
-    expect(onUpdateNoiseStep).toHaveBeenCalledWith(0, { periodIndex: 12 });
+    expect(latestSong().tracks.noise.steps[0]).toMatchObject({ enabled: true, mode: "long", periodIndex: 12 });
   });
 
   it("updates pulse duty via the step detail panel", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ onUpdateMelodicStep });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.click(screen.getByRole("button", { name: "Set duty 75%" }));
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 0, { duty: 0.75 });
+    expect(latestSong().tracks.pulse1.steps[0]).toMatchObject({ enabled: true, duty: 0.75 });
   });
 
   it("disables and edits notes via the step detail panel", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ onUpdateMelodicStep });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.click(screen.getByRole("button", { name: "Disable Pulse I step 1" }));
 
-    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(1, "pulse1", 0, { enabled: false });
+    expect(latestSong().tracks.pulse1.steps[0]?.enabled).toBe(false);
 
     fireEvent.click(screen.getByLabelText("Triangle step 1"));
     fireEvent.click(screen.getByLabelText("Triangle step 1 note"));
     fireEvent.click(screen.getByRole("button", { name: "Select note D3" }));
 
-    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(2, "triangle", 0, { note: "D3" });
+    expect(latestSong().tracks.triangle.steps[0]).toMatchObject({ enabled: true, note: "D3" });
+  });
+
+  it("enables an empty PCM step from the detail panel with the default sample", () => {
+    const { latestSong } = renderMatrix({ defaultSampleId: "mic-001" });
+
+    fireEvent.click(screen.getByLabelText("PCM step 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Enable PCM step 2" }));
+
+    expect(latestSong().tracks.sample.steps[1]).toMatchObject({ enabled: true, sampleId: "mic-001" });
   });
 
   it("shows duration controls in the detail panel for sustained notes", () => {
-    const onUpdateMelodicStep = vi.fn();
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = {
       ...song.tracks.pulse1.steps[0],
@@ -498,7 +535,7 @@ describe("sequencer-matrix", () => {
       length: 3,
     };
 
-    renderMatrix({ song, onUpdateMelodicStep });
+    const { latestSong } = renderMatrix({ song });
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
 
@@ -506,11 +543,15 @@ describe("sequencer-matrix", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Extend Pulse I step 1 duration" }));
 
-    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(1, "pulse1", 0, { length: 4 });
+    expect(latestSong().tracks.pulse1.steps[0]?.length).toBe(4);
+    expect(screen.getByLabelText("Pulse I step 1 duration").textContent).toBe("4 st");
+    expect(
+      (screen.getByRole("button", { name: "Extend Pulse I step 1 duration" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Shorten Pulse I step 1 duration" }));
 
-    expect(onUpdateMelodicStep).toHaveBeenNthCalledWith(2, "pulse1", 0, { length: 2 });
+    expect(latestSong().tracks.pulse1.steps[0]?.length).toBe(3);
   });
 
   it("redirects hold step clicks to the origin step", () => {
@@ -560,13 +601,15 @@ describe("sequencer-matrix", () => {
   });
 
   it("opens the text editor for a melodic voice", () => {
-    const onOpenMelodicTrackEditor = vi.fn();
+    const onOpenArrangementEditor = vi.fn();
 
-    renderMatrix({ onOpenMelodicTrackEditor });
+    renderMatrix({ onOpenArrangementEditor });
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
 
-    expect(onOpenMelodicTrackEditor).toHaveBeenCalledWith("pulse1");
+    expect(onOpenArrangementEditor).toHaveBeenNthCalledWith(1, "pulse1");
+    expect(onOpenArrangementEditor).toHaveBeenNthCalledWith(2, "sample");
   });
 
   it("passes hovered noise and PCM controls to the audio preview via detail panel", () => {
@@ -706,38 +749,45 @@ describe("sequencer-matrix", () => {
   });
 
   it("selects a disabled step on click without enabling it", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ onUpdateMelodicStep });
+    const { onEdit } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 2"));
 
-    expect(onUpdateMelodicStep).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Pulse I step 2 editor")).toBeTruthy();
     expect(screen.getByText("Empty step selected. Press Enter to create a note or trigger here.")).toBeTruthy();
   });
 
   it("enables a selected disabled step on Enter", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ onUpdateMelodicStep });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 2"));
     fireEvent.keyDown(document, { key: "Enter" });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 1, { enabled: true });
+    expect(latestSong().tracks.pulse1.steps[1]).toMatchObject({ enabled: true, length: 1 });
   });
 
-  it("requests loop-length changes from the ruler controls in four-step increments", () => {
-    const onRequestLoopLengthChange = vi.fn();
+  it("enables a selected disabled PCM step on Enter with the default sample", () => {
+    const { latestSong } = renderMatrix();
 
-    renderMatrix({ onRequestLoopLengthChange });
+    fireEvent.click(screen.getByLabelText("PCM step 2"));
+    fireEvent.keyDown(document, { key: "Enter" });
+
+    expect(latestSong().tracks.sample.steps[1]).toMatchObject({ enabled: true, sampleId: "mic-001" });
+  });
+
+  it("changes the loop length from the ruler controls in four-step increments", () => {
+    const { latestSong } = renderMatrix({ song: createEmptySongDocument() });
 
     fireEvent.click(screen.getByRole("button", { name: "Add 4 steps" }));
+
+    expect(latestSong().transport.loopLength).toBe(20);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
 
-    expect(onRequestLoopLengthChange).toHaveBeenNthCalledWith(1, 20);
-    expect(onRequestLoopLengthChange).toHaveBeenNthCalledWith(2, 12);
+    expect(latestSong().transport.loopLength).toBe(12);
+    expect(screen.getByText("12 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
   it("deselects a step on Escape key", () => {
@@ -820,19 +870,16 @@ describe("sequencer-matrix", () => {
   });
 
   it("deletes a selected melodic step with Delete", () => {
-    const onUpdateMelodicStep = vi.fn();
-
-    renderMatrix({ onUpdateMelodicStep });
+    const { latestSong } = renderMatrix();
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.keyDown(document, { key: "Delete" });
 
-    expect(onUpdateMelodicStep).toHaveBeenCalledWith("pulse1", 0, { enabled: false });
+    expect(latestSong().tracks.pulse1.steps[0]?.enabled).toBe(false);
     expect(screen.getByLabelText("Pulse I step 1 editor")).toBeTruthy();
   });
 
   it("deletes a selected trigger step with Backspace", () => {
-    const onUpdateNoiseStep = vi.fn();
     const song = createEmptySongDocument();
     song.tracks.noise.steps[2] = {
       ...song.tracks.noise.steps[2],
@@ -841,12 +888,12 @@ describe("sequencer-matrix", () => {
       periodIndex: 8,
     };
 
-    renderMatrix({ onUpdateNoiseStep, song });
+    const { latestSong } = renderMatrix({ song });
 
     fireEvent.click(screen.getByLabelText("Noise step 3"));
     fireEvent.keyDown(document, { key: "Backspace" });
 
-    expect(onUpdateNoiseStep).toHaveBeenCalledWith(2, { enabled: false });
+    expect(latestSong().tracks.noise.steps[2]?.enabled).toBe(false);
     expect(screen.getByLabelText("Noise step 3 editor")).toBeTruthy();
   });
 
@@ -867,11 +914,10 @@ describe("sequencer-matrix", () => {
   });
 
   it("does not arm drag from an unselected step before shift-click range selection", () => {
-    const onMoveMelodicSelection = vi.fn();
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
-    renderMatrix({ song, onMoveMelodicSelection });
+    const { onEdit } = renderMatrix({ song });
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.mouseDown(screen.getByLabelText("Pulse I step 5"), { clientX: 0, shiftKey: true });
@@ -879,7 +925,7 @@ describe("sequencer-matrix", () => {
 
     expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe("true");
     expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe("true");
-    expect(onMoveMelodicSelection).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
   });
 
   it("shift-click on a hold cell resolves to the origin step", () => {
@@ -907,11 +953,10 @@ describe("sequencer-matrix", () => {
     expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe(null);
   });
 
-  it("drags a selected melodic note and calls the move callback with the computed delta", async () => {
-    const onMoveMelodicSelection = vi.fn();
+  it("drags a selected melodic note by the computed delta", async () => {
     const song = createDefaultSongDocument();
 
-    const { container } = renderMatrix({ song, onMoveMelodicSelection });
+    const { container, latestSong } = renderMatrix({ song });
 
     const cell = screen.getByLabelText("Pulse I step 1");
     const gridCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
@@ -929,18 +974,18 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseMove(window, { clientX: 45, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: 45, clientY: 0 });
 
-    expect(onMoveMelodicSelection).toHaveBeenCalledWith("pulse1", [0], 2);
-    expect(cell.getAttribute("aria-selected")).toBe(null);
+    expect(latestSong().tracks.pulse1.steps[2]).toMatchObject({ enabled: true, note: "C5", duty: 0.125 });
+    expect(latestSong().tracks.pulse1.steps[0]?.enabled).toBe(false);
+    expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe(null);
     expect(screen.getByLabelText("Pulse I step 3").getAttribute("aria-selected")).toBe("true");
   });
 
   it("drags a multi-selection once with all selected origin indexes", async () => {
-    const onMoveMelodicSelection = vi.fn();
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true };
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true };
 
-    const { container } = renderMatrix({ song, onMoveMelodicSelection });
+    const { container, latestSong, onEdit } = renderMatrix({ song });
 
     fireEvent.click(screen.getByLabelText("Pulse I step 1"));
     fireEvent.click(screen.getByLabelText("Pulse I step 5"), { shiftKey: true });
@@ -961,17 +1006,18 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseMove(window, { clientX: 45, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: 45, clientY: 0 });
 
-    expect(onMoveMelodicSelection).toHaveBeenCalledTimes(1);
-    expect(onMoveMelodicSelection).toHaveBeenCalledWith("pulse1", [0, 4], 2);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(
+      latestSong().tracks.pulse1.steps.flatMap((step, stepIndex) => (step.enabled ? [stepIndex] : [])),
+    ).toEqual([2, 6, 8, 12]);
   });
 
-  it("does not call move callbacks for invalid drags", () => {
-    const onMoveMelodicSelection = vi.fn();
+  it("does not move notes for invalid drags", () => {
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
 
-    const { container } = renderMatrix({ song, onMoveMelodicSelection });
+    const { container, latestSong, onEdit } = renderMatrix({ song });
 
     const cell = screen.getByLabelText("Pulse I step 1");
     const gridCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
@@ -986,14 +1032,40 @@ describe("sequencer-matrix", () => {
     fireEvent.pointerMove(window, { clientX: 80 });
     fireEvent.pointerUp(window, { clientX: 80 });
 
-    expect(onMoveMelodicSelection).not.toHaveBeenCalled();
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(latestSong()).toBe(song);
+  });
+
+  it("does not move a note dragged onto another note", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 3 };
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
+
+    const { container, latestSong, onEdit } = renderMatrix({ song });
+    const gridCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
+
+    if (gridCell === null) {
+      throw new Error("Expected step cell");
+    }
+
+    setCellWidth(gridCell, 20);
+
+    fireEvent.mouseDown(screen.getByLabelText("Pulse I step 1"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(window, { clientX: 80, clientY: 0 });
+
+    expect(screen.getAllByLabelText("Pulse I step 5").length).toBeGreaterThan(1);
+
+    fireEvent.mouseUp(window, { clientX: 80, clientY: 0 });
+
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(latestSong()).toBe(song);
+    expect(screen.getAllByLabelText("Pulse I step 5")).toHaveLength(1);
   });
 
   it("drags the right edge to resize a melodic note", () => {
-    const onResizeMelodicStep = vi.fn();
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 2 };
-    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const { container, latestSong } = renderMatrix({ song });
     const firstCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
 
     if (firstCell === null) {
@@ -1006,14 +1078,13 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseMove(window, { clientX: 40, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: 40, clientY: 0 });
 
-    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 0, 0, 4);
+    expect(latestSong().tracks.pulse1.steps[0]).toMatchObject({ enabled: true, note: "C5", length: 4 });
   });
 
   it("drags the left edge to resize a melodic note", () => {
-    const onResizeMelodicStep = vi.fn();
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 3 };
-    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const { container, latestSong } = renderMatrix({ song });
     const firstCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
 
     if (firstCell === null) {
@@ -1026,7 +1097,8 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseMove(window, { clientX: -40, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: -40, clientY: 0 });
 
-    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 4, 2, 5);
+    expect(latestSong().tracks.pulse1.steps[2]).toMatchObject({ enabled: true, note: "E5", length: 5 });
+    expect(latestSong().tracks.pulse1.steps[4]?.enabled).toBe(false);
   });
 
   it("resizes across a wrapped row boundary", () => {
@@ -1041,10 +1113,9 @@ describe("sequencer-matrix", () => {
       value: matchMedia,
     });
 
-    const onResizeMelodicStep = vi.fn();
     const song = createEmptySongDocument();
     song.tracks.pulse1.steps[7] = { ...song.tracks.pulse1.steps[7], enabled: true, length: 1 };
-    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const { container, latestSong } = renderMatrix({ song });
     const step0 = container.querySelector<HTMLElement>('[data-step-index="0"]');
     const step1 = container.querySelector<HTMLElement>('[data-step-index="1"]');
     const step8 = container.querySelector<HTMLElement>('[data-step-index="8"]');
@@ -1061,7 +1132,7 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseMove(window, { clientX: -144, clientY: 52 });
     fireEvent.mouseUp(window, { clientX: -144, clientY: 52 });
 
-    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 7, 7, 3);
+    expect(latestSong().tracks.pulse1.steps[7]).toMatchObject({ enabled: true, length: 3 });
 
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -1070,11 +1141,10 @@ describe("sequencer-matrix", () => {
   });
 
   it("clamps resize before the next melodic note", () => {
-    const onResizeMelodicStep = vi.fn();
     const song = createDefaultSongDocument();
     song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, length: 2 };
     song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, length: 1 };
-    const { container } = renderMatrix({ song, onResizeMelodicStep });
+    const { container, latestSong, onEdit } = renderMatrix({ song });
     const firstCell = container.querySelector<HTMLElement>('[data-step-index="0"]');
 
     if (firstCell === null) {
@@ -1087,7 +1157,15 @@ describe("sequencer-matrix", () => {
     fireEvent.mouseMove(window, { clientX: 100, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: 100, clientY: 0 });
 
-    expect(onResizeMelodicStep).toHaveBeenCalledWith("pulse1", 0, 0, 4);
+    expect(onEdit).toHaveBeenCalledWith({
+      type: "resize-note",
+      trackId: "pulse1",
+      stepIndex: 0,
+      startStepIndex: 0,
+      length: 4,
+    });
+    expect(latestSong().tracks.pulse1.steps[0]).toMatchObject({ enabled: true, length: 4 });
+    expect(latestSong().tracks.pulse1.steps[4]?.enabled).toBe(true);
   });
 
   it("collapses multi-selection to the anchor before arrow navigation", () => {
@@ -1120,5 +1198,93 @@ describe("sequencer-matrix", () => {
     expect(screen.queryByLabelText("Pulse I step 1 editor")).toBeNull();
     expect(screen.getByLabelText("Pulse I step 1").getAttribute("aria-selected")).toBe(null);
     expect(screen.getByLabelText("Pulse I step 5").getAttribute("aria-selected")).toBe(null);
+  });
+
+  it("keeps one keydown listener while the playhead advances", () => {
+    const addEventListener = vi.spyOn(document, "addEventListener");
+    const removeEventListener = vi.spyOn(document, "removeEventListener");
+
+    try {
+      const { movePlayhead } = renderMatrix({ playbackState: "playing", playhead: atStep(0) });
+      const keydownSubscriptions = () => addEventListener.mock.calls.filter(([type]) => type === "keydown").length;
+      const keydownUnsubscriptions = () =>
+        removeEventListener.mock.calls.filter(([type]) => type === "keydown").length;
+      const subscriptionsAfterMount = keydownSubscriptions();
+
+      for (let nextStep = 1; nextStep <= 6; nextStep += 1) {
+        movePlayhead(nextStep);
+      }
+
+      expect(subscriptionsAfterMount).toBe(1);
+      expect(keydownSubscriptions()).toBe(subscriptionsAfterMount);
+      expect(keydownUnsubscriptions()).toBe(0);
+    } finally {
+      addEventListener.mockRestore();
+      removeEventListener.mockRestore();
+    }
+  });
+
+  it("copies a selection and pastes it at the selected step", () => {
+    const song = createEmptySongDocument();
+    song.tracks.noise.steps[1] = { ...song.tracks.noise.steps[1], enabled: true, mode: "long", periodIndex: 8 };
+    song.tracks.noise.steps[2] = { ...song.tracks.noise.steps[2], enabled: true, mode: "short", periodIndex: 3 };
+    const { latestSong } = renderMatrix({ song });
+
+    fireEvent.click(screen.getByLabelText("Noise step 2"));
+    fireEvent.click(screen.getByLabelText("Noise step 3"), { shiftKey: true });
+    fireEvent.keyDown(document, { key: "c", ctrlKey: true });
+    fireEvent.click(screen.getByLabelText("Noise step 11"));
+    fireEvent.keyDown(document, { key: "v", metaKey: true });
+
+    expect(latestSong().tracks.noise.steps[10]).toMatchObject({ enabled: true, mode: "long", periodIndex: 8 });
+    expect(latestSong().tracks.noise.steps[11]).toMatchObject({ enabled: true, mode: "short", periodIndex: 3 });
+    expect(screen.getByLabelText("Noise step 11").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByLabelText("Noise step 12").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("copies and pastes with Cmd/Ctrl shortcuts while recording instead of recording notes", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[0] = { ...song.tracks.pulse1.steps[0], enabled: true, note: "A4", length: 2 };
+    const { latestSong, onEdit } = renderMatrix({ song, playhead: atStep(5), playbackState: "playing" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Pulse I" }));
+    fireEvent.keyDown(document, { key: "c", metaKey: true });
+
+    expect(onEdit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 9"));
+    fireEvent.keyDown(document, { key: "v", ctrlKey: true });
+
+    expect(latestSong().tracks.pulse1.steps[8]).toMatchObject({ enabled: true, note: "A4", length: 2 });
+    expect(latestSong().tracks.pulse1.steps[5]?.enabled).toBe(false);
+  });
+
+  it("does not enter keyboard notes for Cmd/Ctrl chords in keyboard mode", () => {
+    const { onEdit } = renderMatrix();
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Enable keyboard note mode" }));
+    fireEvent.keyDown(document, { key: "z", metaKey: true });
+    fireEvent.keyDown(document, { key: "r", ctrlKey: true });
+
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("closes an open note picker on Escape before clearing the step selection", () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByLabelText("Triangle step 1"));
+    fireEvent.click(screen.getByLabelText("Triangle step 1 note"));
+
+    expect(screen.getByRole("button", { name: "Select note D3" })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("button", { name: "Select note D3" })).toBeNull();
+    expect(screen.getByLabelText("Triangle step 1 editor")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByLabelText("Triangle step 1 editor")).toBeNull();
   });
 });

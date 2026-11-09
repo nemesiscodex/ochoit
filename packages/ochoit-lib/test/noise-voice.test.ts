@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDefaultSongDocument } from "@/features/song/song-document";
-import { createNoiseCycle, getNoisePlaybackRate, NoiseVoice } from "@/features/audio/noise-voice";
+import { createDefaultSongDocument } from "../src/core/song-document.js";
+import { createNoiseCycle, getNoisePlaybackRate, NoiseVoice } from "../src/web/noise-voice.js";
 
 class MockAudioParam {
   value = 1;

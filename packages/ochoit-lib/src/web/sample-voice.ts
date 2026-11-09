@@ -1,6 +1,7 @@
 import { encodeSampleToDpcm, normalizeDpcmRate } from "../core/dpcm.js";
 import { getFrequencyForNote } from "../core/note-frequency.js";
 import type { SampleTrack, SerializedSampleAsset, SongDocument } from "../core/song-document.js";
+import { getVoiceStepGain } from "../core/voice-gain.js";
 
 const noteAttackSeconds = 0.001;
 const noteReleaseSeconds = 0.012;
@@ -18,15 +19,12 @@ function getFrameRange(sample: SerializedSampleAsset) {
   };
 }
 
-function getSampleCacheKey(sample: SerializedSampleAsset, dpcmRate: number | null) {
-  return `${sample.id}:${sample.sampleRate}:${sample.trim.startFrame}:${sample.trim.endFrame}:${sample.frameCount}:${sample.pcm.length}:${dpcmRate ?? "pcm"}`;
-}
-
 export class SampleVoice {
   private track: SampleTrack | null = null;
   private sampleById = new Map<string, SerializedSampleAsset>();
   private engineMode: SongDocument["meta"]["engineMode"] = "inspired";
-  private readonly bufferByCacheKey = new Map<string, AudioBuffer>();
+  // Edits keep unchanged sample objects and a trim or re-record makes a new one, so identity is the exact invalidation.
+  private readonly buffersBySample = new WeakMap<SerializedSampleAsset, Map<string, AudioBuffer>>();
 
   constructor(
     private readonly context: AudioContext,
@@ -41,7 +39,6 @@ export class SampleVoice {
     this.track = track;
     this.sampleById = new Map(samples.map((sample) => [sample.id, sample]));
     this.engineMode = engineMode;
-    this.bufferByCacheKey.clear();
   }
 
   scheduleStep(stepIndex: number, time: number) {
@@ -64,7 +61,7 @@ export class SampleVoice {
     this.playSample(sample, {
       playbackRate: this.getPlaybackRate(step, sample),
       time,
-      volume: step.volume,
+      volume: getVoiceStepGain("sample", step.volume),
     });
   }
 
@@ -85,8 +82,15 @@ export class SampleVoice {
 
   private getSampleBuffer(sample: SerializedSampleAsset, playbackRate: number) {
     const dpcmRate = this.engineMode === "authentic" ? normalizeDpcmRate(playbackRate) : null;
-    const cacheKey = getSampleCacheKey(sample, dpcmRate);
-    const cachedBuffer = this.bufferByCacheKey.get(cacheKey);
+    const cacheKey = `${this.engineMode}:${dpcmRate ?? "pcm"}`;
+    let buffersForSample = this.buffersBySample.get(sample);
+
+    if (buffersForSample === undefined) {
+      buffersForSample = new Map();
+      this.buffersBySample.set(sample, buffersForSample);
+    }
+
+    const cachedBuffer = buffersForSample.get(cacheKey);
 
     if (cachedBuffer !== undefined) {
       return cachedBuffer;
@@ -99,7 +103,7 @@ export class SampleVoice {
       const dpcmSample = encodeSampleToDpcm(pcmSlice, sample.sampleRate, playbackRate);
       const dpcmBuffer = this.context.createBuffer(1, dpcmSample.decodedPcm.length, dpcmSample.sampleRate);
       dpcmBuffer.getChannelData(0).set(dpcmSample.decodedPcm);
-      this.bufferByCacheKey.set(cacheKey, dpcmBuffer);
+      buffersForSample.set(cacheKey, dpcmBuffer);
       return dpcmBuffer;
     }
 
@@ -112,7 +116,7 @@ export class SampleVoice {
       channel.set(pcmSlice);
     }
 
-    this.bufferByCacheKey.set(cacheKey, buffer);
+    buffersForSample.set(cacheKey, buffer);
     return buffer;
   }
 

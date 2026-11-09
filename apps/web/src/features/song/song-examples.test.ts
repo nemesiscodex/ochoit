@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { songExamples } from "@/features/song/song-examples";
-import { parseSongShareText } from "@/features/song/song-share";
+import { parseSongShareText } from "ochoit-lib";
 
 describe("song-examples", () => {
   it("ships a parseable built-in Mario Theme example", () => {

@@ -1,4 +1,4 @@
-import type { SongDocument } from "@/features/song/song-document";
+import type { SongDocument } from "ochoit-lib";
 
 export type EngineMode = SongDocument["meta"]["engineMode"];
 

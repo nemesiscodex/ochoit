@@ -1,18 +1,22 @@
-import { applyOldSpeakerEffect } from "@/features/audio/old-speaker";
-import { encodeSampleToDpcm } from "@/features/audio/dpcm";
-import { getFrequencyForNote } from "@/features/audio/note-frequency";
-import { createNoiseCycle, getNoisePlaybackRate } from "@/features/audio/noise-voice";
-import { createPulseCycle } from "@/features/audio/pulse-voice";
-import { createTriangleCycle, getTriangleOutputGain } from "@/features/audio/triangle-voice";
+import {
+  encodeSampleToDpcm,
+  getFrequencyForNote,
+  getStepOutputGain,
+  type NoiseTrack,
+  type PulseTrack,
+  type SampleTrack,
+  type SerializedSampleAsset,
+  type SongDocument,
+  type TriangleTrack,
+} from "ochoit-lib";
+import {
+  applyOldSpeakerEffect,
+  createNoiseCycle,
+  createPulseCycle,
+  createTriangleCycle,
+  getNoisePlaybackRate,
+} from "ochoit-lib/web";
 import { getTrimmedSamplePcm } from "@/features/song/song-samples";
-import type {
-  NoiseTrack,
-  PulseTrack,
-  SampleTrack,
-  SerializedSampleAsset,
-  SongDocument,
-  TriangleTrack,
-} from "@/features/song/song-document";
 
 const defaultSongWavSampleRate = 44_100;
 const pulseCycleFrameCount = 2048;
@@ -106,7 +110,7 @@ function renderPulseTrack(
     const durationSeconds = Math.max(stepDurationSeconds * step.length - pulseNoteAttackSeconds, pulseNoteAttackSeconds);
     const cycle = getPulseCycle(step.duty, song.meta.engineMode);
     const phaseIncrement = (getFrequencyForNote(step.note) * cycle.length) / sampleRate;
-    const gain = getTriangleOutputGain(song.mixer.masterVolume * track.volume * step.volume);
+    const gain = getStepOutputGain(song.mixer, track, step.volume);
 
     mixCycleVoice(target, {
       attackSeconds: pulseNoteAttackSeconds,
@@ -146,7 +150,7 @@ function renderTriangleTrack(
       triangleNoteAttackSeconds,
     );
     const phaseIncrement = (getFrequencyForNote(step.note) * triangleCycle.length) / sampleRate;
-    const gain = song.mixer.masterVolume * track.volume * step.volume;
+    const gain = getStepOutputGain(song.mixer, track, step.volume);
 
     mixCycleVoice(target, {
       attackSeconds: triangleNoteAttackSeconds,
@@ -180,7 +184,7 @@ function renderNoiseTrack(
     }
 
     const cycle = getNoiseCycle(step.mode);
-    const gain = song.mixer.masterVolume * track.volume * step.volume;
+    const gain = getStepOutputGain(song.mixer, track, step.volume);
 
     mixCycleVoice(target, {
       attackSeconds: noiseNoteAttackSeconds,
@@ -234,7 +238,7 @@ function renderSampleTrack(
 
       mixSampleVoice(target, {
         attackSeconds: sampleNoteAttackSeconds,
-        gain: song.mixer.masterVolume * track.volume * step.volume,
+        gain: getStepOutputGain(song.mixer, track, step.volume),
         inputPcm: dpcmSample.decodedPcm,
         inputSampleRate: dpcmSample.sampleRate,
         outputSampleRate,
@@ -248,7 +252,7 @@ function renderSampleTrack(
 
     mixSampleVoice(target, {
       attackSeconds: sampleNoteAttackSeconds,
-      gain: song.mixer.masterVolume * track.volume * step.volume,
+      gain: getStepOutputGain(song.mixer, track, step.volume),
       inputPcm: trimmedPcm,
       inputSampleRate: sample.sampleRate,
       outputSampleRate,

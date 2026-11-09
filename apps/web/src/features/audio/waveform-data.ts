@@ -1,4 +1,4 @@
-import { trackOrder, type TrackId } from "@/features/song/song-document";
+import { trackOrder, type TrackId } from "ochoit-lib";
 
 export const WAVEFORM_SAMPLE_SIZE = 256;
 const defaultMidpoint = 128;

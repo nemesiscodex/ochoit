@@ -1,13 +1,15 @@
 import type { TransportConfig } from "../core/transport-worklet-shared.js";
 import { getFrequencyForNote } from "../core/note-frequency.js";
 import type { SongDocument, TriangleTrack } from "../core/song-document.js";
+import { getVoiceStepGain } from "../core/voice-gain.js";
+
+export { TRIANGLE_OUTPUT_GAIN } from "../core/voice-gain.js";
 
 const triangleCycleFrameCount = 2048;
 const noteAttackSeconds = 0.002;
 const noteReleaseSeconds = 0.02;
 const sourceStopPaddingSeconds = 0.01;
 const silentGainFloor = 0.0001;
-export const TRIANGLE_OUTPUT_GAIN = 1.7;
 type ActiveTriangleNote = {
   source: AudioBufferSourceNode;
   gain: GainNode;
@@ -21,7 +23,7 @@ const authenticTriangleSequence = [
 ] as const;
 
 export function getTriangleOutputGain(volume: number) {
-  return Math.min(1, volume * TRIANGLE_OUTPUT_GAIN);
+  return getVoiceStepGain("triangle", volume);
 }
 
 export function createTriangleCycle(

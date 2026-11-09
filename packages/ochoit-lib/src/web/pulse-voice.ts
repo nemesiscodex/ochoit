@@ -1,6 +1,7 @@
 import type { TransportConfig } from "../core/transport-worklet-shared.js";
 import { getFrequencyForNote } from "../core/note-frequency.js";
 import type { PulseTrack, SongDocument } from "../core/song-document.js";
+import { getVoiceStepGain } from "../core/voice-gain.js";
 
 const pulseCycleFrameCount = 2048;
 const noteAttackSeconds = 0.002;
@@ -106,7 +107,7 @@ export class PulseVoice {
     }
 
     const noteDuration = Math.max(this.stepDuration * step.length - noteAttackSeconds, noteAttackSeconds);
-    this.playNote(step.note, step.duty, step.volume, time, noteDuration);
+    this.playNote(step.note, step.duty, getVoiceStepGain("pulse", step.volume), time, noteDuration);
   }
 
   previewNote(note: string, duty: PulseDuty, durationMs = 120, volume = 0.25) {

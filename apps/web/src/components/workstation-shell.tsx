@@ -8,43 +8,30 @@ import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useStat
 import {
   type ArrangementTextFormat,
   SONG_MAX_SAMPLE_COUNT,
+  applySongEdit,
   buildSongShareUrl,
   createEmptySongDocument,
   getOrderedTracks,
-  parseMelodicTrackArrangement,
-  parseNoiseTrackArrangement,
-  parseSampleTrackArrangement,
   parseSongShareText,
   readSongShareFromHash,
-  replaceMelodicTrackArrangement,
-  replaceNoiseTrackArrangement,
-  replaceSampleTrackArrangement,
   replaceSampleTrackSampleReference,
-  resizeMelodicTrackStep,
-  serializeMelodicTrackArrangement,
-  serializeNoiseTrackArrangement,
-  serializeSampleTrackArrangement,
+  serializeTrackArrangement,
   serializeSongShareText,
-  updateMelodicTrackStep,
-  updateNoiseTrackStep,
-  updateSampleTrackStep,
   noiseTriggerPresets,
-  isMelodicTrackId,
-  moveMelodicTrackEntries,
-  moveNoiseTrackEntries,
-  moveSampleTrackEntries,
-  type MelodicStepUpdates,
-  type MelodicTrackId,
-  type NoiseStepUpdates,
-  type SampleStepUpdates,
   type SongDocument,
+  type SongEdit,
+  type SongEditResult,
   type TrackId,
-  type TriggerTrackId,
+  resolveSongBpmInput,
+  resolveSongLoopLengthInput,
+  SONG_BPM_RANGE,
+  SONG_LOOP_LENGTH_RANGE,
 } from "ochoit-lib";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
 import { NotePicker } from "@/components/note-picker";
 import { labelByTrackId, waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
+import { useStableCallback } from "@/components/use-stable-callback";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 import {
   createWaveformFromPcm,
@@ -54,21 +41,13 @@ import {
 } from "@/features/audio/sample-recorder";
 import { useAudioEngine, type AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import {
-  type EngineMode,
   formatEngineModeLabel,
   getPcmModeLabel,
   getPcmModeSummary,
   getSampleArrangementHelperCopy,
 } from "@/features/song/pcm-mode";
 import { getSongExampleById, songExamples, type SongExample } from "@/features/song/song-examples";
-import {
-  TRACK_VOLUME_PERCENT_RANGE,
-  toTrackVolumePercent,
-  updateMasterVolume,
-  updateOldSpeakerMode,
-  updateTrackMute,
-  updateTrackVolume,
-} from "@/features/song/song-mixer";
+import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
 import { createSongWavBlob, createSongWavFileName } from "@/features/song/song-wav";
 import {
   applySampleTrim,
@@ -78,22 +57,9 @@ import {
   removeSampleAsset,
   resizeSampleTrimWindow,
 } from "@/features/song/song-samples";
-import {
-  canUpdateSongStepsPerBeat,
-  clampSongLoopLength,
-  resolveSongBpmInput,
-  resolveSongLoopLengthInput,
-  SONG_BPM_RANGE,
-  SONG_EIGHTH_GRID_STEPS_PER_BEAT,
-  SONG_LOOP_LENGTH_RANGE,
-  type SongTimingResolution,
-  songLoopLengthWouldTrimContent,
-  updateSongStepsPerBeat,
-  updateSongTransport,
-} from "@/features/song/song-transport";
 
 type ArrangementEditorState = {
-  trackId: MelodicTrackId | TriggerTrackId;
+  trackId: TrackId;
   draft: string;
   error: string | null;
   textFormat: ArrangementTextFormat;
@@ -111,6 +77,13 @@ type ShareStatus = {
 
 type WorkstationShellProps = {
   initialSong?: SongDocument;
+};
+
+type ReplaceSongOptions = {
+  message: string;
+  stopPlaybackAndClearLink?: boolean;
+  closeShareDslEditor?: boolean;
+  closeExamples?: boolean;
 };
 
 function reformatArrangementDraft(draft: string, textFormat: ArrangementTextFormat) {
@@ -136,8 +109,17 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   const deckSampleIdRef = useRef<string | null>(null);
   const tracks = getOrderedTracks(song);
   deckSampleIdRef.current = deckSampleId;
-  const { engine, engineState, errorMessage, initializeAudio, startTransport, startTransportAtStep, stopTransport, transportState } =
-    useAudioEngine(song);
+  const {
+    engine,
+    engineState,
+    errorMessage,
+    initializeAudio,
+    playbackState,
+    playhead,
+    startTransport,
+    startTransportAtStep,
+    stopTransport,
+  } = useAudioEngine(song);
   const {
     errorMessage: recorderErrorMessage,
     permissionState: recorderPermissionState,
@@ -174,7 +156,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   });
   const audioReady = engineState === "running" || engineState === "suspended";
   const showAudioGate = !audioReady;
-  const isPlaying = transportState.playbackState === "playing";
+  const isPlaying = playbackState === "playing";
   const deckSample =
     (deckSampleId === null ? null : song.samples.find((sample) => sample.id === deckSampleId) ?? null) ??
     song.samples.at(-1) ??
@@ -194,131 +176,32 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     readyEngine?.previewSampleTrigger(deckSample.id, 1, Math.max(1, deckSampleDurationMs));
   };
 
-  const toggleTrackMute = (trackId: TrackId) => {
-    setSong((currentSong) => updateTrackMute(currentSong, trackId));
+  const showEditError = (message: string) => {
+    setShareStatus({
+      tone: "error",
+      message,
+    });
   };
 
-  const setTrackVolume = (trackId: TrackId, volume: number) => {
-    setSong((currentSong) => updateTrackVolume(currentSong, trackId, volume));
-  };
+  // The check runs on the rendered song so the confirm dialog stays out of the state updater; the
+  // updater re-applies against the latest song so several edits from one event still compose.
+  const applyEdit = (edit: SongEdit, onRejected: (message: string) => void = showEditError): SongEditResult => {
+    const editContext = { defaultSampleId: deckSample?.id ?? null };
+    const result = applySongEdit(song, edit, editContext);
 
-  const setMasterSongVolume = (volume: number) => {
-    setSong((currentSong) => updateMasterVolume(currentSong, volume));
-  };
-
-  const setOldSpeakerMode = (enabled: boolean) => {
-    setSong((currentSong) => updateOldSpeakerMode(currentSong, enabled));
-  };
-
-  const updateMelodicStep = (trackId: MelodicTrackId, stepIndex: number, updates: MelodicStepUpdates) => {
-    setSong((currentSong) => updateMelodicTrackStep(currentSong, trackId, stepIndex, updates));
-  };
-
-  const updateNoiseStep = (stepIndex: number, updates: NoiseStepUpdates) => {
-    setSong((currentSong) => updateNoiseTrackStep(currentSong, stepIndex, updates));
-  };
-
-  const updateSampleStep = (stepIndex: number, updates: SampleStepUpdates) => {
-    setSong((currentSong) => updateSampleTrackStep(currentSong, stepIndex, updates));
-  };
-
-  const moveMelodicSelection = (trackId: MelodicTrackId, selectedStepIndexes: number[], delta: number) => {
-    setSong((currentSong) => moveMelodicTrackEntries(currentSong, trackId, selectedStepIndexes, delta));
-  };
-
-  const resizeMelodicStep = (
-    trackId: MelodicTrackId,
-    stepIndex: number,
-    nextStartStepIndex: number,
-    nextLength: number,
-  ) => {
-    setSong((currentSong) =>
-      resizeMelodicTrackStep(currentSong, trackId, stepIndex, nextStartStepIndex, nextLength),
-    );
-  };
-
-  const moveNoiseSelection = (selectedStepIndexes: number[], delta: number) => {
-    setSong((currentSong) => moveNoiseTrackEntries(currentSong, selectedStepIndexes, delta));
-  };
-
-  const moveSampleSelection = (selectedStepIndexes: number[], delta: number) => {
-    setSong((currentSong) => moveSampleTrackEntries(currentSong, selectedStepIndexes, delta));
-  };
-
-  const requestLoopLengthChange = (nextLoopLength: number) => {
-    const resolvedLoopLength = clampSongLoopLength(nextLoopLength);
-
-    if (resolvedLoopLength === song.transport.loopLength) {
-      return;
+    if (result.status === "rejected") {
+      onRejected(result.message);
+      return result;
     }
 
-    if (
-      resolvedLoopLength < song.transport.loopLength &&
-      songLoopLengthWouldTrimContent(song, resolvedLoopLength) &&
-      typeof window !== "undefined"
-    ) {
-      const confirmed = window.confirm(
-        `Reduce the pattern to ${resolvedLoopLength} steps? This will delete or shorten notes and triggers beyond the new end.`,
-      );
-
-      if (!confirmed) {
-        return;
-      }
+    if (result.status === "needs-confirmation" && typeof window !== "undefined" && !window.confirm(result.message)) {
+      return result;
     }
 
-    setSong((currentSong) => updateSongTransport(currentSong, { loopLength: resolvedLoopLength }));
-  };
+    const editToCommit = result.status === "needs-confirmation" ? result.confirmedEdit : edit;
 
-  const requestStepsPerBeatChange = (nextStepsPerBeat: SongTimingResolution) => {
-    if (song.transport.stepsPerBeat === nextStepsPerBeat) {
-      return;
-    }
-
-    if (!canUpdateSongStepsPerBeat(song, nextStepsPerBeat)) {
-      setShareStatus({
-        tone: "error",
-        message:
-          nextStepsPerBeat === SONG_EIGHTH_GRID_STEPS_PER_BEAT
-            ? "1/8 grid would exceed the maximum pattern length."
-            : "Grid mode is only available when recorded notes and triggers align to the beat grid.",
-      });
-      return;
-    }
-
-    setSong((currentSong) => updateSongStepsPerBeat(currentSong, nextStepsPerBeat));
-  };
-
-  const updateEngineMode = (engineMode: EngineMode) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        engineMode,
-        updatedAt: new Date().toISOString(),
-      },
-    }));
-  };
-
-  const updateSongName = (name: string) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        name: name.slice(0, 80),
-        updatedAt: new Date().toISOString(),
-      },
-    }));
-  };
-
-  const updateSongAuthor = (author: string) => {
-    setSong((currentSong) => ({
-      ...currentSong,
-      meta: {
-        ...currentSong.meta,
-        author: author.slice(0, 80),
-        updatedAt: new Date().toISOString(),
-      },
-    }));
+    setSong((currentSong) => applySongEdit(currentSong, editToCommit, editContext).song);
+    return result;
   };
 
   const moveDeckSampleTrimWindow = (startFrame: number) => {
@@ -376,6 +259,42 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     }));
   };
 
+  const clearSongShareFromCurrentUrl = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    url.hash = "";
+    window.history.replaceState(window.history.state, "", url.toString());
+  };
+
+  const replaceSong = (nextSong: SongDocument, options: ReplaceSongOptions) => {
+    if (options.stopPlaybackAndClearLink) {
+      stopTransport();
+      clearSongShareFromCurrentUrl();
+    }
+
+    startTransition(() => {
+      setSong(nextSong);
+      setArrangementEditor(null);
+      setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
+
+      if (options.closeExamples) {
+        setExamplesOpen(false);
+      }
+    });
+
+    if (options.closeShareDslEditor) {
+      setShareDslEditor(null);
+    }
+
+    setShareStatus({
+      tone: "neutral",
+      message: options.message,
+    });
+  };
+
   const applySharedSongFromCurrentUrl = (emptyMessage: string | null) => {
     if (typeof window === "undefined") {
       return;
@@ -402,25 +321,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       return;
     }
 
-    startTransition(() => {
-      setSong(result.song);
-      setArrangementEditor(null);
-      setDeckSampleId(result.song.samples.at(-1)?.id ?? null);
-    });
-    setShareStatus({
-      tone: "neutral",
-      message: "Loaded shared song from the current link.",
-    });
-  };
-
-  const clearSongShareFromCurrentUrl = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    url.hash = "";
-    window.history.replaceState(window.history.state, "", url.toString());
+    replaceSong(result.song, { message: "Loaded shared song from the current link." });
   };
 
   const resetSong = () => {
@@ -434,18 +335,10 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       }
     }
 
-    stopTransport();
-    clearSongShareFromCurrentUrl();
-
-    startTransition(() => {
-      setSong(createEmptySongDocument());
-      setDeckSampleId(null);
-      setArrangementEditor(null);
-      setShareDslEditor(null);
-    });
-    setShareStatus({
-      tone: "neutral",
+    replaceSong(createEmptySongDocument(), {
       message: "Started a new song and removed the shared link.",
+      stopPlaybackAndClearLink: true,
+      closeShareDslEditor: true,
     });
   };
 
@@ -497,32 +390,18 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     }
   };
 
-  const openMelodicTrackEditor = (trackId: MelodicTrackId) => {
+  const openArrangementEditor = (trackId: TrackId) => {
     setExamplesOpen(false);
     setShareDslEditor(null);
     setArrangementEditor({
       trackId,
-      draft: serializeMelodicTrackArrangement(song.tracks[trackId], "compact"),
+      draft: serializeTrackArrangement(song, trackId, "compact"),
       error: null,
       textFormat: "compact",
     });
   };
 
-  const openTriggerTrackEditor = (trackId: TriggerTrackId) => {
-    setExamplesOpen(false);
-    setShareDslEditor(null);
-    setArrangementEditor({
-      trackId,
-      draft:
-        trackId === "noise"
-          ? serializeNoiseTrackArrangement(song.tracks.noise, "compact")
-          : serializeSampleTrackArrangement(song.tracks.sample, song.meta.engineMode, "compact"),
-      error: null,
-      textFormat: "compact",
-    });
-  };
-
-  const closeMelodicTrackEditor = () => {
+  const closeArrangementEditor = () => {
     setArrangementEditor(null);
   };
 
@@ -557,20 +436,11 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     }
 
     try {
-      const nextSong = parseSongShareText(example.dsl);
-
-      stopTransport();
-      clearSongShareFromCurrentUrl();
-      startTransition(() => {
-        setSong(nextSong);
-        setArrangementEditor(null);
-        setShareDslEditor(null);
-        setExamplesOpen(false);
-        setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
-      });
-      setShareStatus({
-        tone: "neutral",
+      replaceSong(parseSongShareText(example.dsl), {
         message: `Loaded example: ${example.name}.`,
+        stopPlaybackAndClearLink: true,
+        closeShareDslEditor: true,
+        closeExamples: true,
       });
     } catch (error) {
       setShareStatus({
@@ -616,17 +486,9 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     }
 
     try {
-      const nextSong = parseSongShareText(shareDslEditor.draft);
-
-      startTransition(() => {
-        setSong(nextSong);
-        setArrangementEditor(null);
-        setDeckSampleId(nextSong.samples.at(-1)?.id ?? null);
-      });
-      setShareDslEditor(null);
-      setShareStatus({
-        tone: "neutral",
+      replaceSong(parseSongShareText(shareDslEditor.draft), {
         message: "Loaded song from share DSL.",
+        closeShareDslEditor: true,
       });
     } catch (error) {
       setShareDslEditor((currentEditor) => {
@@ -676,83 +538,16 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
       return;
     }
 
-    if (arrangementEditor.trackId === "noise") {
-      const parsedArrangement = parseNoiseTrackArrangement(arrangementEditor.draft, song.transport.loopLength);
-
-      if (!parsedArrangement.ok) {
-        setArrangementEditor((currentEditor) => {
-          if (currentEditor === null) {
-            return null;
-          }
-
-          return {
-            ...currentEditor,
-            error: parsedArrangement.error,
-          };
-        });
-        return;
-      }
-
-      setSong((currentSong) => replaceNoiseTrackArrangement(currentSong, parsedArrangement.entries));
-      setArrangementEditor(null);
-      return;
-    }
-
-    if (arrangementEditor.trackId === "sample") {
-      const parsedArrangement = parseSampleTrackArrangement(
-        arrangementEditor.draft,
-        song.transport.loopLength,
-        song.samples,
-      );
-
-      if (!parsedArrangement.ok) {
-        setArrangementEditor((currentEditor) => {
-          if (currentEditor === null) {
-            return null;
-          }
-
-          return {
-            ...currentEditor,
-            error: parsedArrangement.error,
-          };
-        });
-        return;
-      }
-
-      setSong((currentSong) => replaceSampleTrackArrangement(currentSong, parsedArrangement.entries));
-      setArrangementEditor(null);
-      return;
-    }
-
-    if (!isMelodicTrackId(arrangementEditor.trackId)) {
-      return;
-    }
-
-    const melodicTrackId = arrangementEditor.trackId;
-    const parsedArrangement = parseMelodicTrackArrangement(
-      arrangementEditor.draft,
-      song.transport.loopLength,
-      melodicTrackId,
+    const result = applyEdit(
+      { type: "replace-arrangement", trackId: arrangementEditor.trackId, text: arrangementEditor.draft },
+      (error) => {
+        setArrangementEditor((currentEditor) => (currentEditor === null ? null : { ...currentEditor, error }));
+      },
     );
 
-    if (!parsedArrangement.ok) {
-      setArrangementEditor((currentEditor) => {
-        if (currentEditor === null) {
-          return null;
-        }
-
-        return {
-          ...currentEditor,
-          error: parsedArrangement.error,
-        };
-      });
-      return;
+    if (result.status !== "rejected") {
+      setArrangementEditor(null);
     }
-
-    setSong((currentSong) =>
-      replaceMelodicTrackArrangement(currentSong, melodicTrackId, parsedArrangement.entries),
-    );
-    setArrangementEditor(null);
   };
 
   useEffect(() => {
@@ -848,6 +643,27 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
     applySharedSongFromCurrentUrl(null);
   }, []);
 
+  // Stable identities let the memoized panels below skip the re-render every song edit causes here.
+  const editSong = useStableCallback(applyEdit);
+  const onStartTransport = useStableCallback(startTransport);
+  const onStopTransport = useStableCallback(stopTransport);
+  const onInitializeAudio = useStableCallback(initializeAudio);
+  const onOpenExamples = useStableCallback(() => {
+    setShowExamplesGlow(false);
+    openExamplesDialog();
+  });
+  const onOpenShareDsl = useStableCallback(openShareDslEditor);
+  const onSaveWav = useStableCallback(() => {
+    void saveArrangementAsWav();
+  });
+  const onCopyShareLink = useStableCallback(() => {
+    void copyShareLink();
+  });
+  const onLoadSongFromUrl = useStableCallback(() => {
+    applySharedSongFromCurrentUrl("No shared song was found in the current link.");
+  });
+  const onStartNewSong = useStableCallback(resetSong);
+
   return (
     <main className="relative min-h-full overflow-auto bg-[var(--oc-bg)] text-white oc-scanlines">
       {/* Ambient gradient backdrop */}
@@ -862,162 +678,36 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
         <section className={cn("flex flex-col gap-2.5", showAudioGate ? "relative z-30" : undefined)}>
           {/* Row 1: Transport Strip — the "hardware panel" */}
           <TransportStrip
-            song={song}
+            bpm={song.transport.bpm}
+            loopLength={song.transport.loopLength}
+            masterVolume={song.mixer.masterVolume}
+            oldSpeakerMode={song.mixer.oldSpeakerMode}
             engineState={engineState}
-            startTransport={startTransport}
-            stopTransport={stopTransport}
+            startTransport={onStartTransport}
+            stopTransport={onStopTransport}
             isPlaying={isPlaying}
             sequencerRulerVisible={sequencerRulerVisible}
             sequencerHoverPreviewEnabled={sequencerHoverPreviewEnabled}
-            onMasterVolumeChange={setMasterSongVolume}
-            onOldSpeakerModeChange={setOldSpeakerMode}
+            onEdit={editSong}
             onSequencerRulerVisibleChange={setSequencerRulerVisible}
             onSequencerHoverPreviewChange={setSequencerHoverPreviewEnabled}
-            onBpmChange={(nextBpm) => {
-              setSong((currentSong) => updateSongTransport(currentSong, { bpm: nextBpm }));
-            }}
-            onLoopLengthChange={(nextLoopLength) => {
-              setSong((currentSong) => updateSongTransport(currentSong, { loopLength: nextLoopLength }));
-            }}
           />
 
           {/* Row 2: Actions Bar — distinct from transport */}
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.04] bg-[var(--oc-surface)]/60 px-3 py-2 backdrop-blur-sm">
-            {/* Primary: Audio gate */}
-            <AudioInitButton
-              engineState={engineState}
-              audioReady={audioReady}
-              initializeAudio={initializeAudio}
-              showAudioGate={showAudioGate}
-            />
-
-            <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
-
-            {/* Featured: Examples — the star of the show */}
-            <BorderGlow
-              animated={showExamplesGlow}
-              backgroundColor="rgba(13, 15, 24, 0.85)"
-              borderRadius={8}
-              glowRadius={16}
-              glowIntensity={0.9}
-              edgeSensitivity={20}
-              coneSpread={30}
-              fillOpacity={0.35}
-              glowColor="263 90 76"
-              colors={["#a78bfa", "#5cb8ff", "#ff5ea0"]}
-            >
-              <Button
-                variant="outline"
-                className="h-10 rounded-lg border-0 bg-transparent px-4 font-[var(--oc-mono)] text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--oc-accent)]/80 hover:bg-[var(--oc-accent)]/10 hover:text-[var(--oc-accent)]"
-                aria-label="Open examples"
-                onClick={() => {
-                  setShowExamplesGlow(false);
-                  openExamplesDialog();
-                }}
-              >
-                <Sparkles className="mr-1.5 size-3.5" />
-                Examples
-              </Button>
-            </BorderGlow>
-
-            <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
-
-            {/* Utility cluster: DSL, WAV, Share, Load */}
-            <div className="flex items-center gap-1.5">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-                      aria-label="Edit share DSL"
-                      onClick={openShareDslEditor}
-                    />
-                  }
-                >
-                  DSL
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Edit song as text DSL</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-                      aria-label="Download arrangement as WAV file"
-                      disabled={isExportingWav}
-                      onClick={() => {
-                        void saveArrangementAsWav();
-                      }}
-                    />
-                  }
-                >
-                  <Download className="mr-1 size-3" />
-                  <span className="hidden sm:inline">{isExportingWav ? "Saving…" : "WAV"}</span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Download as WAV file</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-                      aria-label="Copy shareable link to clipboard"
-                      onClick={() => {
-                        void copyShareLink();
-                      }}
-                    />
-                  }
-                >
-                  <Link className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Copy shareable link</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-                      aria-label="Load song from current URL"
-                      onClick={() => {
-                        applySharedSongFromCurrentUrl("No shared song was found in the current link.");
-                      }}
-                    />
-                  }
-                >
-                  <Upload className="size-3.5" />
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Load song from URL</TooltipContent>
-              </Tooltip>
-            </div>
-
-            {/* Spacer pushes destructive action to the end */}
-            <div className="hidden flex-1 lg:block" />
-
-            {/* Destructive: New */}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-9 rounded-md border-[var(--oc-noise)]/15 bg-[var(--oc-noise)]/[0.04] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-noise)]/60 hover:border-[var(--oc-noise)]/30 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
-                    aria-label="New song"
-                    onClick={resetSong}
-                  />
-                }
-              >
-                <FilePlus2 className="mr-1 size-3" />
-                <span className="hidden sm:inline">New</span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Start a new song</TooltipContent>
-            </Tooltip>
-          </div>
+          <ActionsBar
+            audioReady={audioReady}
+            engineState={engineState}
+            isExportingWav={isExportingWav}
+            onCopyShareLink={onCopyShareLink}
+            onInitializeAudio={onInitializeAudio}
+            onLoadSongFromUrl={onLoadSongFromUrl}
+            onOpenExamples={onOpenExamples}
+            onOpenShareDsl={onOpenShareDsl}
+            onSaveWav={onSaveWav}
+            onStartNewSong={onStartNewSong}
+            showAudioGate={showAudioGate}
+            showExamplesGlow={showExamplesGlow}
+          />
 
           {shareStatus !== null ? (
             <div
@@ -1048,24 +738,12 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               engine={engine}
               hoverPreviewEnabled={sequencerHoverPreviewEnabled}
               rulerVisible={sequencerRulerVisible}
-              onOpenMelodicTrackEditor={openMelodicTrackEditor}
-              onOpenTriggerTrackEditor={openTriggerTrackEditor}
-              onRequestLoopLengthChange={requestLoopLengthChange}
-              onRequestStepsPerBeatChange={requestStepsPerBeatChange}
-              onToggleTrackMute={toggleTrackMute}
-              onUpdateTrackVolume={setTrackVolume}
-              onUpdateMelodicStep={updateMelodicStep}
-              onResizeMelodicStep={resizeMelodicStep}
-              onMoveMelodicSelection={moveMelodicSelection}
-              onMoveNoiseSelection={moveNoiseSelection}
-              onMoveSampleSelection={moveSampleSelection}
-              onUpdateNoiseStep={updateNoiseStep}
-              onUpdateSampleStep={updateSampleStep}
+              onEdit={editSong}
+              onOpenArrangementEditor={openArrangementEditor}
               onStartTransportAtStep={startTransportAtStep}
               song={song}
-              playbackState={transportState.playbackState}
-              nextStep={transportState.nextStep}
-              loopCount={transportState.loopCount}
+              playbackState={playbackState}
+              playhead={playhead}
             />
           </div>
 
@@ -1091,11 +769,13 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
               onStopRecording={stopRecording}
             />
             <SongMeta
+              author={song.meta.author}
+              bpm={song.transport.bpm}
+              engineMode={song.meta.engineMode}
               engineState={engineState}
-              onUpdateEngineMode={updateEngineMode}
-              onUpdateSongAuthor={updateSongAuthor}
-              onUpdateSongName={updateSongName}
-              song={song}
+              loopLength={song.transport.loopLength}
+              name={song.meta.name}
+              onEdit={editSong}
               trackCount={tracks.length}
             />
           </aside>
@@ -1120,7 +800,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
           samples={song.samples}
           onChangeDraft={updateArrangementDraft}
           onChangeTextFormat={updateArrangementTextFormat}
-          onClose={closeMelodicTrackEditor}
+          onClose={closeArrangementEditor}
           onApply={applyArrangement}
         />
       ) : null}
@@ -1141,36 +821,196 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   );
 }
 
+/* ─────────── Actions Bar ─────────── */
+
+const ActionsBar = memo(function ActionsBar({
+  audioReady,
+  engineState,
+  isExportingWav,
+  onCopyShareLink,
+  onInitializeAudio,
+  onLoadSongFromUrl,
+  onOpenExamples,
+  onOpenShareDsl,
+  onSaveWav,
+  onStartNewSong,
+  showAudioGate,
+  showExamplesGlow,
+}: {
+  audioReady: boolean;
+  engineState: AudioBootstrapState;
+  isExportingWav: boolean;
+  onCopyShareLink: () => void;
+  onInitializeAudio: () => Promise<unknown>;
+  onLoadSongFromUrl: () => void;
+  onOpenExamples: () => void;
+  onOpenShareDsl: () => void;
+  onSaveWav: () => void;
+  onStartNewSong: () => void;
+  showAudioGate: boolean;
+  showExamplesGlow: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.04] bg-[var(--oc-surface)]/60 px-3 py-2 backdrop-blur-sm">
+      {/* Primary: Audio gate */}
+      <AudioInitButton
+        engineState={engineState}
+        audioReady={audioReady}
+        initializeAudio={onInitializeAudio}
+        showAudioGate={showAudioGate}
+      />
+
+      <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
+
+      {/* Featured: Examples — the star of the show */}
+      <BorderGlow
+        animated={showExamplesGlow}
+        backgroundColor="rgba(13, 15, 24, 0.85)"
+        borderRadius={8}
+        glowRadius={16}
+        glowIntensity={0.9}
+        edgeSensitivity={20}
+        coneSpread={30}
+        fillOpacity={0.35}
+        glowColor="263 90 76"
+        colors={["#a78bfa", "#5cb8ff", "#ff5ea0"]}
+      >
+        <Button
+          variant="outline"
+          className="h-10 rounded-lg border-0 bg-transparent px-4 font-[var(--oc-mono)] text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--oc-accent)]/80 hover:bg-[var(--oc-accent)]/10 hover:text-[var(--oc-accent)]"
+          aria-label="Open examples"
+          onClick={onOpenExamples}
+        >
+          <Sparkles className="mr-1.5 size-3.5" />
+          Examples
+        </Button>
+      </BorderGlow>
+
+      <div className="oc-action-divider hidden sm:block" aria-hidden="true" />
+
+      {/* Utility cluster: DSL, WAV, Share, Load */}
+      <div className="flex items-center gap-1.5">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                aria-label="Edit share DSL"
+                onClick={onOpenShareDsl}
+              />
+            }
+          >
+            DSL
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Edit song as text DSL</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                className="h-9 rounded-md border-white/[0.06] bg-white/[0.02] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                aria-label="Download arrangement as WAV file"
+                disabled={isExportingWav}
+                onClick={onSaveWav}
+              />
+            }
+          >
+            <Download className="mr-1 size-3" />
+            <span className="hidden sm:inline">{isExportingWav ? "Saving…" : "WAV"}</span>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Download as WAV file</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                aria-label="Copy shareable link to clipboard"
+                onClick={onCopyShareLink}
+              />
+            }
+          >
+            <Link className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Copy shareable link</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-9 border-white/[0.06] bg-white/[0.02] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                aria-label="Load song from current URL"
+                onClick={onLoadSongFromUrl}
+              />
+            }
+          >
+            <Upload className="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Load song from URL</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Spacer pushes destructive action to the end */}
+      <div className="hidden flex-1 lg:block" />
+
+      {/* Destructive: New */}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-md border-[var(--oc-noise)]/15 bg-[var(--oc-noise)]/[0.04] px-2.5 font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-[var(--oc-noise)]/60 hover:border-[var(--oc-noise)]/30 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
+              aria-label="New song"
+              onClick={onStartNewSong}
+            />
+          }
+        >
+          <FilePlus2 className="mr-1 size-3" />
+          <span className="hidden sm:inline">New</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Start a new song</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+});
+
 /* ─────────── Transport Strip ─────────── */
 
-function TransportStrip({
-  song,
+const TransportStrip = memo(function TransportStrip({
+  bpm,
+  loopLength,
+  masterVolume,
+  oldSpeakerMode,
   engineState,
   startTransport,
   stopTransport,
   isPlaying,
   sequencerRulerVisible,
   sequencerHoverPreviewEnabled,
-  onMasterVolumeChange,
-  onOldSpeakerModeChange,
+  onEdit,
   onSequencerRulerVisibleChange,
   onSequencerHoverPreviewChange,
-  onBpmChange,
-  onLoopLengthChange,
 }: {
-  song: SongDocument;
+  bpm: number;
+  loopLength: number;
+  masterVolume: number;
+  oldSpeakerMode: boolean;
   engineState: AudioBootstrapState;
   startTransport: () => Promise<void>;
   stopTransport: () => void;
   isPlaying: boolean;
   sequencerRulerVisible: boolean;
   sequencerHoverPreviewEnabled: boolean;
-  onMasterVolumeChange: (value: number) => void;
-  onOldSpeakerModeChange: (enabled: boolean) => void;
+  onEdit: (edit: SongEdit) => void;
   onSequencerRulerVisibleChange: (enabled: boolean) => void;
   onSequencerHoverPreviewChange: (enabled: boolean) => void;
-  onBpmChange: (value: number) => void;
-  onLoopLengthChange: (value: number) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-gradient-to-b from-[#0e1019] to-[#0a0c14] px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_2px_8px_rgba(0,0,0,0.3)]">
@@ -1210,21 +1050,25 @@ function TransportStrip({
       <div className="flex items-center gap-2">
         <TransportField
           label="BPM"
-          value={song.transport.bpm}
+          value={bpm}
           min={SONG_BPM_RANGE.min}
           max={SONG_BPM_RANGE.max}
           step={1}
-          onChange={onBpmChange}
-          parseValue={(rawValue) => resolveSongBpmInput(rawValue, song.transport.bpm)}
+          onChange={(bpm) => {
+            onEdit({ type: "set-bpm", bpm });
+          }}
+          parseValue={(rawValue) => resolveSongBpmInput(rawValue, bpm)}
         />
         <TransportField
           label="Loop"
-          value={song.transport.loopLength}
+          value={loopLength}
           min={SONG_LOOP_LENGTH_RANGE.min}
           max={SONG_LOOP_LENGTH_RANGE.max}
           step={SONG_LOOP_LENGTH_RANGE.step}
-          onChange={onLoopLengthChange}
-          parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, song.transport.loopLength)}
+          onChange={(loopLength) => {
+            onEdit({ type: "set-loop-length", loopLength });
+          }}
+          parseValue={(rawValue) => resolveSongLoopLengthInput(rawValue, loopLength)}
           suffix="st"
         />
       </div>
@@ -1234,12 +1078,16 @@ function TransportStrip({
 
       {/* ── Master output ── */}
       <MasterVolumeField
-        value={song.mixer.masterVolume}
-        oldSpeakerMode={song.mixer.oldSpeakerMode}
+        value={masterVolume}
+        oldSpeakerMode={oldSpeakerMode}
         sequencerRulerVisible={sequencerRulerVisible}
         sequencerHoverPreviewEnabled={sequencerHoverPreviewEnabled}
-        onChange={onMasterVolumeChange}
-        onOldSpeakerModeChange={onOldSpeakerModeChange}
+        onChange={(volume) => {
+          onEdit({ type: "set-master-volume", volume });
+        }}
+        onOldSpeakerModeChange={(enabled) => {
+          onEdit({ type: "set-old-speaker-mode", enabled });
+        }}
         onSequencerRulerVisibleChange={onSequencerRulerVisibleChange}
         onSequencerHoverPreviewChange={onSequencerHoverPreviewChange}
       />
@@ -1254,7 +1102,7 @@ function TransportStrip({
       </div>
     </div>
   );
-}
+});
 
 function MasterVolumeField({
   value,
@@ -2000,23 +1848,25 @@ function downloadBlobFile(blob: Blob, fileName: string) {
 
 /* ─────────── Song Metadata ─────────── */
 
-type SongMetaProps = {
-  song: SongDocument;
-  engineState: AudioBootstrapState;
-  onUpdateEngineMode: (engineMode: EngineMode) => void;
-  onUpdateSongAuthor: (author: string) => void;
-  onUpdateSongName: (name: string) => void;
-  trackCount: number;
-};
-
 const SongMeta = memo(function SongMeta({
-  song,
+  author,
+  bpm,
+  engineMode: songEngineMode,
   engineState,
-  onUpdateEngineMode,
-  onUpdateSongAuthor,
-  onUpdateSongName,
+  loopLength,
+  name,
+  onEdit,
   trackCount,
-}: SongMetaProps) {
+}: {
+  author: string;
+  bpm: number;
+  engineMode: SongDocument["meta"]["engineMode"];
+  engineState: AudioBootstrapState;
+  loopLength: number;
+  name: string;
+  onEdit: (edit: SongEdit) => void;
+  trackCount: number;
+}) {
   return (
     <div className="rounded-lg border border-white/[0.06] bg-[var(--oc-surface)] p-4">
       <h2 className="mb-3 font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">
@@ -2033,10 +1883,10 @@ const SongMeta = memo(function SongMeta({
           id="song-name"
           aria-label="Song Name"
           maxLength={80}
-          value={song.meta.name}
+          value={name}
           className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
           onChange={(event) => {
-            onUpdateSongName(event.currentTarget.value);
+            onEdit({ type: "set-song-name", name: event.currentTarget.value });
           }}
         />
       </div>
@@ -2051,24 +1901,24 @@ const SongMeta = memo(function SongMeta({
           id="song-author"
           aria-label="Author"
           maxLength={80}
-          value={song.meta.author}
+          value={author}
           className="h-8 border-white/[0.08] bg-black/30 px-2.5 font-[var(--oc-mono)] text-[11px] text-white placeholder:text-white/20"
           onChange={(event) => {
-            onUpdateSongAuthor(event.currentTarget.value);
+            onEdit({ type: "set-song-author", author: event.currentTarget.value });
           }}
         />
       </div>
       <div className="grid gap-2 font-[var(--oc-mono)] text-[10px]">
-        <MetaRow label="Author" value={song.meta.author} />
-        <MetaRow label="Mode" value={formatEngineModeLabel(song.meta.engineMode)} />
-        <MetaRow label="Tempo" value={`${song.transport.bpm} bpm`} />
-        <MetaRow label="Loop" value={`${song.transport.loopLength} steps`} />
+        <MetaRow label="Author" value={author} />
+        <MetaRow label="Mode" value={formatEngineModeLabel(songEngineMode)} />
+        <MetaRow label="Tempo" value={`${bpm} bpm`} />
+        <MetaRow label="Loop" value={`${loopLength} steps`} />
         <MetaRow label="Voices" value={`${trackCount}`} />
         <MetaRow label="Audio" value={engineState} />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {(["authentic", "inspired"] as const).map((engineMode) => {
-          const isSelected = song.meta.engineMode === engineMode;
+          const isSelected = songEngineMode === engineMode;
 
           return (
             <Button
@@ -2083,7 +1933,7 @@ const SongMeta = memo(function SongMeta({
                   : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.08] hover:text-white",
               )}
               onClick={() => {
-                onUpdateEngineMode(engineMode);
+                onEdit({ type: "set-engine-mode", engineMode });
               }}
             >
               {formatEngineModeLabel(engineMode)}
@@ -2096,21 +1946,13 @@ const SongMeta = memo(function SongMeta({
         className="mt-3 rounded-md border border-white/[0.06] bg-black/20 px-3 py-2 font-[var(--oc-mono)]"
       >
         <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">
-          {getPcmModeLabel(song.meta.engineMode)}
+          {getPcmModeLabel(songEngineMode)}
         </div>
-        <p className="mt-1 text-[10px] leading-5 text-white/55">{getPcmModeSummary(song.meta.engineMode)}</p>
+        <p className="mt-1 text-[10px] leading-5 text-white/55">{getPcmModeSummary(songEngineMode)}</p>
       </div>
     </div>
   );
-}, areSongMetaPropsEqual);
-
-function areSongMetaPropsEqual(previousProps: Readonly<SongMetaProps>, nextProps: Readonly<SongMetaProps>) {
-  return (
-    previousProps.song === nextProps.song &&
-    previousProps.engineState === nextProps.engineState &&
-    previousProps.trackCount === nextProps.trackCount
-  );
-}
+});
 
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
@@ -2291,7 +2133,7 @@ function TrackArrangementEditor({
   onApply,
 }: {
   engineMode: SongDocument["meta"]["engineMode"];
-  trackId: MelodicTrackId | TriggerTrackId;
+  trackId: TrackId;
   loopLength: number;
   draft: string;
   error: string | null;

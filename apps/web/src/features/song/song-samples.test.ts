@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument } from "ochoit-lib";
 import {
   applySampleTrim,
   getTrimmedFrameCount,

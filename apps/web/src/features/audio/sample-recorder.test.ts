@@ -11,7 +11,7 @@ import {
   getNextMicSampleId,
   useSampleRecorder,
 } from "@/features/audio/sample-recorder";
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { createDefaultSongDocument } from "ochoit-lib";
 
 class MockAudioBuffer {
   readonly numberOfChannels: number;

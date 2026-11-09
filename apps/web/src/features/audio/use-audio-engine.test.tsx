@@ -52,6 +52,7 @@ vi.mock("ochoit-lib/web", () => ({
 }));
 
 import { useAudioEngine } from "@/features/audio/use-audio-engine";
+import { usePlayheadSelector } from "@/features/audio/use-playhead-selector";
 
 type HookResult = ReturnType<typeof useAudioEngine>;
 
@@ -142,11 +143,7 @@ describe("use-audio-engine", () => {
     expect(webAudioMocks.engine.startTransport).toHaveBeenCalledWith(undefined, 5);
   });
 
-  it("publishes scheduled transport steps when their audio time arrives", async () => {
-    vi.useFakeTimers();
-    const song = createDefaultSongDocument();
-    render(<HookHarness song={song} onValue={(value) => void (latestValue = value)} />);
-
+  async function initializeWithTransportListener() {
     if (latestValue === null) {
       throw new Error("Expected the hook harness to expose the audio hook value.");
     }
@@ -161,24 +158,28 @@ describe("use-audio-engine", () => {
       throw new Error("Expected useAudioEngine to subscribe to transport events.");
     }
 
+    return transportListener;
+  }
+
+  function playbackStateEvent(playbackState: "playing" | "stopped", nextStep: number, loopCount: number): AudioTransportEvent {
+    return {
+      type: "playback-state",
+      snapshot: { playbackState, nextStep, nextStepTime: playbackState === "playing" ? 1.1 : null, loopCount },
+    };
+  }
+
+  it("publishes scheduled transport steps when their audio time arrives", async () => {
+    vi.useFakeTimers();
+    const song = createDefaultSongDocument();
+    render(<HookHarness song={song} onValue={(value) => void (latestValue = value)} />);
+    const transportListener = await initializeWithTransportListener();
+
     act(() => {
-      transportListener({
-        type: "playback-state",
-        snapshot: {
-          playbackState: "playing",
-          nextStep: 8,
-          nextStepTime: 1.1,
-          loopCount: 2,
-        },
-      });
+      transportListener(playbackStateEvent("playing", 8, 2));
     });
 
-    expect(latestValue?.transportState).toEqual({
-      playbackState: "playing",
-      nextStep: 0,
-      nextStepTime: null,
-      loopCount: 0,
-    });
+    expect(latestValue?.playbackState).toBe("playing");
+    expect(latestValue?.playhead.get()).toEqual({ nextStep: 0, loopCount: 0 });
 
     act(() => {
       transportListener({
@@ -187,17 +188,107 @@ describe("use-audio-engine", () => {
       });
     });
 
-    expect(latestValue?.transportState.nextStep).toBe(0);
+    expect(latestValue?.playhead.get().nextStep).toBe(0);
 
     act(() => {
       vi.advanceTimersByTime(50);
     });
 
-    expect(latestValue?.transportState).toEqual({
-      playbackState: "playing",
-      nextStep: 4,
-      nextStepTime: 1.05,
-      loopCount: 2,
+    expect(latestValue?.playbackState).toBe("playing");
+    expect(latestValue?.playhead.get()).toEqual({ nextStep: 4, loopCount: 2 });
+  });
+
+  it("advances the playhead without re-rendering the component that owns the hook", async () => {
+    vi.useFakeTimers();
+    let renders = 0;
+
+    function CountingHarness(props: { song: SongDocument }) {
+      const value = useAudioEngine(props.song);
+      renders += 1;
+      latestValue = value;
+      return null;
+    }
+
+    render(<CountingHarness song={createDefaultSongDocument()} />);
+    const transportListener = await initializeWithTransportListener();
+    const playhead = latestValue?.playhead;
+
+    act(() => {
+      transportListener(playbackStateEvent("playing", 0, 0));
     });
+    const rendersWhilePlaying = renders;
+
+    act(() => {
+      transportListener({
+        type: "scheduled-steps",
+        steps: [1, 2, 3, 4].map((step) => ({ step, time: 1 + step * 0.01, loopCount: 0 })),
+      });
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(latestValue?.playhead.get()).toEqual({ nextStep: 4, loopCount: 0 });
+    expect(latestValue?.playhead).toBe(playhead);
+    expect(renders).toBe(rendersWhilePlaying);
+  });
+
+  it("resets the playhead and drops pending steps when transport stops", async () => {
+    vi.useFakeTimers();
+    render(<HookHarness song={createDefaultSongDocument()} onValue={(value) => void (latestValue = value)} />);
+    const transportListener = await initializeWithTransportListener();
+
+    act(() => {
+      transportListener(playbackStateEvent("playing", 0, 0));
+      transportListener({
+        type: "scheduled-steps",
+        steps: [
+          { step: 6, time: 1.01, loopCount: 1 },
+          { step: 7, time: 1.2, loopCount: 1 },
+        ],
+      });
+      vi.advanceTimersByTime(50);
+    });
+
+    expect(latestValue?.playhead.get()).toEqual({ nextStep: 6, loopCount: 1 });
+
+    act(() => {
+      transportListener(playbackStateEvent("stopped", 0, 0));
+    });
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(latestValue?.playbackState).toBe("stopped");
+    expect(latestValue?.playhead.get()).toEqual({ nextStep: 0, loopCount: 0 });
+  });
+
+  it("never renders the reset step as playing when transport stops", async () => {
+    vi.useFakeTimers();
+    const rendered: string[] = [];
+
+    function PlayheadProbe(props: { song: SongDocument }) {
+      const value = useAudioEngine(props.song);
+      const nextStep = usePlayheadSelector(value.playhead, (playhead) => playhead.nextStep);
+      latestValue = value;
+      rendered.push(`${value.playbackState}:${nextStep}`);
+      return null;
+    }
+
+    render(<PlayheadProbe song={createDefaultSongDocument()} />);
+    const transportListener = await initializeWithTransportListener();
+
+    act(() => {
+      transportListener(playbackStateEvent("playing", 0, 0));
+      transportListener({ type: "scheduled-steps", steps: [{ step: 7, time: 1.01, loopCount: 0 }] });
+      vi.advanceTimersByTime(50);
+    });
+
+    expect(rendered.at(-1)).toBe("playing:7");
+    const rendersBeforeStop = rendered.length;
+
+    act(() => {
+      transportListener(playbackStateEvent("stopped", 0, 0));
+    });
+
+    expect(rendered.slice(rendersBeforeStop)).toEqual(["stopped:0"]);
   });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createDefaultSongDocument, createEmptySongDocument, DEFAULT_PULSE_DUTY } from "../src/core/song-document";
 import {
   getMelodicStepState,
+  getResizedMelodicNote,
   moveMelodicTrackEntries,
   moveNoiseTrackEntries,
   moveSampleTrackEntries,
@@ -258,6 +259,21 @@ describe("song-pattern", () => {
       note: "E3",
       length: 6,
     });
+  });
+
+  it("reports the span a melodic resize lands on without changing the song", () => {
+    const song = replaceMelodicTrackArrangement(createEmptySongDocument(), "triangle", [
+      { stepIndex: 2, note: "C3", length: 2 },
+      { stepIndex: 7, note: "E3", length: 3 },
+      { stepIndex: 12, note: "G3", length: 1 },
+    ]);
+    const track = song.tracks.triangle;
+
+    expect(getResizedMelodicNote(track, 7, 1, 9)).toEqual({ stepIndex: 4, length: 6 });
+    expect(getResizedMelodicNote(track, 7, 7, 20)).toEqual({ stepIndex: 7, length: 5 });
+    expect(getResizedMelodicNote(track, 12, 12.4, 9.6)).toEqual({ stepIndex: 12, length: 4 });
+    expect(getResizedMelodicNote(track, 7, 7, 3)).toEqual({ stepIndex: 7, length: 3 });
+    expect(getResizedMelodicNote(track, 8, 8, 2)).toBeNull();
   });
 
   it("moves noise triggers together and preserves config and volume", () => {

@@ -1,5 +1,6 @@
 import type { TransportConfig } from "../core/transport-worklet-shared.js";
 import type { NoiseTrack } from "../core/song-document.js";
+import { getVoiceStepGain } from "../core/voice-gain.js";
 
 const noiseCycleFrameCount = 2048;
 const noteAttackSeconds = 0.001;
@@ -61,7 +62,7 @@ export class NoiseVoice {
       return;
     }
 
-    this.playStep(step, time, this.stepDuration);
+    this.playStep({ ...step, volume: getVoiceStepGain("noise", step.volume) }, time, this.stepDuration);
   }
 
   previewStep(step: Pick<NoiseTrack["steps"][number], "volume" | "mode" | "periodIndex">, durationMs = 120) {

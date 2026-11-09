@@ -2,7 +2,7 @@ import { startTransition, useCallback, useEffect, useRef, useState } from "react
 
 import { suggestSamplePitchNote } from "@/features/audio/sample-pitch";
 import { createFlatWaveform } from "@/features/audio/waveform-data";
-import type { SerializedSampleAsset } from "@/features/song/song-document";
+import type { SerializedSampleAsset } from "ochoit-lib";
 
 export const SAMPLE_RECORDING_TARGET_RATE = 11_025;
 export const SAMPLE_RECORDING_MAX_DURATION_MS = 2_000;

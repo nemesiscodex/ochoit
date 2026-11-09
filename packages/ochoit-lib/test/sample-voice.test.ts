@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { normalizeDpcmRate } from "@/features/audio/dpcm";
-import { SampleVoice } from "@/features/audio/sample-voice";
-import { createDefaultSongDocument } from "@/features/song/song-document";
+import { normalizeDpcmRate } from "../src/core/dpcm.js";
+import { SampleVoice } from "../src/web/sample-voice.js";
+import { createDefaultSongDocument } from "../src/core/song-document.js";
 
 class MockAudioParam {
   value = 1;
@@ -226,5 +226,67 @@ describe("sample-voice", () => {
     expect(createdBuffers).toHaveLength(1);
     expect(createdBuffers[0]?.length).toBe(1);
     expect(Array.from(createdBuffers[0]?.data ?? [])).toEqual([0]);
+  });
+
+  describe("decoded buffer reuse across song edits", () => {
+    function createPlayableSong() {
+      const song = createDefaultSongDocument();
+      const sample = song.samples[0];
+
+      if (sample === undefined) {
+        throw new Error("Expected seeded sample asset.");
+      }
+
+      const track = {
+        ...song.tracks.sample,
+        steps: song.tracks.sample.steps.map((step, index) =>
+          index === 7 ? { ...step, enabled: true, sampleId: sample.id, playbackRate: 2 } : step,
+        ),
+      };
+
+      return { sample, track, samples: song.samples };
+    }
+
+    it("keeps the decoded buffer when an edit reconfigures the voice with the same sample", () => {
+      const { track, samples } = createPlayableSong();
+      const { context, output, createdBuffers } = createMockAudioContext();
+      const voice = new SampleVoice(context, output);
+
+      voice.configure(track, samples, "authentic");
+      voice.scheduleStep(7, 1);
+
+      voice.configure({ ...track, volume: 0.4 }, [...samples], "authentic");
+      voice.scheduleStep(7, 2);
+
+      expect(createdBuffers).toHaveLength(1);
+    });
+
+    it("rebuilds the buffer when the sample is replaced by a trimmed copy with the same id", () => {
+      const { sample, track } = createPlayableSong();
+      const { context, output, createdBuffers } = createMockAudioContext();
+      const voice = new SampleVoice(context, output);
+      const trimmed = { ...sample, trim: { startFrame: 2, endFrame: 8 } };
+
+      voice.configure(track, [sample], "authentic");
+      voice.scheduleStep(7, 1);
+      voice.configure(track, [trimmed], "authentic");
+      voice.scheduleStep(7, 2);
+
+      expect(createdBuffers).toHaveLength(2);
+      expect(createdBuffers[1]?.length).not.toBe(createdBuffers[0]?.length);
+    });
+
+    it("rebuilds the buffer when the engine mode changes", () => {
+      const { track, samples } = createPlayableSong();
+      const { context, output, createdBuffers } = createMockAudioContext();
+      const voice = new SampleVoice(context, output);
+
+      voice.configure(track, samples, "authentic");
+      voice.scheduleStep(7, 1);
+      voice.configure(track, samples, "inspired");
+      voice.scheduleStep(7, 2);
+
+      expect(createdBuffers).toHaveLength(2);
+    });
   });
 });

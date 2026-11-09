@@ -8,6 +8,7 @@ import { SampleVoice } from "./sample-voice.js";
 import { getTriangleOutputGain, TriangleVoice } from "./triangle-voice.js";
 import { getOrderedTracks, trackOrder, type SongDocument, type TrackId } from "../core/song-document.js";
 import { getNoiseTriggerPresetById, type MelodicTrackId, type NoiseTriggerPresetId, type NoteValue, type PulseDutyValue } from "../core/song-pattern.js";
+import { getTrackGain } from "../core/voice-gain.js";
 
 export type AudioEngineState = AudioContextState | "closed";
 
@@ -192,7 +193,7 @@ export class AudioEngine {
     this.setMasterVolume(song.mixer.masterVolume);
     this.setOldSpeakerMode(song.mixer.oldSpeakerMode);
     getOrderedTracks(song).forEach((track) => {
-      this.setVoiceVolume(track.id, track.muted ? 0 : track.volume);
+      this.setVoiceVolume(track.id, getTrackGain(track));
     });
     this.pulseVoice1.configure(song.tracks.pulse1, song.transport, song.meta.engineMode);
     this.pulseVoice2.configure(song.tracks.pulse2, song.transport, song.meta.engineMode);
