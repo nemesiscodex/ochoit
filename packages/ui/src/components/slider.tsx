@@ -8,7 +8,11 @@ import {
 } from "@ui-sdk/react/slider";
 import type { CSSProperties } from "react";
 
-type SliderProps = Omit<StyledProps<typeof SliderRoot>, "value" | "defaultValue" | "onValueChange" | "onValueCommit"> & {
+type SliderProps = Omit<
+  StyledProps<typeof SliderRoot>,
+  "value" | "defaultValue" | "onValueChange" | "onValueCommit" | "style"
+> & {
+  style?: CSSProperties;
   value: number;
   onValueChange: (value: number) => void;
   onValueCommit?: (value: number) => void;
@@ -28,13 +32,15 @@ function Slider({
   style,
   ...props
 }: SliderProps) {
+  const accentStyle: CSSProperties & { "--slider-accent": string } = { ...style, "--slider-accent": accent };
+
   return (
     <SliderRoot
       value={value}
       onValueChange={(next) => onValueChange(Array.isArray(next) ? (next[0] ?? value) : next)}
       onValueCommit={onValueCommit ? (next) => onValueCommit(Array.isArray(next) ? (next[0] ?? value) : next) : undefined}
       className={cn("group/slider w-full data-disabled:opacity-45", className)}
-      style={{ "--slider-accent": accent, ...style } as unknown as CSSProperties}
+      style={accentStyle}
       {...props}
     >
       <SliderControl className="flex h-6 w-full cursor-pointer items-center touch-none group-data-disabled/slider:cursor-not-allowed">

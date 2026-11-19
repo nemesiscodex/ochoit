@@ -1,5 +1,13 @@
 # Agent notes
 
+This project uses pnpm. Assume the app is already running, do not try to run it again.
+
+The use of "as any" is forbidden, we want to make good use of typescript and the type system.
+
+Always add tests after developing a feature.
+
+Always run the tests and type checks after doing a change.
+
 ## UI
 
 The web UI is built on [UI SDK](https://ui-sdk.dev) (`@ui-sdk/react`, `@ui-sdk/core`).
