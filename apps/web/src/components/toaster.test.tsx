@@ -49,6 +49,23 @@ describe("Toaster", () => {
     expect(region.getAttribute("data-align")).toBe("center");
   });
 
+  it("keeps only the newest of several toasts reachable while the stack is collapsed", () => {
+    stubViewport(true);
+
+    const region = renderToastRegion();
+
+    act(() => {
+      toast("Share link copied");
+      toast("Loaded the song from the link");
+    });
+
+    const toasts = [...region.querySelectorAll("[data-slot='toast']")];
+    const reachable = toasts.filter((item) => !item.hasAttribute("inert"));
+
+    expect(toasts).toHaveLength(3);
+    expect(reachable.map((item) => item.textContent)).toEqual(["Loaded the song from the link"]);
+  });
+
   it("keeps toasts in the bottom corner on wider screens", () => {
     stubViewport(false);
 

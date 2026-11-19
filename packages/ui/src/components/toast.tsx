@@ -37,18 +37,16 @@ function Toaster() {
       side={isPhone ? "top" : "bottom"}
       align={isPhone ? "center" : "end"}
       className={cn(
-        "fixed z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2",
+        "fixed z-50 w-[min(22rem,calc(100vw-2rem))]",
         isPhone ? "top-[50px] left-1/2 -translate-x-1/2 max-sm:top-[94px]" : "right-4 bottom-4",
       )}
     >
       {() => (
         <Toast
-          className={cn(
-            "relative flex items-start gap-3 rounded-panel border border-band-edge bg-band py-3 pr-10 pl-4 text-band-ink shadow-pop",
-            "transition-[opacity,translate] duration-200 ease-snap data-starting-style:opacity-0 data-ending-style:opacity-0",
-            isPhone ? "data-starting-style:-translate-y-2" : "data-starting-style:translate-y-2",
-            "data-[type=error]:border-signal",
+          render={(props, state) => (
+            <li {...props} inert={state.leaving || (!state.expanded && state.index > 0) || undefined} />
           )}
+          className="flex items-start gap-3 rounded-panel border border-band-edge bg-band py-3 pr-10 pl-4 text-band-ink shadow-pop data-[type=error]:border-signal"
         >
           <div className="min-w-0">
             <ToastTitle className="text-sm font-semibold" />
