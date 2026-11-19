@@ -426,6 +426,7 @@ function SampleStepDetail({
             <DetailField label="DPCM rate">
               <ChoiceGroup
                 aria-label={`${stepName} playback rate`}
+                className="flex-wrap"
                 disabled={!step.enabled}
                 value={String(step.playbackRate)}
                 onChoose={(value) => {
