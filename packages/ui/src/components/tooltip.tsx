@@ -23,7 +23,7 @@ function TooltipContent({
       collisionPadding={collisionPadding}
       className={cn(
         "z-50 max-w-64 rounded-control border border-band-edge/70 bg-band px-2.5 py-1.5 text-xs leading-snug text-band-ink shadow-pop",
-        "origin-(--transform-origin) transition-[opacity,scale] duration-100 data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:opacity-0",
+        "origin-(--transform-origin) transition-[opacity,scale] duration-125 ease-snap data-starting-style:scale-97 data-starting-style:opacity-0 data-ending-style:scale-97 data-ending-style:opacity-0 data-instant:transition-none",
         "[&_[data-slot=tooltip-shortcut]]:ml-2 [&_[data-slot=tooltip-shortcut]]:text-band-muted",
         className,
       )}

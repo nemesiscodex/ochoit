@@ -73,6 +73,8 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-wordmark: "Silkscreen", "VT323", monospace;
 
+  --ease-snap: cubic-bezier(0.23, 1, 0.32, 1);
+
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);

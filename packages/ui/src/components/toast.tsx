@@ -44,7 +44,7 @@ function Toaster() {
         <Toast
           className={cn(
             "relative flex items-start gap-3 rounded-panel border border-band-edge bg-band py-3 pr-10 pl-4 text-band-ink shadow-pop",
-            "transition-[opacity,translate] duration-200 ease-out data-starting-style:opacity-0 data-ending-style:opacity-0",
+            "transition-[opacity,translate] duration-200 ease-snap data-starting-style:opacity-0 data-ending-style:opacity-0",
             isPhone ? "data-starting-style:-translate-y-2" : "data-starting-style:translate-y-2",
             "data-[type=error]:border-signal",
           )}
