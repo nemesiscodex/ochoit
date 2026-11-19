@@ -66,6 +66,7 @@
 @theme inline {
   --font-sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
   --font-screen: "VT323", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-wordmark: "Silkscreen", "VT323", monospace;
 
   --color-surface-0: var(--surface-0);
