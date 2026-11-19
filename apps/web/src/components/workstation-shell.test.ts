@@ -3,6 +3,8 @@ import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AudioEngine } from "ochoit-lib/web";
 
+import { Toaster, toast } from "@ochoit/ui/components/toast";
+
 import { WorkstationShell } from "@/components/workstation-shell";
 import type { RecordedSampleDraft } from "@/features/audio/sample-recorder";
 import {
@@ -65,8 +67,13 @@ function createUseSampleRecorderResult(
   };
 }
 
+// The app root mounts the toaster beside the route, so the shell's toasts render there.
+function withToaster(shell: React.ReactElement) {
+  return React.createElement(React.Fragment, null, shell, React.createElement(Toaster));
+}
+
 function createWorkstationShellElement(initialSong: SongDocument = createDefaultSongDocument()) {
-  return React.createElement(WorkstationShell, { initialSong });
+  return withToaster(React.createElement(WorkstationShell, { initialSong }));
 }
 
 function renderWorkstationShell(initialSong: SongDocument = createDefaultSongDocument()) {
@@ -74,7 +81,30 @@ function renderWorkstationShell(initialSong: SongDocument = createDefaultSongDoc
 }
 
 function renderEmptyWorkstationShell() {
-  return render(React.createElement(WorkstationShell));
+  return render(withToaster(React.createElement(WorkstationShell)));
+}
+
+function inputValueOf(element: HTMLElement) {
+  if (!(element instanceof HTMLInputElement)) {
+    throw new Error("Expected an input.");
+  }
+
+  return element.value;
+}
+
+function chooseShareAction(name: string) {
+  fireEvent.click(screen.getByRole("button", { name: "Share" }));
+  fireEvent.click(screen.getByRole("menuitem", { name }));
+}
+
+function getLatestSong() {
+  const latestSong = vi.mocked(useAudioEngineModule.useAudioEngine).mock.lastCall?.[0];
+
+  if (latestSong === undefined) {
+    throw new Error("Expected the audio engine hook to receive song state.");
+  }
+
+  return latestSong;
 }
 
 describe("workstation-shell", () => {
@@ -82,12 +112,13 @@ describe("workstation-shell", () => {
   const mockUseSampleRecorder = vi.mocked(sampleRecorderModule.useSampleRecorder);
   let latestRecorderOptions: Parameters<typeof sampleRecorderModule.useSampleRecorder>[0] | null = null;
   let clipboardWriteText: ReturnType<typeof vi.fn<(value: string) => Promise<void>>>;
-  let confirmDialog: ReturnType<typeof vi.fn<(message?: string) => boolean>>;
   let createObjectURL: ReturnType<typeof vi.fn<(blob: Blob) => string>>;
   let revokeObjectURL: ReturnType<typeof vi.fn<(url: string) => void>>;
   let anchorClick: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
+    // jsdom has no scrollIntoView; the share menu calls it to reveal the highlighted item.
+    Element.prototype.scrollIntoView = function scrollIntoView() {};
     mockUseAudioEngine.mockReset();
     mockUseSampleRecorder.mockReset();
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult());
@@ -104,8 +135,9 @@ describe("workstation-shell", () => {
         writeText: clipboardWriteText,
       },
     });
-    confirmDialog = vi.fn(() => true);
-    window.confirm = confirmDialog;
+    act(() => {
+      toast.dismiss();
+    });
     createObjectURL = vi.fn(() => "blob:arrangement");
     revokeObjectURL = vi.fn();
     anchorClick = vi.fn();
@@ -127,21 +159,21 @@ describe("workstation-shell", () => {
   it("updates the bpm and loop length fields in the transport bar", () => {
     renderWorkstationShell();
 
-    const bpmInput = screen.getByLabelText("BPM");
-    const loopLengthInput = screen.getByLabelText("Loop Length");
+    const bpmInput = screen.getByLabelText("Tempo");
+    const loopLengthInput = screen.getByLabelText("Steps");
 
     fireEvent.change(bpmInput, { target: { value: "172" } });
     fireEvent.change(loopLengthInput, { target: { value: "20" } });
 
-    expect(screen.getByDisplayValue("172")).toBeTruthy();
-    expect(screen.getByDisplayValue("20")).toBeTruthy();
+    expect(inputValueOf(bpmInput)).toBe("172");
+    expect(inputValueOf(loopLengthInput)).toBe("20");
   });
 
-  it("clamps the bpm and loop length transport inputs to the supported UI range", () => {
+  it("clamps the bpm and loop length transport inputs to the supported UI range", async () => {
     renderWorkstationShell();
 
-    const bpmInput = screen.getByLabelText("BPM");
-    const loopLengthInput = screen.getByLabelText("Loop Length");
+    const bpmInput = screen.getByLabelText("Tempo");
+    const loopLengthInput = screen.getByLabelText("Steps");
 
     fireEvent.focus(bpmInput);
     fireEvent.change(bpmInput, { target: { value: "1001" } });
@@ -151,8 +183,15 @@ describe("workstation-shell", () => {
     fireEvent.change(loopLengthInput, { target: { value: "2" } });
     fireEvent.blur(loopLengthInput);
 
-    expect(screen.getByDisplayValue("1000")).toBeTruthy();
-    expect(screen.getByDisplayValue("4")).toBeTruthy();
+    const question = await screen.findByRole("alertdialog", { name: "Reduce the pattern to 4 steps?" });
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole("button", { name: "Shorten pattern" }));
+    });
+
+    expect(inputValueOf(bpmInput)).toBe("1000");
+    expect(inputValueOf(loopLengthInput)).toBe("4");
+    expect(getLatestSong().transport).toMatchObject({ bpm: 1000, loopLength: 4 });
   });
 
   it("extends and safely shrinks the pattern from the ruler without prompting when no content is lost", () => {
@@ -163,7 +202,7 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
 
-    expect(confirmDialog).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
@@ -197,47 +236,58 @@ describe("workstation-shell", () => {
     expect(latestSong.transport.loopLength).toBe(16);
   });
 
-  it("confirms before shrinking the pattern when content would be removed", () => {
+  it("asks in a dialog before shrinking the pattern when content would be removed", async () => {
     const song = createEmptySongDocument();
     song.tracks.pulse1.steps[12] = {
       ...song.tracks.pulse1.steps[12],
       enabled: true,
     };
-    confirmDialog.mockReturnValueOnce(false);
 
     renderWorkstationShell(song);
 
     fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
 
-    expect(confirmDialog).toHaveBeenCalledWith(
-      "Reduce the pattern to 12 steps? This will delete or shorten notes and triggers beyond the new end.",
-    );
+    const question = await screen.findByRole("alertdialog", { name: "Reduce the pattern to 12 steps?" });
+
+    expect(
+      within(question).getByText("This will delete or shorten notes and triggers beyond the new end."),
+    ).toBeTruthy();
     expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
+    });
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(getLatestSong().tracks.pulse1.steps[12]?.enabled).toBe(true);
   });
 
-  it("confirms before the Loop field shrinks the pattern and keeps the song when declined", () => {
+  it("asks before the Steps field shrinks the pattern and keeps the song when cancelled", async () => {
     const song = createEmptySongDocument();
     song.tracks.pulse1.steps[12] = {
       ...song.tracks.pulse1.steps[12],
       enabled: true,
     };
-    confirmDialog.mockReturnValueOnce(false);
 
     renderWorkstationShell(song);
 
-    const loopLengthInput = screen.getByLabelText("Loop Length");
+    const loopLengthInput = screen.getByLabelText("Steps");
 
     if (!(loopLengthInput instanceof HTMLInputElement)) {
-      throw new Error("Expected Loop Length to be an input.");
+      throw new Error("Expected Steps to be an input.");
     }
 
     fireEvent.focus(loopLengthInput);
     fireEvent.change(loopLengthInput, { target: { value: "12" } });
     fireEvent.blur(loopLengthInput);
 
-    expect(confirmDialog).toHaveBeenCalledWith(
-      "Reduce the pattern to 12 steps? This will delete or shorten notes and triggers beyond the new end.",
-    );
+    const question = await screen.findByRole("alertdialog", { name: "Reduce the pattern to 12 steps?" });
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
+    });
+
     expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
     expect(loopLengthInput.value).toBe("16");
 
@@ -251,7 +301,7 @@ describe("workstation-shell", () => {
     expect(latestSong.tracks.pulse1.steps[12]?.enabled).toBe(true);
   });
 
-  it("trims the pattern from the Loop field once the shrink is confirmed", () => {
+  it("trims the pattern from the Steps field once the shrink is confirmed", async () => {
     const song = createEmptySongDocument();
     song.tracks.pulse1.steps[12] = {
       ...song.tracks.pulse1.steps[12],
@@ -260,13 +310,18 @@ describe("workstation-shell", () => {
 
     renderWorkstationShell(song);
 
-    const loopLengthInput = screen.getByLabelText("Loop Length");
+    const loopLengthInput = screen.getByLabelText("Steps");
 
     fireEvent.focus(loopLengthInput);
     fireEvent.change(loopLengthInput, { target: { value: "12" } });
     fireEvent.blur(loopLengthInput);
 
-    expect(confirmDialog).toHaveBeenCalledTimes(1);
+    const question = await screen.findByRole("alertdialog", { name: "Reduce the pattern to 12 steps?" });
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole("button", { name: "Shorten pattern" }));
+    });
+
     expect(screen.getByText("12 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
 
     const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
@@ -283,10 +338,10 @@ describe("workstation-shell", () => {
   it("updates the global volume from the transport bar", () => {
     renderWorkstationShell();
 
-    const globalVolume = screen.getByLabelText("Global Volume");
+    const globalVolume = screen.getByLabelText("Master volume");
 
     if (!(globalVolume instanceof HTMLInputElement)) {
-      throw new Error("Expected Global Volume to be a range input.");
+      throw new Error("Expected Master volume to be a range input.");
     }
 
     fireEvent.change(globalVolume, { target: { value: "61" } });
@@ -349,30 +404,73 @@ describe("workstation-shell", () => {
     expect(screen.queryByText("Pattern Ruler")).toBeNull();
   });
 
-  it("highlights start audio as the first action before the engine is ready", () => {
-    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
+  it("offers Start audio with a note on why before the engine is ready", () => {
+    const idle = createUseAudioEngineResult("stopped", "idle");
+    mockUseAudioEngine.mockReturnValue(idle);
 
     renderWorkstationShell();
 
-    expect(screen.getByText("First step")).toBeTruthy();
-    expect(screen.getByText(/before using the sequencer/i)).toBeTruthy();
+    const startAudioButton = screen.getByRole("button", { name: "Start audio" });
+    const noteId = startAudioButton.getAttribute("aria-describedby");
 
-    const startAudioButton = screen.getByRole("button", { name: "Start Audio" });
-    expect(startAudioButton.getAttribute("aria-describedby")).toBe("audio-init-prompt");
+    expect(noteId === null ? null : document.getElementById(noteId)?.textContent).toBe(
+      "Browsers need one click before they play sound.",
+    );
+    expect(screen.queryByText("Audio on")).toBeNull();
+
+    fireEvent.click(startAudioButton);
+
+    expect(idle.initializeAudio).toHaveBeenCalledTimes(1);
   });
 
-  it("removes the audio gate once audio is running", () => {
+  it("swaps Start audio for a quiet audio-on note once audio is running", () => {
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
 
     const { rerender } = renderWorkstationShell();
 
-    expect(screen.getByText("First step")).toBeTruthy();
-
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "running"));
     rerender(createWorkstationShellElement());
 
-    expect(screen.queryByText("First step")).toBeNull();
-    expect(screen.getByRole("button", { name: "Audio On" }).getAttribute("aria-describedby")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Start audio" })).toBeNull();
+    expect(screen.queryByText("Browsers need one click before they play sound.")).toBeNull();
+    expect(screen.getByText("Audio on")).toBeTruthy();
+  });
+
+  it("starts audio and playback with one press of Play while audio is off", () => {
+    const idle = createUseAudioEngineResult("stopped", "idle");
+    mockUseAudioEngine.mockReturnValue(idle);
+
+    renderWorkstationShell();
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+
+    expect(idle.startTransport).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an audio engine failure as an inline alert", () => {
+    mockUseAudioEngine.mockReturnValue({
+      ...createUseAudioEngineResult("stopped", "error"),
+      errorMessage: "The audio device is busy.",
+    });
+
+    renderWorkstationShell();
+
+    const alert = screen.getByText("Audio didn't start").closest('[role="alert"]');
+
+    expect(alert?.textContent).toContain("The audio device is busy.");
+    expect(screen.getByRole("button", { name: "Start audio" })).toBeTruthy();
+  });
+
+  it("shows the brand and links to the source repository from the band", () => {
+    renderWorkstationShell();
+
+    expect(screen.getByRole("heading", { level: 1, name: "Ochoit" })).toBeTruthy();
+    expect(document.querySelector('img[src="/ochoit-logo.png"]')).toBeTruthy();
+
+    const githubLink = screen.getByRole("link", { name: "Open GitHub repository" });
+
+    expect(githubLink.getAttribute("href")).toBe("https://github.com/nemesiscodex/ochoit");
+    expect(githubLink.getAttribute("target")).toBe("_blank");
+    expect(githubLink.getAttribute("rel")).toBe("noreferrer");
   });
 
   it("forwards play and stop actions to the audio engine hook", () => {
@@ -419,7 +517,7 @@ describe("workstation-shell", () => {
 
     renderWorkstationShell();
 
-    fireEvent.keyDown(screen.getByLabelText("BPM"), { key: " " });
+    fireEvent.keyDown(screen.getByLabelText("Tempo"), { key: " " });
 
     expect(stoppedResult.startTransport).not.toHaveBeenCalled();
   });
@@ -566,7 +664,7 @@ describe("workstation-shell", () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue("Link Tune")).toBeTruthy();
       expect(screen.getByText("172 bpm")).toBeTruthy();
-      expect(screen.getByText("Loaded shared song from the current link.")).toBeTruthy();
+      expect(screen.getByText("Loaded the song from the link")).toBeTruthy();
     });
     expect(window.location.hash).toContain("song=");
     expect(engineResult.stopTransport).not.toHaveBeenCalled();
@@ -579,13 +677,13 @@ describe("workstation-shell", () => {
 
     renderEmptyWorkstationShell();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open examples" }));
+    fireEvent.click(screen.getByRole("button", { name: "Examples" }));
     fireEvent.click(screen.getByRole("button", { name: "Load example Mario Theme" }));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Mario Theme")).toBeTruthy();
       expect(screen.getByDisplayValue("nemesiscodex")).toBeTruthy();
-      expect(screen.getByText("Loaded example: Mario Theme.")).toBeTruthy();
+      expect(screen.getByText("Loaded Mario Theme")).toBeTruthy();
     });
     expect(screen.queryByRole("button", { name: "Load example Mario Theme" })).toBeNull();
     expect(window.location.hash).toBe("");
@@ -595,23 +693,21 @@ describe("workstation-shell", () => {
   it("loads the Zelda Medley example from the examples dialog", async () => {
     renderEmptyWorkstationShell();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open examples" }));
+    fireEvent.click(screen.getByRole("button", { name: "Examples" }));
     fireEvent.click(screen.getByRole("button", { name: "Load example Zelda Medley" }));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Zelda Medley")).toBeTruthy();
       expect(screen.getByDisplayValue("nemesiscodex")).toBeTruthy();
       expect(screen.getByText("140 bpm")).toBeTruthy();
-      expect(screen.getByText("Loaded example: Zelda Medley.")).toBeTruthy();
+      expect(screen.getByText("Loaded Zelda Medley")).toBeTruthy();
     });
   });
 
   it("copies a share link and updates the current url", async () => {
     renderWorkstationShell();
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy shareable link to clipboard" }));
-    });
+    chooseShareAction("Copy share link");
 
     await waitFor(() => {
       expect(window.location.hash).toContain("song=");
@@ -619,7 +715,7 @@ describe("workstation-shell", () => {
 
     expect(clipboardWriteText).toHaveBeenCalledTimes(1);
     expect(clipboardWriteText.mock.calls[0]?.[0]).toContain("#song=");
-    expect(screen.getByText("Share link copied to clipboard.")).toBeTruthy();
+    expect(await screen.findByText("Share link copied")).toBeTruthy();
   });
 
   it("copies a share link for a four-step song", async () => {
@@ -633,9 +729,7 @@ describe("workstation-shell", () => {
 
     renderWorkstationShell(song);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy shareable link to clipboard" }));
-    });
+    chooseShareAction("Copy share link");
 
     await waitFor(() => {
       expect(window.location.hash).toContain("song=");
@@ -643,7 +737,7 @@ describe("workstation-shell", () => {
 
     expect(clipboardWriteText).toHaveBeenCalledTimes(1);
     expect(clipboardWriteText.mock.calls[0]?.[0]).toContain("#song=v5.");
-    expect(screen.getByText("Share link copied to clipboard.")).toBeTruthy();
+    expect(await screen.findByText("Share link copied")).toBeTruthy();
   });
 
   it("downloads the current arrangement as a wav file", async () => {
@@ -651,7 +745,7 @@ describe("workstation-shell", () => {
     renderWorkstationShell();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Download arrangement as WAV file" }));
+      fireEvent.click(screen.getByRole("button", { name: "Download WAV" }));
     });
 
     await waitFor(() => {
@@ -682,33 +776,33 @@ describe("workstation-shell", () => {
     revokeDownloadUrl();
 
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:arrangement");
-    expect(screen.getByText("WAV download started.")).toBeTruthy();
+    expect(screen.getByText("WAV download started")).toBeTruthy();
   });
 
-  it("opens the share dsl editor and copies the current dsl text", async () => {
+  it("opens the song text editor from the share menu and copies the current song text", async () => {
     renderWorkstationShell();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit share DSL" }));
+    chooseShareAction("Edit song as text");
 
-    const textarea = screen.getByLabelText("Share DSL text");
+    const textarea = screen.getByLabelText("Song text");
 
     if (!(textarea instanceof HTMLTextAreaElement)) {
-      throw new Error("Expected share DSL text to be a textarea.");
+      throw new Error("Expected Song text to be a textarea.");
     }
 
     expect(textarea.value).toContain("!v=3;");
     expect(textarea.value).toContain("=1;vol=");
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy DSL" }));
+      fireEvent.click(screen.getByRole("button", { name: "Copy text" }));
     });
 
     expect(clipboardWriteText).toHaveBeenCalled();
     expect(clipboardWriteText.mock.calls.at(-1)?.[0]).toContain("!v=3;");
-    expect(screen.getByText("Share DSL copied to clipboard.")).toBeTruthy();
+    expect(screen.getByText("Song text copied")).toBeTruthy();
   });
 
-  it("applies pasted share dsl text to replace the current song", async () => {
+  it("replaces the current song with pasted song text", async () => {
     const sharedSong = createDefaultSongDocument();
     sharedSong.meta.name = "DSL Tune";
     sharedSong.transport.bpm = 180;
@@ -719,12 +813,12 @@ describe("workstation-shell", () => {
 
     renderWorkstationShell();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit share DSL" }));
+    chooseShareAction("Edit song as text");
 
-    const textarea = screen.getByLabelText("Share DSL text");
+    const textarea = screen.getByLabelText("Song text");
 
     if (!(textarea instanceof HTMLTextAreaElement)) {
-      throw new Error("Expected share DSL text to be a textarea.");
+      throw new Error("Expected Song text to be a textarea.");
     }
 
     fireEvent.change(textarea, {
@@ -733,15 +827,15 @@ describe("workstation-shell", () => {
       },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply DSL" }));
+    fireEvent.click(screen.getByRole("button", { name: "Replace song" }));
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("DSL Tune")).toBeTruthy();
       expect(screen.getByText("180 bpm")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
-      expect(screen.getByText("Loaded song from share DSL.")).toBeTruthy();
+      expect(screen.getByText("Loaded the song from text")).toBeTruthy();
     });
-    expect(screen.queryByLabelText("Share DSL text")).toBeNull();
+    expect(screen.queryByLabelText("Song text")).toBeNull();
     expect(window.location.hash).toBe("#song=kept");
     expect(engineResult.stopTransport).not.toHaveBeenCalled();
   });
@@ -805,17 +899,22 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New song" }));
 
-    expect(engineResult.stopTransport).toHaveBeenCalledTimes(1);
+    const question = await screen.findByRole("alertdialog", { name: "Start a new song?" });
 
-    expect(confirmDialog).toHaveBeenCalledWith(
-      "Start a new song? This will clear all notes, recordings, and the current song link.",
-    );
+    expect(within(question).getByText("This clears every note, recording and the current song link.")).toBeTruthy();
+    expect(engineResult.stopTransport).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole("button", { name: "Start new song" }));
+    });
+
+    expect(engineResult.stopTransport).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
       expect(window.location.hash).toBe("");
     });
 
-    expect(screen.getByText("Started a new song and removed the shared link.")).toBeTruthy();
+    expect(await screen.findByText("Started a new song")).toBeTruthy();
     expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
@@ -827,6 +926,46 @@ describe("workstation-shell", () => {
     }
 
     expect(textarea.value).toBe("");
+  });
+
+  it("keeps the song and its link when the new song question is cancelled", async () => {
+    window.history.replaceState({}, "", buildSongShareUrl(window.location.href, createDefaultSongDocument()));
+    const engineResult = createUseAudioEngineResult();
+    mockUseAudioEngine.mockReturnValue(engineResult);
+
+    renderWorkstationShell();
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain("song=");
+    });
+
+    const newSongButton = screen.getByRole("button", { name: "New song" });
+
+    fireEvent.click(newSongButton);
+
+    const question = await screen.findByRole("alertdialog", { name: "Start a new song?" });
+
+    await act(async () => {
+      fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
+    });
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(engineResult.stopTransport).not.toHaveBeenCalled();
+    expect(window.location.hash).toContain("song=");
+    expect(getLatestSong().tracks.pulse1.steps.some((step) => step.enabled)).toBe(true);
+  });
+
+  it("closes the examples dialog with Escape and keeps the song", () => {
+    renderWorkstationShell();
+
+    fireEvent.click(screen.getByRole("button", { name: "Examples" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Examples" });
+
+    fireEvent.keyDown(dialog, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "Examples" })).toBeNull();
+    expect(screen.getByDisplayValue("(No name)")).toBeTruthy();
   });
 
   it("opens the voice text editor with the current arrangement", () => {
@@ -856,11 +995,11 @@ describe("workstation-shell", () => {
 
     expect(textarea.value).toBe("1: C5 @12.5%, 5: E5 @25%, 9: G5, 13: E5 @25%");
 
-    fireEvent.click(screen.getByRole("button", { name: "Use multiline arrangement text" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Lines" }));
 
     expect(textarea.value).toBe("1: C5 @12.5%\n5: E5 @25%\n9: G5\n13: E5 @25%");
 
-    fireEvent.click(screen.getByRole("button", { name: "Use compact arrangement text" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Compact" }));
 
     expect(textarea.value).toBe("1: C5 @12.5%, 5: E5 @25%, 9: G5, 13: E5 @25%");
   });
@@ -881,7 +1020,7 @@ describe("workstation-shell", () => {
         value: "1: e4 @25%, 3: g4, 5: a4 @75%, 17: c5",
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply arrangement" }));
 
     expect(screen.queryByLabelText("Pulse I arrangement text")).toBeNull();
 
@@ -920,7 +1059,7 @@ describe("workstation-shell", () => {
         value: "1-3: e4\n5-6: g4",
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply arrangement" }));
 
     expect(screen.queryByLabelText("Pulse I arrangement text")).toBeNull();
 
@@ -977,7 +1116,7 @@ describe("workstation-shell", () => {
         value: "2: short P1, 4: long P12, 18: short P3",
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply arrangement" }));
 
     expect(screen.queryByLabelText("Noise trigger text")).toBeNull();
 
@@ -1015,7 +1154,7 @@ describe("workstation-shell", () => {
         value: "2: vox-hit>D5, 6: mic-001>A#2, 20: vox-hit",
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Arrangement" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply arrangement" }));
 
     expect(screen.queryByLabelText("PCM trigger text")).toBeNull();
 
@@ -1036,14 +1175,10 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Noise arrangement as text" }));
 
-    const editor = screen.getByLabelText("Noise trigger text").closest(".fixed");
-
-    if (!(editor instanceof HTMLElement)) {
-      throw new Error("Expected the arrangement editor overlay.");
-    }
+    const editor = screen.getByRole("dialog", { name: "Edit Noise as text" });
 
     fireEvent.change(within(editor).getByLabelText("Noise trigger text"), { target: { value: "1: thunder" } });
-    fireEvent.click(within(editor).getByRole("button", { name: "Apply Arrangement" }));
+    fireEvent.click(within(editor).getByRole("button", { name: "Apply arrangement" }));
 
     expect(screen.getByLabelText("Noise trigger text")).toBeTruthy();
     expect(within(editor).getByText(/^Line 1 has an invalid noise trigger/)).toBeTruthy();

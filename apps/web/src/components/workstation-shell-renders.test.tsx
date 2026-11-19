@@ -92,10 +92,24 @@ describe("workstation-shell render scope", () => {
     expect(screen.getByLabelText("Disable Pulse I step 3")).toBeTruthy();
     expect(created("SequencerMatrix")).toBe(1);
     expect(created("CompactStepGrid")).toBe(1);
-    expect(created("TransportField")).toBe(0);
-    expect(created("BorderGlow")).toBe(0);
+    expect(created("BandMix")).toBe(0);
+    expect(created("BandActions")).toBe(0);
     expect(created("MetaRow")).toBe(0);
     expect(created("SampleTrimControl")).toBe(0);
+  });
+
+  it("re-renders the transport band, and not the sequencer grid, when the master volume changes", () => {
+    renderShell();
+
+    const created = recordRenders(() => {
+      fireEvent.change(screen.getByLabelText("Master volume"), { target: { value: "40" } });
+    });
+
+    expect(screen.getByText("40%")).toBeTruthy();
+    expect(created("BandMix")).toBe(1);
+    expect(created("BandActions")).toBe(1);
+    expect(created("CompactStepGrid")).toBe(0);
+    expect(created("MetaRow")).toBe(0);
   });
 
   it("re-renders the song info panel and nothing else when the song name changes", () => {
@@ -107,8 +121,8 @@ describe("workstation-shell render scope", () => {
 
     expect(screen.getByDisplayValue("Night Drive")).toBeTruthy();
     expect(created("MetaRow")).toBeGreaterThan(0);
-    expect(created("TransportField")).toBe(0);
-    expect(created("BorderGlow")).toBe(0);
+    expect(created("BandMix")).toBe(0);
+    expect(created("BandActions")).toBe(0);
     expect(created("SampleTrimControl")).toBe(0);
     expect(created("CompactStepGrid")).toBe(0);
   });
