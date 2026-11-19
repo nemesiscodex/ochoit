@@ -187,6 +187,15 @@ describe("sequencer-matrix", () => {
     expect(within(screen.getByLabelText("Noise step 3")).getByText("hat")).toBeTruthy();
   });
 
+  it("names a held note again on the row it wraps onto", () => {
+    const song = applySongEdit(createEmptySongDocument(), { type: "set-loop-length", loopLength: 32, confirmed: true }).song;
+    song.tracks.pulse1.steps[12] = { ...song.tracks.pulse1.steps[12], enabled: true, note: "B8", length: 8 };
+    renderMatrix({ song });
+
+    expect(within(screen.getByLabelText("Pulse I step 13")).getByText("B8")).toBeTruthy();
+    expect(within(screen.getByLabelText("Pulse I step 13 continuation")).getByText("B8")).toBeTruthy();
+  });
+
   it("moves the highlight when the playhead advances", () => {
     const { container, movePlayhead } = renderMatrix({ playbackState: "playing", playhead: atStep(4) });
 

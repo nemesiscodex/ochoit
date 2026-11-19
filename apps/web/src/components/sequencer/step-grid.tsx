@@ -638,7 +638,13 @@ const MelodicNoteBlock = memo(function MelodicNoteBlock({
               left={`calc(${(100 / segment.columnSpan) * offset}% + 5px)`}
             />
           ))}
-      {segment.isFirstSegment ? <span className="relative truncate pt-1.5">{segment.label}</span> : null}
+      {segment.isFirstSegment ? (
+        <span className="relative truncate pt-1.5">{segment.label}</span>
+      ) : segment.isPreview ? null : (
+        <span className="relative truncate pt-1.5 opacity-70">
+          {segment.label}
+        </span>
+      )}
       {segment.isFirstSegment && !segment.isPreview ? (
         <VolumeBar volume={segment.volume} width={`${100 / segment.columnSpan}%`} />
       ) : null}
