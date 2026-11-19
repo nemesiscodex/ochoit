@@ -539,7 +539,7 @@ describe("workstation-shell", () => {
 
     expect(screen.getByDisplayValue("(No name)")).toBeTruthy();
     expect(screen.getByDisplayValue("(Anonymous)")).toBeTruthy();
-    expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
+    expect(screen.getByText(/Record a sound to add your first clip/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
@@ -565,7 +565,7 @@ describe("workstation-shell", () => {
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("Link Tune")).toBeTruthy();
-      expect(screen.getByText("172 bpm")).toBeTruthy();
+      expect(screen.getByDisplayValue("172")).toBeTruthy();
       expect(screen.getByText("Loaded shared song from the current link.")).toBeTruthy();
     });
     expect(window.location.hash).toContain("song=");
@@ -601,7 +601,7 @@ describe("workstation-shell", () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue("Zelda Medley")).toBeTruthy();
       expect(screen.getByDisplayValue("nemesiscodex")).toBeTruthy();
-      expect(screen.getByText("140 bpm")).toBeTruthy();
+      expect(screen.getByDisplayValue("140")).toBeTruthy();
       expect(screen.getByText("Loaded example: Zelda Medley.")).toBeTruthy();
     });
   });
@@ -737,7 +737,7 @@ describe("workstation-shell", () => {
 
     await waitFor(() => {
       expect(screen.getByDisplayValue("DSL Tune")).toBeTruthy();
-      expect(screen.getByText("180 bpm")).toBeTruthy();
+      expect(screen.getByDisplayValue("180")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Unmute Pulse I" })).toBeTruthy();
       expect(screen.getByText("Loaded song from share DSL.")).toBeTruthy();
     });
@@ -749,10 +749,10 @@ describe("workstation-shell", () => {
   it("updates the song name from the song info panel", () => {
     renderWorkstationShell();
 
-    const nameInput = screen.getByLabelText("Song Name");
+    const nameInput = screen.getByLabelText("Song name");
 
     if (!(nameInput instanceof HTMLInputElement)) {
-      throw new Error("Expected Song Name to be an input.");
+      throw new Error("Expected Song name to be an input.");
     }
 
     fireEvent.change(nameInput, { target: { value: "Boss Theme" } });
@@ -816,7 +816,7 @@ describe("workstation-shell", () => {
     });
 
     expect(screen.getByText("Started a new song and removed the shared link.")).toBeTruthy();
-    expect(screen.getByText("Record something to build your PCM clip list.")).toBeTruthy();
+    expect(screen.getByText(/Record a sound to add your first clip/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit Pulse I arrangement as text" }));
 
@@ -1078,12 +1078,14 @@ describe("workstation-shell", () => {
     expect(screen.getByText(/target note from C0 to B8/i)).toBeTruthy();
   });
 
-  it("renders the sample deck sidebar", () => {
+  it("renders the sample deck and song info panels", () => {
     renderWorkstationShell();
 
-    expect(screen.getByText("Sample Deck")).toBeTruthy();
-    expect(screen.getByText("Song Info")).toBeTruthy();
-    expect(screen.getByText("Recorded Clips")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Record" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Clips" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Load sample vox-hit" })).toBeTruthy();
+    expect(screen.getByLabelText("Song name")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Inspired" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("blocks new recordings once the sample deck reaches the share limit", () => {
@@ -1130,8 +1132,8 @@ describe("workstation-shell", () => {
   it("moves the trim window while preserving the selected length", () => {
     renderWorkstationShell();
 
-    const lengthFrameInput = screen.getByLabelText("Sample trim length frame");
-    const windowFrameInput = screen.getByLabelText("Sample trim window frame");
+    const lengthFrameInput = screen.getByLabelText("Length in frames");
+    const windowFrameInput = screen.getByLabelText("Start in frames");
 
     if (!(lengthFrameInput instanceof HTMLInputElement) || !(windowFrameInput instanceof HTMLInputElement)) {
       throw new Error("Expected sample trim frame inputs.");
@@ -1152,14 +1154,14 @@ describe("workstation-shell", () => {
       startFrame: 4,
       endFrame: 10,
     });
-    expect(screen.getByText("4-10 · 6 / 12 fr")).toBeTruthy();
+    expect(screen.getByText("Frames 4 to 10 of 12")).toBeTruthy();
   });
 
   it("applies the current trim destructively from the sample deck", () => {
     renderWorkstationShell();
 
-    const lengthFrameInput = screen.getByLabelText("Sample trim length frame");
-    const windowFrameInput = screen.getByLabelText("Sample trim window frame");
+    const lengthFrameInput = screen.getByLabelText("Length in frames");
+    const windowFrameInput = screen.getByLabelText("Start in frames");
 
     if (!(lengthFrameInput instanceof HTMLInputElement) || !(windowFrameInput instanceof HTMLInputElement)) {
       throw new Error("Expected sample trim frame inputs.");
@@ -1167,7 +1169,7 @@ describe("workstation-shell", () => {
 
     fireEvent.change(lengthFrameInput, { target: { value: "6" } });
     fireEvent.change(windowFrameInput, { target: { value: "4" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply Trim" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply trim" }));
 
     const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
 
@@ -1181,7 +1183,7 @@ describe("workstation-shell", () => {
       startFrame: 0,
       endFrame: 6,
     });
-    expect(screen.getByText("0-6 · 6 / 6 fr")).toBeTruthy();
+    expect(screen.getByText("Frames 0 to 6 of 6")).toBeTruthy();
   });
 
   it("toggles the mute state for a specific voice", () => {
@@ -1342,13 +1344,7 @@ describe("workstation-shell", () => {
 
     renderWorkstationShell();
 
-    const sidebar = screen.getByText("Sample Deck").closest("aside");
-
-    if (sidebar === null) {
-      throw new Error("Expected sample deck sidebar.");
-    }
-
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Stop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop recording" }));
 
     expect(stopRecording).toHaveBeenCalledTimes(1);
 
@@ -1377,7 +1373,7 @@ describe("workstation-shell", () => {
     });
 
     expect(screen.getAllByText("mic-002").length).toBeGreaterThan(0);
-    expect(screen.getByText("0-4 · 4 / 4 fr")).toBeTruthy();
+    expect(screen.getByText("Frames 0 to 4 of 4")).toBeTruthy();
 
     // Verify PCM lane updated: re-open text editor to check
     fireEvent.click(screen.getByRole("button", { name: "Edit PCM arrangement as text" }));
@@ -1429,7 +1425,7 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Load sample vox-hit" }));
 
-    expect(screen.getByText("0-12 · 12 / 12 fr")).toBeTruthy();
+    expect(screen.getByText("Frames 0 to 12 of 12")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete sample mic-002" }));
 
@@ -1465,12 +1461,6 @@ describe("workstation-shell", () => {
 
     renderWorkstationShell();
 
-    const sidebar = screen.getByText("Sample Deck").closest("aside");
-
-    if (sidebar === null) {
-      throw new Error("Expected sample deck sidebar.");
-    }
-
     const recording: RecordedSampleDraft = {
       asset: {
         id: "mic-002",
@@ -1495,7 +1485,7 @@ describe("workstation-shell", () => {
       latestRecorderOptions?.onRecordingComplete(recording);
     });
 
-    fireEvent.click(within(sidebar).getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview clip" }));
 
     expect(initializeAudio).toHaveBeenCalledTimes(1);
     await Promise.resolve();

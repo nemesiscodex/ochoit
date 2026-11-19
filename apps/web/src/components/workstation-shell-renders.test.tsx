@@ -94,7 +94,7 @@ describe("workstation-shell render scope", () => {
     expect(created("CompactStepGrid")).toBe(1);
     expect(created("TransportField")).toBe(0);
     expect(created("BorderGlow")).toBe(0);
-    expect(created("MetaRow")).toBe(0);
+    expect(created("EngineModeField")).toBe(0);
     expect(created("SampleTrimControl")).toBe(0);
   });
 
@@ -102,11 +102,11 @@ describe("workstation-shell render scope", () => {
     renderShell();
 
     const created = recordRenders(() => {
-      fireEvent.change(screen.getByLabelText("Song Name"), { target: { value: "Night Drive" } });
+      fireEvent.change(screen.getByLabelText("Song name"), { target: { value: "Night Drive" } });
     });
 
     expect(screen.getByDisplayValue("Night Drive")).toBeTruthy();
-    expect(created("MetaRow")).toBeGreaterThan(0);
+    expect(created("EngineModeField")).toBeGreaterThan(0);
     expect(created("TransportField")).toBe(0);
     expect(created("BorderGlow")).toBe(0);
     expect(created("SampleTrimControl")).toBe(0);
