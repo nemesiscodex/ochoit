@@ -17,7 +17,9 @@ import { labelByTrackId } from "@/components/sequencer-theme";
 import {
   beatEdgeClass,
   getGridMetrics,
+  rowStartGutterClass,
   stepGridClass,
+  stepRowsClass,
   stepsPerBeatGroup,
   useStepColumnCount,
 } from "@/components/sequencer/grid-geometry";
@@ -26,10 +28,10 @@ import type { DragPreview, RowAction } from "@/components/sequencer/row-action";
 const noSelectedStepIndexSet: ReadonlySet<number> = new Set();
 const gridCellChunkSize = 16;
 
-const cellBaseClass =
-  "relative flex min-h-12 min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[4px] border font-screen text-[24px] leading-none select-none transition-[background-color,box-shadow,border-color] duration-100 focus-visible:z-20 max-md:text-[21px]";
-const filledClass =
-  "border-[1.5px] border-(--voice) bg-(--voice)/13 text-[color-mix(in_srgb,var(--voice)_82%,white)] shadow-[0_0_10px_-2px_color-mix(in_srgb,var(--voice)_55%,transparent),inset_0_0_12px_-4px_color-mix(in_srgb,var(--voice)_60%,transparent)] [text-shadow:0_0_7px_color-mix(in_srgb,var(--voice)_75%,transparent)]";
+const cellTextClass = "font-mono text-[13px] font-semibold leading-none max-md:text-[12px]";
+const cellBaseClass = `relative flex min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[4px] border select-none transition-[background-color,box-shadow,border-color] duration-100 focus-visible:z-20 ${cellTextClass}`;
+// Resting notes stay flat; only the selection and the playhead glow.
+const filledClass = "border-(--voice) bg-(--voice)/13 text-[color-mix(in_srgb,var(--voice)_82%,white)]";
 const selectedFilledClass =
   "border-[1.5px] border-(--voice) bg-(--voice) text-voice-ink shadow-[0_0_16px_1px_color-mix(in_srgb,var(--voice)_70%,transparent)] [text-shadow:none]";
 const selectedEmptyClass =
@@ -39,12 +41,43 @@ const playheadClass =
 
 function emptyCellClass(index: number) {
   return index % stepsPerBeatGroup === 0
-    ? "border-screen-muted/75 bg-screen-edge/15 hover:bg-screen-edge/30"
-    : "border-screen-edge bg-screen-edge/8 hover:bg-screen-edge/25";
+    ? "border-screen-muted/75 bg-screen-edge/15 text-screen-ink/85 hover:bg-screen-edge/30"
+    : "border-screen-edge bg-screen-edge/8 text-screen-muted hover:bg-screen-edge/25";
 }
 
-function EmptyDot() {
-  return <i aria-hidden="true" className="size-1 bg-screen-muted/50" />;
+function StepNumber({ index, left }: { index: number; left?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute top-[4px] font-mono text-[10px] leading-none font-medium",
+        left === undefined && "left-[5px]",
+        index % stepsPerBeatGroup !== 0 && "opacity-90",
+      )}
+      style={left === undefined ? undefined : { left }}
+    >
+      {index + 1}
+    </span>
+  );
+}
+
+function RowStartGutter({ columnCount, rowCount }: { columnCount: number; rowCount: number }) {
+  if (rowCount === 1) {
+    return null;
+  }
+
+  return (
+    <div aria-hidden className={cn("grid gap-1", rowStartGutterClass, stepRowsClass(rowCount))}>
+      {Array.from({ length: rowCount }, (_, row) => (
+        <span
+          key={row * columnCount}
+          className="flex items-center justify-end font-mono text-[10px] leading-none font-medium text-screen-muted"
+        >
+          {row * columnCount + 1}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 type TriggerCellData = {
@@ -168,83 +201,96 @@ export const CompactStepGrid = memo(function CompactStepGrid({
     [triggerTrack, engineMode, samples],
   );
   const gridLabel = `${labelByTrackId[track.id]} steps`;
+  const rowCount = Math.ceil(track.steps.length / columnCount);
+  const rowsClass = stepRowsClass(rowCount);
 
   if (melodicTrack !== null) {
-    const rowCount = Math.ceil(melodicTrack.steps.length / columnCount);
-
     // Separate memoized layers: a drag move re-renders only the preview layer, and a step edit or
     // selection change leaves the layer it does not touch alone.
     return (
-      <div ref={gridRef} className="relative flex-1" role="group" aria-label={gridLabel} data-step-grid="">
-        <MelodicGridCellLayer
-          isPlaying={isPlaying}
-          onRowAction={onRowAction}
-          playhead={playhead}
-          selectedStepIndexSet={selectedStepIndexSet}
-          stepStates={melodicStepStates}
-          trackId={track.id}
-        />
-        <div
-          className={cn("pointer-events-none absolute inset-0", stepGridClass)}
-          style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
-        >
-          <MelodicSegmentLayer
-            gridRef={gridRef}
+      <div className="flex gap-1">
+        <RowStartGutter columnCount={columnCount} rowCount={rowCount} />
+        <div ref={gridRef} className="relative min-w-0 flex-1" role="group" aria-label={gridLabel} data-step-grid="">
+          <MelodicGridCellLayer
             isPlaying={isPlaying}
+            rowsClass={rowsClass}
             onRowAction={onRowAction}
             playhead={playhead}
-            segments={noteSegments}
-            selectedStepIndexSet={noteSelection}
+            selectedStepIndexSet={selectedStepIndexSet}
+            stepStates={melodicStepStates}
             trackId={track.id}
           />
-          <MelodicSegmentLayer
-            gridRef={gridRef}
-            isPlaying={isPlaying}
-            onRowAction={onRowAction}
-            playhead={playhead}
-            segments={previewSegments}
-            selectedStepIndexSet={noSelectedStepIndexSet}
-            trackId={track.id}
-          />
+          <div
+            className={cn("pointer-events-none absolute inset-0", stepGridClass)}
+            style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
+          >
+            <MelodicSegmentLayer
+              gridRef={gridRef}
+              isPlaying={isPlaying}
+              onRowAction={onRowAction}
+              playhead={playhead}
+              segments={noteSegments}
+              selectedStepIndexSet={noteSelection}
+              trackId={track.id}
+            />
+            <MelodicSegmentLayer
+              gridRef={gridRef}
+              isPlaying={isPlaying}
+              onRowAction={onRowAction}
+              playhead={playhead}
+              segments={previewSegments}
+              selectedStepIndexSet={noSelectedStepIndexSet}
+              trackId={track.id}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div ref={gridRef} className={cn(stepGridClass, "flex-1")} role="group" aria-label={gridLabel} data-step-grid="">
-      {triggerCells.map((cellData, index) => {
-        const isDragPreview =
-          dragState?.mode === "move" &&
-          dragState.isActive &&
-          dragState.initialSelectedStepIndexes.includes(index - dragState.delta);
+    <div className="flex gap-1">
+      <RowStartGutter columnCount={columnCount} rowCount={rowCount} />
+      <div
+        ref={gridRef}
+        className={cn(stepGridClass, rowsClass, "min-w-0 flex-1")}
+        role="group"
+        aria-label={gridLabel}
+        data-step-grid=""
+      >
+        {triggerCells.map((cellData, index) => {
+          const isDragPreview =
+            dragState?.mode === "move" &&
+            dragState.isActive &&
+            dragState.initialSelectedStepIndexes.includes(index - dragState.delta);
 
-        return (
-          <TriggerStepCell
-            key={`${track.id}-step-${index}`}
-            columnCount={columnCount}
-            dragPreview={isDragPreview ? (dragState.isValid ? "valid" : "invalid") : null}
-            enabled={cellData.enabled}
-            gridRef={gridRef}
-            index={index}
-            isPlaying={isPlaying}
-            isSelected={selectedStepIndexSet.has(index)}
-            label={cellData.label}
-            onRowAction={onRowAction}
-            playhead={playhead}
-            trackId={track.id}
-            volume={cellData.volume}
-          />
-        );
-      })}
+          return (
+            <TriggerStepCell
+              key={`${track.id}-step-${index}`}
+              columnCount={columnCount}
+              dragPreview={isDragPreview ? (dragState.isValid ? "valid" : "invalid") : null}
+              enabled={cellData.enabled}
+              gridRef={gridRef}
+              index={index}
+              isPlaying={isPlaying}
+              isSelected={selectedStepIndexSet.has(index)}
+              label={cellData.label}
+              onRowAction={onRowAction}
+              playhead={playhead}
+              trackId={track.id}
+              volume={cellData.volume}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 });
 
 function VolumeBar({ volume, width = "100%" }: { volume: number; width?: string }) {
   return (
-    <span aria-hidden className="absolute bottom-1.5 left-1.5 h-0.5 rounded-full bg-current/20" style={{ width: `calc(${width} - 0.75rem)` }}>
-      <span className="block h-full rounded-full bg-current/70" style={{ width: `${volume * 100}%` }} />
+    <span aria-hidden className="absolute bottom-[5px] left-[5px] h-[3px] rounded-full bg-current/25" style={{ width: `calc(${width} - 10px)` }}>
+      <span className="block h-full rounded-full bg-current" style={{ width: `${volume * 100}%` }} />
     </span>
   );
 }
@@ -321,20 +367,20 @@ const TriggerStepCell = memo(function TriggerStepCell({
       onPointerMove={moveDrag}
       onPointerUp={endDrag}
     >
+      <StepNumber index={index} />
       {enabled ? (
         <>
-          <span className="max-w-full truncate px-1 pb-1">{label}</span>
+          <span className="max-w-full truncate px-1 pt-1.5">{label}</span>
           <VolumeBar volume={volume} />
         </>
-      ) : (
-        <EmptyDot />
-      )}
+      ) : null}
     </button>
   );
 });
 
 const MelodicGridCellLayer = memo(function MelodicGridCellLayer({
   isPlaying,
+  rowsClass,
   onRowAction,
   playhead,
   selectedStepIndexSet,
@@ -342,6 +388,7 @@ const MelodicGridCellLayer = memo(function MelodicGridCellLayer({
   trackId,
 }: {
   isPlaying: boolean;
+  rowsClass: string;
   onRowAction: (action: RowAction) => void;
   playhead: PlayheadStore;
   selectedStepIndexSet: ReadonlySet<number>;
@@ -357,7 +404,7 @@ const MelodicGridCellLayer = memo(function MelodicGridCellLayer({
   );
 
   return (
-    <div className={cn(stepGridClass, "h-full")}>
+    <div className={cn(stepGridClass, rowsClass)}>
       {chunkStarts.map((start) => (
         <MelodicGridCellChunk
           key={start}
@@ -479,7 +526,7 @@ const MelodicGridCell = memo(function MelodicGridCell({
         onRowAction({ type: "select-step", trackId, stepIndex: index, shiftKey: event.shiftKey });
       }}
     >
-      {isOccupiedByNote ? null : <EmptyDot />}
+      {isOccupiedByNote ? null : <StepNumber index={index} />}
     </button>
   );
 });
@@ -545,7 +592,8 @@ const MelodicNoteBlock = memo(function MelodicNoteBlock({
       aria-label={segment.isFirstSegment ? stepName : `${stepName} continuation`}
       aria-selected={isSelected || undefined}
       className={cn(
-        "pointer-events-auto relative z-10 flex h-full min-w-0 cursor-grab touch-manipulation items-center rounded-[4px] border font-screen text-[24px] leading-none select-none focus-visible:z-20 max-md:text-[21px]",
+        "pointer-events-auto relative z-10 flex h-full min-w-0 cursor-grab touch-manipulation items-center rounded-[4px] border select-none focus-visible:z-20",
+        cellTextClass,
         segment.columnSpan === 1 ? "justify-center" : "justify-start px-2",
         beatEdgeClass(segment.segmentStepIndex, segment.segmentStepIndex + segment.columnSpan - 1),
         segment.isPreview
@@ -575,7 +623,16 @@ const MelodicNoteBlock = memo(function MelodicNoteBlock({
       {isActive ? (
         <PlayheadSweep columnSpan={segment.columnSpan} playhead={playhead} segmentStepIndex={segment.segmentStepIndex} />
       ) : null}
-      {segment.isFirstSegment ? <span className="relative truncate pb-1">{segment.label}</span> : null}
+      {segment.isPreview
+        ? null
+        : Array.from({ length: segment.columnSpan }, (_, offset) => (
+            <StepNumber
+              key={segment.segmentStepIndex + offset}
+              index={segment.segmentStepIndex + offset}
+              left={`calc(${(100 / segment.columnSpan) * offset}% + 5px)`}
+            />
+          ))}
+      {segment.isFirstSegment ? <span className="relative truncate pt-1.5">{segment.label}</span> : null}
       {segment.isFirstSegment && !segment.isPreview ? (
         <VolumeBar volume={segment.volume} width={`${100 / segment.columnSpan}%`} />
       ) : null}

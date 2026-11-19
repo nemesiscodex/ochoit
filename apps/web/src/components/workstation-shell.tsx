@@ -495,7 +495,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
         onNewSong={onNewSong}
       />
 
-      <main className="mx-auto grid w-full max-w-[1600px] flex-1 content-start gap-3.5 px-2 pt-2.5 pb-4 md:gap-[18px] md:px-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <main className="mx-auto grid w-full max-w-[1600px] flex-1 content-start gap-3.5 px-2 pt-2.5 pb-4 md:gap-[18px] md:px-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         {errorMessage === null ? null : (
           <div
             role="alert"

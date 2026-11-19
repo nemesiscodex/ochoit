@@ -17,7 +17,14 @@ import type { RecordTrackId } from "@/features/sequencer/quantized-recorder";
 import { keyboardModeShortcutKey } from "@/features/sequencer/sequencer-keys";
 import type { KeyboardNoteBinding } from "@/features/song/song-keyboard-input";
 import { labelByTrackId } from "@/components/sequencer-theme";
-import { beatEdgeClass, laneColumnsClass, stepGridClass, stepsPerBeatGroup } from "@/components/sequencer/grid-geometry";
+import {
+  beatEdgeClass,
+  laneColumnsClass,
+  rowStartGutterClass,
+  stepGridClass,
+  stepsPerBeatGroup,
+  useStepColumnCount,
+} from "@/components/sequencer/grid-geometry";
 
 const keyboardBaseOctaveRange = { min: 0, max: 8 } as const;
 const gridChoices = {
@@ -69,22 +76,22 @@ export const PatternHeader = memo(function PatternHeader({
     recordingTrackId !== null
       ? `Recording ${labelByTrackId[recordingTrackId]}${isEighthGrid ? " at 1/8 grid" : ""}. Play keyboard notes.`
       : keyboardTargetLabel === null
-        ? "Select a melodic or inspired PCM step to use note-entry mode."
+        ? "Select empty steps, then press Enter to add."
         : keyboardModeEnabled
           ? `${keyboardTargetLabel} is armed for keyboard note entry.`
           : `${keyboardTargetLabel} is ready for keyboard note entry.`;
 
   return (
     <div>
-      <div className="flex flex-col gap-2.5 pb-1 lg:flex-row lg:items-end lg:justify-between lg:gap-[18px]">
+      <div className="flex flex-col gap-2.5 pb-1.5 lg:flex-row lg:items-end lg:justify-between lg:gap-[18px]">
         <div className="min-w-0">
-          <h2 className="glow-text font-screen text-[32px] leading-[0.9] font-normal">Pattern ruler</h2>
-          <p className="mt-1.5 text-[13.5px] text-ink-muted">
-            {loopLength} step loop. Select empty steps, then press Enter to add.
-          </p>
+          <h2 className="glow-text font-screen text-[32px] leading-[0.9] font-normal">Pattern</h2>
           <p
             aria-live="polite"
-            className={cn("text-[13.5px]", recordingTrackId !== null ? "font-semibold text-signal-text" : "text-ink-muted")}
+            className={cn(
+              "mt-1 text-[13.5px]",
+              recordingTrackId !== null ? "font-semibold text-signal-text" : "text-ink-muted",
+            )}
           >
             {keyboardTargetSummary}
           </p>
@@ -110,11 +117,10 @@ export const PatternHeader = memo(function PatternHeader({
           selectedNote={keyboardTargetNote}
         />
       ) : null}
-      <div className={cn("grid", laneColumnsClass)}>
-        <div aria-hidden className="hidden lg:block" />
-        <div className="pt-1 pb-1.5">
-          <StepRuler isPlaying={isPlaying} loopLength={loopLength} playhead={playhead} />
-        </div>
+      {/* Below lg the lane head sits between this header and the steps, so the in-cell numbers do its job. */}
+      <div className={cn("grid max-lg:hidden", laneColumnsClass)}>
+        <div aria-hidden />
+        <StepRuler isPlaying={isPlaying} loopLength={loopLength} playhead={playhead} />
       </div>
     </div>
   );
@@ -150,29 +156,33 @@ const PatternToolbar = memo(function PatternToolbar({
 
   return (
     <Toolbar aria-label="Pattern" className="gap-x-2.5 lg:justify-end">
-      <ToolbarGroup aria-label="Loop length" className="gap-1.5">
+      <ToolbarGroup aria-label="Loop length" className="gap-1">
+        <span aria-hidden className="mr-0.5 font-screen text-[21px] leading-none text-screen-muted">
+          Steps
+        </span>
         <ToolbarButton
           variant="screen"
-          size="icon-sm"
-          aria-label="Remove 4 steps"
+          size="sm"
+          className="w-10 px-0 font-mono text-[13px] font-semibold"
+          aria-label={`Remove ${SONG_LOOP_LENGTH_RANGE.step} steps`}
           disabled={loopLength <= SONG_LOOP_LENGTH_RANGE.min}
           onClick={() => {
             onEdit({ type: "set-loop-length", loopLength: loopLength - SONG_LOOP_LENGTH_RANGE.step });
           }}
         >
-          <Minus aria-hidden="true" />
+          −{SONG_LOOP_LENGTH_RANGE.step}
         </ToolbarButton>
-        <span className="min-w-[66px] text-center font-screen text-[22px] leading-none whitespace-nowrap">{loopLength} steps</span>
         <ToolbarButton
           variant="screen"
-          size="icon-sm"
-          aria-label="Add 4 steps"
+          size="sm"
+          className="w-10 px-0 font-mono text-[13px] font-semibold"
+          aria-label={`Add ${SONG_LOOP_LENGTH_RANGE.step} steps`}
           disabled={loopLength >= SONG_LOOP_LENGTH_RANGE.max}
           onClick={() => {
             onEdit({ type: "set-loop-length", loopLength: loopLength + SONG_LOOP_LENGTH_RANGE.step });
           }}
         >
-          <Plus aria-hidden="true" />
+          +{SONG_LOOP_LENGTH_RANGE.step}
         </ToolbarButton>
       </ToolbarGroup>
       <ToggleGroup
@@ -242,6 +252,7 @@ const PatternToolbar = memo(function PatternToolbar({
   );
 });
 
+// One header row names the columns; the lanes' gutters name the step each wrapped row starts on.
 const StepRuler = memo(function StepRuler({
   isPlaying,
   loopLength,
@@ -251,40 +262,51 @@ const StepRuler = memo(function StepRuler({
   loopLength: number;
   playhead: PlayheadStore;
 }) {
+  const columnCount = useStepColumnCount();
+  const isWrapped = loopLength > columnCount;
+
   return (
-    <div aria-hidden className={stepGridClass}>
-      {Array.from({ length: loopLength }, (_, index) => (
-        <RulerStepCell key={`ruler-step-${index}`} index={index} isPlaying={isPlaying} playhead={playhead} />
-      ))}
+    <div aria-hidden className="flex gap-1 pt-1 pb-1.5">
+      {isWrapped ? <div className={rowStartGutterClass} /> : null}
+      <div className={cn(stepGridClass, "min-w-0 flex-1")}>
+        {Array.from({ length: Math.min(loopLength, columnCount) }, (_, column) => (
+          <RulerStepCell
+            key={column}
+            column={column}
+            columnCount={columnCount}
+            isPlaying={isPlaying}
+            playhead={playhead}
+          />
+        ))}
+      </div>
     </div>
   );
 });
 
 const RulerStepCell = memo(function RulerStepCell({
-  index,
+  column,
+  columnCount,
   isPlaying,
   playhead,
 }: {
-  index: number;
+  column: number;
+  columnCount: number;
   isPlaying: boolean;
   playhead: PlayheadStore;
 }) {
-  const isActive = usePlayheadSelector(playhead, ({ nextStep }) => isPlaying && nextStep === index);
+  const isActive = usePlayheadSelector(playhead, ({ nextStep }) => isPlaying && nextStep % columnCount === column);
 
   return (
     <div
       aria-current={isActive ? "step" : undefined}
       className={cn(
-        "relative pt-2 text-center font-screen leading-none",
-        beatEdgeClass(index),
-        index % stepsPerBeatGroup === 0
-          ? "text-[24px] text-ink before:absolute before:top-0 before:left-1/2 before:h-[5px] before:w-0.5 before:-translate-x-1/2 before:bg-ink-muted"
-          : "text-[20px] text-ink-muted",
-        isActive &&
-          "beam rounded-t-[3px] text-beam [text-shadow:0_0_8px_var(--glow),0_0_2px_var(--beam)] before:bg-beam",
+        "rounded-[3px] py-1 text-center font-mono text-[12px] leading-none font-semibold",
+        beatEdgeClass(column),
+        column % stepsPerBeatGroup === 0 ? "text-ink" : "text-ink-muted",
+        isActive && "beam text-beam",
       )}
     >
-      {index + 1}
+      {column + 1}
     </div>
   );
 });

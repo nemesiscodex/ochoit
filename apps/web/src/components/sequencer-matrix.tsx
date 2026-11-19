@@ -546,7 +546,7 @@ export function SequencerMatrix({
 
   return (
     <div className="crt-rim">
-      <div className="crt-glass overflow-hidden px-3 pt-3.5 pb-3.5 md:px-6 md:pt-4">
+      <div className="crt-glass overflow-hidden px-3 pt-3.5 pb-3 md:px-4 md:pt-4">
         {rulerVisible ? (
           <PatternHeader
             activeKeyboardKey={activeKeyboardKey}

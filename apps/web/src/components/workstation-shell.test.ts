@@ -196,12 +196,12 @@ describe("workstation-shell", () => {
     renderWorkstationShell(createEmptySongDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "Add 4 steps" }));
-    expect(screen.getByText("20 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("20");
 
     fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("16");
   });
 
   it("switches the sequencer between beat grid and 1/8 recording grid", () => {
@@ -209,7 +209,7 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Use 1/8 grid recording" }));
 
-    expect(screen.getByText("32 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("32");
 
     let latestSong = mockUseAudioEngine.mock.lastCall?.[0];
 
@@ -222,7 +222,7 @@ describe("workstation-shell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Use beat grid recording" }));
 
-    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("16");
 
     latestSong = mockUseAudioEngine.mock.lastCall?.[0];
 
@@ -250,14 +250,14 @@ describe("workstation-shell", () => {
     expect(
       within(question).getByText("This will delete or shorten notes and triggers beyond the new end."),
     ).toBeTruthy();
-    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("16");
 
     await act(async () => {
       fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
     });
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("16");
     expect(getLatestSong().tracks.pulse1.steps[12]?.enabled).toBe(true);
   });
 
@@ -286,7 +286,7 @@ describe("workstation-shell", () => {
       fireEvent.click(within(question).getByRole("button", { name: "Cancel" }));
     });
 
-    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("16");
     expect(loopLengthInput.value).toBe("16");
 
     const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
@@ -320,7 +320,7 @@ describe("workstation-shell", () => {
       fireEvent.click(within(question).getByRole("button", { name: "Shorten pattern" }));
     });
 
-    expect(screen.getByText("12 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(inputValueOf(screen.getByLabelText("Steps"))).toBe("12");
 
     const latestSong = mockUseAudioEngine.mock.lastCall?.[0];
 
@@ -394,12 +394,12 @@ describe("workstation-shell", () => {
     const rulerButton = screen.getByRole("button", { name: "Sequencer ruler" });
 
     expect(rulerButton.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("Pattern ruler")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pattern" })).toBeTruthy();
 
     fireEvent.click(rulerButton);
 
     expect(rulerButton.getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByText("Pattern ruler")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Pattern" })).toBeNull();
   });
 
   it("offers Start audio with a note on why before the engine is ready", () => {
@@ -618,7 +618,7 @@ describe("workstation-shell", () => {
     expect(screen.getByRole("heading", { name: "Triangle" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Noise" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "PCM" })).toBeTruthy();
-    expect(screen.getByText("Pattern ruler")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pattern" })).toBeTruthy();
   });
 
   it("surfaces the current inspired PCM behavior in the song info panel", () => {

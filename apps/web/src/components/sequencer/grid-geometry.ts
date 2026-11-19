@@ -3,9 +3,16 @@ import { useEffect, useState } from "react";
 import type { GridMetrics } from "@/features/sequencer/step-drag";
 
 export const stepsPerBeatGroup = 4;
-export const stepGridClass = "grid auto-rows-fr grid-cols-8 gap-1 md:grid-cols-16";
-export const laneColumnsClass = "lg:grid-cols-[18rem_minmax(0,1fr)]";
+export const stepGridClass = "grid grid-cols-8 gap-1 md:grid-cols-16";
+export const laneColumnsClass = "lg:grid-cols-[214px_minmax(0,1fr)]";
 export const stepHeightPx = 48;
+// Wrapped rows get a gutter that names each row's first step; the column header leaves the same gap.
+export const rowStartGutterClass = "w-[22px] shrink-0";
+
+// A lone row stays a little taller than wrapped rows instead of stretching to the lane head.
+export function stepRowsClass(rowCount: number) {
+  return rowCount === 1 ? "auto-rows-[60px]" : "auto-rows-[48px]";
+}
 
 const fallbackStepWidthPx = 40;
 const fallbackStepGapPx = 4;

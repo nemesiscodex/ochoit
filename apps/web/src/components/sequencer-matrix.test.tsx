@@ -129,6 +129,34 @@ describe("sequencer-matrix", () => {
     expect(screen.getByLabelText("PCM step 5").getAttribute("aria-current")).toBe("step");
   });
 
+  it("lights the column header for the playhead's column when the pattern wraps", () => {
+    const song = applySongEdit(createEmptySongDocument(), { type: "set-loop-length", loopLength: 64, confirmed: true }).song;
+    const { container } = renderMatrix({ song, playbackState: "playing", playhead: atStep(19) });
+    const current = [...container.querySelectorAll('[aria-current="step"]')];
+
+    expect(current).toHaveLength(6);
+    expect(current.filter((element) => element.getAttribute("aria-label") === null).map((element) => element.textContent)).toEqual([
+      "4",
+    ]);
+    expect(screen.getByLabelText("PCM step 20").getAttribute("aria-current")).toBe("step");
+  });
+
+  it("shows each step's number inside its cell, under notes too", () => {
+    const song = createEmptySongDocument();
+    song.tracks.pulse1.steps[4] = { ...song.tracks.pulse1.steps[4], enabled: true, note: "E4", length: 2 };
+    song.tracks.noise.steps[2] = { ...song.tracks.noise.steps[2], enabled: true };
+    renderMatrix({ song });
+
+    expect(within(screen.getByLabelText("Pulse I step 3")).getByText("3")).toBeTruthy();
+    expect(within(screen.getByLabelText("Noise step 3")).getByText("3")).toBeTruthy();
+
+    const note = screen.getByLabelText("Pulse I step 5");
+
+    expect(within(note).getByText("E4")).toBeTruthy();
+    expect(within(note).getByText("5")).toBeTruthy();
+    expect(within(note).getByText("6")).toBeTruthy();
+  });
+
   it("moves the highlight when the playhead advances", () => {
     const { container, movePlayhead } = renderMatrix({ playbackState: "playing", playhead: atStep(4) });
 
@@ -170,10 +198,11 @@ describe("sequencer-matrix", () => {
     expect(container.querySelectorAll('[aria-current="step"]')).toHaveLength(0);
   });
 
-  it("shows the empty-step creation hint in the pattern ruler", () => {
+  it("shows the empty-step creation hint in the pattern header", () => {
     renderMatrix();
 
-    expect(screen.getByText("16 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Pattern" })).toBeTruthy();
+    expect(screen.getByText("Select empty steps, then press Enter to add.")).toBeTruthy();
   });
 
   it("toggles keyboard note mode from the ruler and via the shortcut", () => {
@@ -228,7 +257,7 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use 1/8 grid recording" }));
 
     expect(latestSong().transport).toMatchObject({ stepsPerBeat: 8, loopLength: 32 });
-    expect(screen.getByText("32 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(screen.getByLabelText("Pulse I step 32")).toBeTruthy();
   });
 
   it("shows 1/8 grid in the recording status when active", () => {
@@ -797,7 +826,8 @@ describe("sequencer-matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove 4 steps" }));
 
     expect(latestSong().transport.loopLength).toBe(12);
-    expect(screen.getByText("12 step loop. Select empty steps, then press Enter to add.")).toBeTruthy();
+    expect(screen.getByLabelText("Pulse I step 12")).toBeTruthy();
+    expect(screen.queryByLabelText("Pulse I step 13")).toBeNull();
   });
 
   it("deselects a step on Escape key", () => {
