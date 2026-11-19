@@ -68,7 +68,7 @@ export function NotePicker({
         disabled={disabled}
         className={cn(
           buttonVariants({ variant: "default", size: "sm" }),
-          "glass-well glow-text min-w-16 justify-between gap-1 px-2 font-screen text-[22px] leading-none font-normal text-screen-ink hover:bg-transparent disabled:cursor-not-allowed disabled:opacity-45",
+          "glass-well min-w-16 justify-between gap-1 px-2 font-mono text-[13px] leading-none font-semibold text-screen-ink hover:bg-transparent disabled:cursor-not-allowed disabled:opacity-45",
         )}
       >
         {selectedNote}
@@ -81,7 +81,7 @@ export function NotePicker({
       >
         <div className="mb-2 flex items-center justify-between gap-3">
           <PopoverTitle>Note picker</PopoverTitle>
-          <span className="glass-well glow-text rounded-control px-2 py-0.5 font-screen text-[20px] leading-none">
+          <span className="glass-well rounded-control px-2 py-1 font-mono text-[13px] leading-none font-semibold">
             {selectedNote}
           </span>
         </div>
@@ -91,7 +91,7 @@ export function NotePicker({
             <span
               key={octave}
               className={cn(
-                "col-span-2 pb-1 text-center font-screen text-[18px] leading-none",
+                "col-span-2 pb-1 text-center font-mono text-[11px] leading-none font-semibold",
                 isSweetSpot(octave) ? "text-ink-muted" : "text-ink-faint",
               )}
             >
@@ -101,7 +101,7 @@ export function NotePicker({
           {pickerRows.map((row) => [
             <span
               key={`${row.baseName}-label`}
-              className="flex items-center justify-center font-screen text-[18px] leading-none text-ink-muted"
+              className="flex items-center justify-center font-mono text-[11px] leading-none font-semibold text-ink-muted"
             >
               {row.baseName}
             </span>,
@@ -149,7 +149,7 @@ function NoteCell({
       aria-label={`Select note ${cell.note}`}
       aria-pressed={isSelected}
       className={cn(
-        "flex h-7 cursor-pointer items-center justify-center rounded-[3px] font-screen text-[18px] leading-none transition-colors duration-100 focus-visible:relative focus-visible:z-10",
+        "flex h-7 cursor-pointer items-center justify-center rounded-[3px] font-mono text-[11px] leading-none font-semibold transition-colors duration-100 focus-visible:relative focus-visible:z-10",
         isSelected
           ? "bg-(--note-accent) text-voice-ink shadow-[0_0_10px_color-mix(in_srgb,var(--note-accent)_60%,transparent)]"
           : cn(

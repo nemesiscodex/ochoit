@@ -239,9 +239,9 @@ function ClipList({
                       {...pcmTraceColors}
                     />
                   </span>
-                  <span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 font-screen leading-none font-normal">
-                    <span className="truncate text-[22px] text-ink">{entry.name}</span>
-                    <span className="text-[20px] text-ink-muted">{formatSeconds(durationMs)}</span>
+                  <span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 font-mono text-[13px] leading-none font-semibold">
+                    <span className="truncate text-ink">{entry.name}</span>
+                    <span className="text-[12px] text-ink-muted">{formatSeconds(durationMs)}</span>
                   </span>
                   {isSelected ? <Check aria-hidden="true" className="size-4 shrink-0 text-ink" /> : null}
                 </Button>

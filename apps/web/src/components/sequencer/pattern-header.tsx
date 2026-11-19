@@ -401,7 +401,7 @@ function KeyboardBindingKey({
         isPressed && "translate-y-px bg-screen-edge/40",
       )}
     >
-      <span className="truncate font-screen text-[20px] leading-none">{binding.note ?? "None"}</span>
+      <span className="truncate font-mono text-[12px] leading-none font-semibold">{binding.note ?? "None"}</span>
       <span className="text-xs text-ink-muted">{binding.keyLabel}</span>
     </div>
   );

@@ -53,7 +53,7 @@ function NumberField({
         <NumberInputControl
           aria-label={label}
           className={cn(
-            "glow-text w-12 min-w-0 bg-transparent text-center font-screen text-[24px] leading-none text-screen-ink outline-none",
+            "w-12 min-w-0 bg-transparent text-center font-mono text-[14px] leading-none font-semibold text-screen-ink outline-none",
             inputClassName,
           )}
         />

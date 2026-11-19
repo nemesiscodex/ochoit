@@ -187,7 +187,7 @@ function MelodicStepDetail({
           </Button>
           <output
             aria-label={`${stepName} duration`}
-            className="min-w-12 text-center font-screen text-[22px] leading-none"
+            className="min-w-12 text-center font-mono text-[13px] leading-none font-semibold"
           >
             {step.enabled ? `${step.length} st` : "--"}
           </output>
@@ -316,7 +316,7 @@ function NoiseStepDetail({
               onUpdate({ periodIndex });
             }}
           />
-          <output aria-label={`${stepName} noise settings`} className="min-w-16 font-screen text-[22px] leading-none">
+          <output aria-label={`${stepName} noise settings`} className="min-w-16 font-mono text-[13px] leading-none font-semibold">
             {formatNoiseConfigLabel(step.mode, step.periodIndex)}
           </output>
         </div>
@@ -610,7 +610,7 @@ function StepVolumeField({
             onChange(next / STEP_VOLUME_PERCENT_MAX);
           }}
         />
-        <span className="w-10 text-right font-screen text-[19px] leading-none text-ink-muted">{percent}%</span>
+        <span className="w-10 text-right font-mono text-[12px] leading-none font-semibold text-ink-muted">{percent}%</span>
       </div>
     </DetailField>
   );

@@ -200,7 +200,7 @@ const LaneHead = memo(function LaneHead({
               onEdit({ type: "set-track-volume", trackId, volume: next / TRACK_VOLUME_PERCENT_RANGE.max });
             }}
           />
-          <span className="w-9 shrink-0 font-screen text-[19px] leading-none text-ink-muted">{volumePercent}%</span>
+          <span className="w-9 shrink-0 font-mono text-[12px] leading-none font-semibold text-ink-muted">{volumePercent}%</span>
         </div>
         <Button
           variant="screen"
