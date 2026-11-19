@@ -1,24 +1,27 @@
-import { Input } from "@ochoit/ui/components/input";
 import { Button } from "@ochoit/ui/components/button";
+import { NumberField } from "@ochoit/ui/components/number-field";
+import { Slider } from "@ochoit/ui/components/slider";
 import { cn } from "@ochoit/ui/lib/utils";
-import { Mic, Square, Trash2 } from "lucide-react";
-import { memo, useMemo } from "react";
+import { Check, Mic, Play, Square, Trash2 } from "lucide-react";
+import { memo, useMemo, useSyncExternalStore } from "react";
 import { SONG_MAX_SAMPLE_COUNT, type SongDocument } from "ochoit-lib";
 
 import { NotePicker } from "@/components/note-picker";
-import { waveformGlowColorByTrackId, waveformLineColorByTrackId } from "@/components/sequencer-theme";
 import { WaveformCanvas } from "@/components/waveform-canvas";
 import {
   createWaveformFromPcm,
+  SAMPLE_RECORDING_MAX_DURATION_MS,
   type SampleRecorderPermissionState,
   type SampleRecorderStatus,
 } from "@/features/audio/sample-recorder";
 import { getTrimmedFrameCount, getTrimmedSamplePcm } from "@/features/song/song-samples";
 
+type SampleAsset = SongDocument["samples"][number];
+
 type SampleDeckProps = {
   engineMode: SongDocument["meta"]["engineMode"];
   samples: SongDocument["samples"];
-  sample: SongDocument["samples"][number] | null;
+  sample: SampleAsset | null;
   selectedSampleId: string | null;
   recorderErrorMessage: string | null;
   recorderPermissionState: SampleRecorderPermissionState;
@@ -34,6 +37,11 @@ type SampleDeckProps = {
   onStartRecording: () => Promise<void>;
   onStopRecording: () => void;
 };
+
+type RecorderMessage = { tone: "status" | "error"; text: string };
+
+const maxRecordingLabel = formatSeconds(SAMPLE_RECORDING_MAX_DURATION_MS);
+const maxRecordingSentence = `${SAMPLE_RECORDING_MAX_DURATION_MS / 1000} seconds`;
 
 export const SampleDeck = memo(function SampleDeck({
   engineMode,
@@ -57,275 +65,46 @@ export const SampleDeck = memo(function SampleDeck({
   const isRecording = recorderStatus === "recording";
   const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
   const sampleLimitReached = samples.length >= SONG_MAX_SAMPLE_COUNT;
-  const trimmedPcm = useMemo(() => (sample === null ? [] : getTrimmedSamplePcm(sample)), [sample]);
-  const waveform = useMemo(() => createWaveformFromPcm(trimmedPcm), [trimmedPcm]);
-  const sampleClipPreviews = useMemo(
-    () =>
-      [...samples].reverse().map((entry) => ({
-        entry,
-        waveform: createWaveformFromPcm(getTrimmedSamplePcm(entry), 48),
-        trimmedDurationMs:
-          entry.sampleRate <= 0 ? 0 : Math.round((getTrimmedFrameCount(entry) / entry.sampleRate) * 1000),
-      })),
-    [samples],
-  );
-  const trimmedFrameCount = useMemo(() => (sample === null ? 0 : getTrimmedFrameCount(sample)), [sample]);
-  const trimWindowMaxStart = sample === null ? 0 : Math.max(0, sample.frameCount - trimmedFrameCount);
-  const hasPendingTrim = sample !== null && (sample.trim.startFrame > 0 || sample.trim.endFrame < sample.frameCount);
-  const sampleDurationMs =
-    sample === null || sample.sampleRate <= 0 ? 0 : Math.round((trimmedFrameCount / sample.sampleRate) * 1000);
-  const statusLabel =
-    recorderStatus === "recording"
-      ? `Recording ${formatSampleDurationLabel(recordingDurationMs)}`
-      : recorderStatus === "processing"
-        ? "Rendering clip"
-        : recorderStatus === "requesting-permission"
-          ? "Requesting microphone access"
-          : recorderStatus === "error"
-            ? (recorderErrorMessage ?? "Recorder error")
-            : sampleLimitReached
-              ? `Clip limit reached (${samples.length}/${SONG_MAX_SAMPLE_COUNT})`
-              : sample === null
-                ? "Ready to capture"
-                : `Latest clip ${formatSampleDurationLabel(sampleDurationMs)}`;
-  const permissionLabel = getPermissionLabel(recorderPermissionState);
+  const waveformColors = useWaveformColors();
 
   return (
-    <div className="rounded-lg border border-[var(--oc-sample)]/20 bg-[var(--oc-surface)] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--oc-sample)]">
-          Sample Deck
-        </h2>
-        <Mic className="size-4 text-[var(--oc-sample)]/60" />
-      </div>
-
-      <p className="mb-3 font-[var(--oc-mono)] text-[10px] text-white/35">
-        Capture up to 2s from the microphone. Store up to {SONG_MAX_SAMPLE_COUNT} clips, then trim and swap between them
-        from the deck.
-      </p>
-
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          className="h-8 rounded-md bg-[var(--oc-sample)] font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[#07080e] hover:bg-[var(--oc-sample)]/85"
-          disabled={recorderPermissionState === "unsupported" || isBusy || (!isRecording && sampleLimitReached)}
-          onClick={() => {
-            if (isRecording) {
-              onStopRecording();
-              return;
-            }
-
-            void onStartRecording();
-          }}
-        >
-          {isRecording ? <Square className="mr-1.5 size-3" /> : <Mic className="mr-1.5 size-3" />}
-          {isRecording ? "Stop" : recorderStatus === "requesting-permission" ? "Allow Mic" : "Record"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/50 hover:bg-white/[0.07] hover:text-white"
-          disabled={sample === null || isBusy || isRecording}
-          onClick={() => {
-            void onPreviewSample();
-          }}
-        >
-          Preview
-        </Button>
-      </div>
-
-      <div className="mb-3 grid grid-cols-2 gap-2 font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em]">
-        <div className="rounded-md border border-white/[0.06] bg-black/25 px-2.5 py-2 text-white/45">
-          <span className="block text-white/25">Mic</span>
-          <span className="mt-1 block text-white/65">{permissionLabel}</span>
-        </div>
-        <div className="rounded-md border border-white/[0.06] bg-black/25 px-2.5 py-2 text-white/45">
-          <span className="block text-white/25">Recorder</span>
-          <span className="mt-1 block text-white/65">{statusLabel}</span>
-        </div>
-      </div>
-      {sampleLimitReached ? (
-        <div className="mb-3 rounded-md border border-[var(--oc-noise)]/25 bg-[var(--oc-noise)]/[0.06] px-2.5 py-2 font-[var(--oc-mono)] text-[10px] leading-5 text-[var(--oc-noise)]">
-          Delete a clip before recording another one. Share links also cap embedded samples at {SONG_MAX_SAMPLE_COUNT}.
-        </div>
-      ) : null}
-
-      <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
-        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
-          <span>Trim</span>
-          <span>{sample?.name ?? "No Sample"}</span>
-        </div>
-        <div className="oc-waveform-wrap rounded-sm">
-          <WaveformCanvas
-            ariaLabel="PCM trim preview waveform"
-            samples={waveform}
-            className="h-12 w-full"
-            backgroundColor="rgba(7, 8, 14, 0.9)"
-            glowColor={waveformGlowColorByTrackId.sample}
-            lineColor={waveformLineColorByTrackId.sample}
+    <div className="@container">
+      <div className="grid items-start gap-6 @2xl:grid-cols-2 @2xl:gap-8">
+        <div className="flex flex-col gap-6">
+          <RecordControl
+            canRecord={recorderPermissionState !== "unsupported" && !isBusy && (isRecording || !sampleLimitReached)}
+            isRecording={isRecording}
+            message={getRecorderMessage({
+              errorMessage: recorderErrorMessage,
+              permissionState: recorderPermissionState,
+              recordingDurationMs,
+              status: recorderStatus,
+            })}
+            onStartRecording={onStartRecording}
+            onStopRecording={onStopRecording}
+          />
+          <ClipList
+            samples={samples}
+            selectedSampleId={selectedSampleId}
+            waveformColors={waveformColors.thumbnail}
+            onDeleteSample={onDeleteSample}
+            onSelectSample={onSelectSample}
           />
         </div>
-        <div className="mt-3 grid gap-3">
-          <SampleTrimControl
-            disabled={sample === null || isRecording}
-            label="Window"
-            labelId="sample-trim-window"
-            max={trimWindowMaxStart}
-            onChange={onMoveTrimWindow}
-            value={sample?.trim.startFrame ?? 0}
+        {sample === null ? null : (
+          <SampleEditor
+            engineMode={engineMode}
+            sample={sample}
+            isBusy={isBusy}
+            isRecording={isRecording}
+            waveformColors={waveformColors.editor}
+            onApplyTrim={onApplyTrim}
+            onMoveTrimWindow={onMoveTrimWindow}
+            onPreviewSample={onPreviewSample}
+            onResizeTrimWindow={onResizeTrimWindow}
+            onSetSampleBaseNote={onSetSampleBaseNote}
           />
-          <SampleTrimControl
-            disabled={sample === null || isRecording}
-            label="Length"
-            labelId="sample-trim-length"
-            max={sample?.frameCount ?? 0}
-            min={0}
-            onChange={onResizeTrimWindow}
-            value={trimmedFrameCount}
-          />
-        </div>
-        <div className="mt-3 flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 rounded-md border-white/[0.08] bg-white/[0.03] font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.12em] text-white/60 hover:bg-white/[0.07] hover:text-white"
-            disabled={!hasPendingTrim || isRecording || isBusy}
-            onClick={onApplyTrim}
-          >
-            Apply Trim
-          </Button>
-        </div>
-        <div className="mt-3 grid gap-2 rounded-md border border-white/[0.06] bg-black/20 p-2.5">
-          <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
-            <span>Pitch Map</span>
-            <span>{engineMode === "inspired" ? "Chromatic" : "Trigger"}</span>
-          </div>
-          {sample === null ? (
-            <div className="font-[var(--oc-mono)] text-[10px] text-white/32">
-              Load a sample to assign its base note.
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="min-w-[7rem]">
-                  <NotePicker
-                    accentColor={waveformLineColorByTrackId.sample}
-                    ariaLabel="Sample base note"
-                    disabled={isRecording}
-                    selectedNote={sample.baseNote}
-                    onSelectNote={(note) => {
-                      onSetSampleBaseNote(note);
-                    }}
-                  />
-                </div>
-                <span className="font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.14em] text-white/36">
-                  Base note
-                </span>
-                {sample.detectedBaseNote !== null ? (
-                  <button
-                    type="button"
-                    className="rounded-sm border border-[var(--oc-sample)]/20 bg-[var(--oc-sample)]/10 px-2 py-1 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--oc-sample)] transition hover:bg-[var(--oc-sample)]/18"
-                    onClick={() => {
-                      onSetSampleBaseNote(sample.detectedBaseNote ?? sample.baseNote);
-                    }}
-                  >
-                    Suggested {sample.detectedBaseNote}
-                  </button>
-                ) : (
-                  <span className="font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/28">
-                    No stable note detected
-                  </span>
-                )}
-              </div>
-              <p className="font-[var(--oc-mono)] text-[10px] leading-5 text-white/40">
-                Inspired mode transposes from this base note. Authentic mode still plays the clip as a one-shot trigger.
-              </p>
-            </>
-          )}
-        </div>
-        <div className="mt-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/35">
-          <span>
-            {sample === null
-              ? "No clip loaded"
-              : `${sample.trim.startFrame}-${sample.trim.endFrame} · ${trimmedFrameCount} / ${sample.frameCount} fr`}
-          </span>
-          <span>{sample === null ? "0.00s" : formatSampleDurationLabel(sampleDurationMs)}</span>
-        </div>
-      </div>
-
-      <div className="rounded-md border border-white/[0.06] bg-black/25 p-2.5">
-        <div className="mb-2 flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.18em] text-white/35">
-          <span>Recorded Clips</span>
-          <span>{samples.length}</span>
-        </div>
-        <div className="grid gap-2">
-          {samples.length === 0 ? (
-            <div className="rounded-md border border-dashed border-white/[0.08] bg-black/20 px-3 py-4 text-center font-[var(--oc-mono)] text-[10px] uppercase tracking-[0.16em] text-white/28">
-              Record something to build your PCM clip list.
-            </div>
-          ) : (
-            sampleClipPreviews.map(({ entry, waveform, trimmedDurationMs }) => {
-              const isSelected = entry.id === selectedSampleId;
-
-              return (
-                <div
-                  key={entry.id}
-                  className={cn(
-                    "grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md border p-2 transition-colors",
-                    isSelected
-                      ? "border-[var(--oc-sample)]/50 bg-[var(--oc-sample)]/10"
-                      : "border-white/[0.06] bg-black/20",
-                  )}
-                >
-                  <button
-                    type="button"
-                    aria-label={`Load sample ${entry.name}`}
-                    className="min-w-0 text-left"
-                    onClick={() => {
-                      onSelectSample(entry.id);
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-[var(--oc-mono)] text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
-                        {entry.name}
-                      </span>
-                      {isSelected ? (
-                        <span className="rounded-sm bg-[var(--oc-sample)]/18 px-1.5 py-0.5 font-[var(--oc-mono)] text-[8px] font-semibold uppercase tracking-[0.16em] text-[var(--oc-sample)]">
-                          Live
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 font-[var(--oc-mono)] text-[8px] uppercase tracking-[0.14em] text-white/34">
-                      {entry.id} · {formatSampleDurationLabel(trimmedDurationMs)}
-                    </div>
-                    <div className="mt-2 rounded-sm border border-white/[0.05] bg-[#07080e]/80">
-                      <WaveformCanvas
-                        ariaLabel={`${entry.name} waveform`}
-                        samples={waveform}
-                        className="h-8 w-full"
-                        backgroundColor="rgba(7, 8, 14, 0.82)"
-                        glowColor={waveformGlowColorByTrackId.sample}
-                        lineColor={waveformLineColorByTrackId.sample}
-                      />
-                    </div>
-                  </button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    aria-label={`Delete sample ${entry.name}`}
-                    className="size-8 self-start border-white/[0.08] bg-white/[0.03] text-white/45 hover:bg-[var(--oc-noise)]/10 hover:text-[var(--oc-noise)]"
-                    onClick={() => {
-                      onDeleteSample(entry.id);
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
-              );
-            })
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -344,73 +123,447 @@ function areSampleDeckPropsEqual(previousProps: Readonly<SampleDeckProps>, nextP
   );
 }
 
+function RecordControl({
+  canRecord,
+  isRecording,
+  message,
+  onStartRecording,
+  onStopRecording,
+}: {
+  canRecord: boolean;
+  isRecording: boolean;
+  message: RecorderMessage;
+  onStartRecording: () => Promise<void>;
+  onStopRecording: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-2.5">
+      <Button
+        variant="primary"
+        disabled={!canRecord}
+        onClick={() => {
+          if (isRecording) {
+            onStopRecording();
+            return;
+          }
+
+          void onStartRecording();
+        }}
+      >
+        {isRecording ? <Square aria-hidden="true" className="fill-current" /> : <Mic aria-hidden="true" />}
+        {isRecording ? "Stop recording" : "Record"}
+      </Button>
+      <p aria-live="polite" className="text-[13px] leading-snug text-ink-muted tabular-nums">
+        {message.tone === "status" ? message.text : null}
+      </p>
+      {message.tone === "error" ? (
+        <p role="alert" className="text-[13px] leading-snug font-medium text-signal">
+          {message.text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ClipList({
+  samples,
+  selectedSampleId,
+  waveformColors,
+  onDeleteSample,
+  onSelectSample,
+}: {
+  samples: SongDocument["samples"];
+  selectedSampleId: string | null;
+  waveformColors: WaveformColorSet;
+  onDeleteSample: (sampleId: string) => void;
+  onSelectSample: (sampleId: string) => void;
+}) {
+  const clipRows = useMemo(
+    () =>
+      [...samples].reverse().map((entry) => ({
+        entry,
+        waveform: createWaveformFromPcm(getTrimmedSamplePcm(entry), 48),
+        durationMs: getDurationMs(entry, getTrimmedFrameCount(entry)),
+      })),
+    [samples],
+  );
+
+  return (
+    <section aria-labelledby="sample-deck-clips" className="flex flex-col gap-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 id="sample-deck-clips" className="text-sm font-semibold text-ink">
+          Clips
+        </h2>
+        <span className="text-[13px] text-ink-muted tabular-nums">
+          {samples.length} of {SONG_MAX_SAMPLE_COUNT}
+        </span>
+      </div>
+      {samples.length >= SONG_MAX_SAMPLE_COUNT ? (
+        <div className="rounded-control border border-line bg-surface-sunken px-3 py-2 text-[13px] leading-snug text-ink-muted">
+          <p className="font-medium text-ink">{`Clip limit reached (${samples.length}/${SONG_MAX_SAMPLE_COUNT})`}</p>
+          <p>
+            Delete a clip before recording another one. Share links also cap embedded samples at{" "}
+            {SONG_MAX_SAMPLE_COUNT}.
+          </p>
+        </div>
+      ) : null}
+      {clipRows.length === 0 ? (
+        <p className="rounded-panel bg-surface-sunken px-4 py-5 text-[13px] leading-relaxed text-ink-muted">
+          Record a sound to add your first clip. A song holds up to {SONG_MAX_SAMPLE_COUNT} clips for the PCM voice.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {clipRows.map(({ entry, waveform, durationMs }) => {
+            const isSelected = entry.id === selectedSampleId;
+
+            return (
+              <li
+                key={entry.id}
+                className={cn(
+                  "flex items-center gap-1 rounded-control border pr-1 transition-colors",
+                  isSelected ? "border-ink bg-surface-2 shadow-raised" : "border-transparent hover:bg-surface-2",
+                )}
+              >
+                <Button
+                  variant="ghost"
+                  aria-label={`Load sample ${entry.name}`}
+                  aria-pressed={isSelected}
+                  className="h-auto min-w-0 flex-1 justify-start gap-3 border-0 p-1.5 text-left hover:bg-transparent active:translate-y-0"
+                  onClick={() => {
+                    onSelectSample(entry.id);
+                  }}
+                >
+                  <span aria-hidden="true" className="block h-8 w-20 shrink-0 overflow-hidden rounded-[4px] bg-surface-sunken">
+                    <WaveformCanvas
+                      ariaLabel={`${entry.name} waveform`}
+                      samples={waveform}
+                      className="block h-full w-full"
+                      {...waveformColors}
+                    />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] font-medium text-ink">{entry.name}</span>
+                    <span className="text-xs text-ink-muted tabular-nums">{formatSeconds(durationMs)}</span>
+                  </span>
+                  {isSelected ? <Check aria-hidden="true" className="size-4 shrink-0 text-ink" /> : null}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Delete sample ${entry.name}`}
+                  data-agent-confirm={`Deletes the clip ${entry.name} and clears its PCM steps`}
+                  className="hover:text-signal"
+                  onClick={() => {
+                    onDeleteSample(entry.id);
+                  }}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SampleEditor({
+  engineMode,
+  sample,
+  isBusy,
+  isRecording,
+  waveformColors,
+  onApplyTrim,
+  onMoveTrimWindow,
+  onPreviewSample,
+  onResizeTrimWindow,
+  onSetSampleBaseNote,
+}: {
+  engineMode: SongDocument["meta"]["engineMode"];
+  sample: SampleAsset;
+  isBusy: boolean;
+  isRecording: boolean;
+  waveformColors: WaveformColorSet;
+  onApplyTrim: () => void;
+  onMoveTrimWindow: (startFrame: number) => void;
+  onPreviewSample: () => Promise<void>;
+  onResizeTrimWindow: (frameCount: number) => void;
+  onSetSampleBaseNote: (baseNote: string) => void;
+}) {
+  const waveform = useMemo(() => createWaveformFromPcm(sample.pcm), [sample.pcm]);
+  const trimmedFrameCount = getTrimmedFrameCount(sample);
+  const { startFrame, endFrame } = sample.trim;
+  const hasPendingTrim = startFrame > 0 || endFrame < sample.frameCount;
+  const windowStartPercent = sample.frameCount <= 0 ? 0 : (startFrame / sample.frameCount) * 100;
+  const windowEndPercent = sample.frameCount <= 0 ? 100 : (endFrame / sample.frameCount) * 100;
+
+  return (
+    <section aria-labelledby="sample-deck-editor" className="flex flex-col gap-5 border-t border-line pt-5 @2xl:border-t-0 @2xl:border-l @2xl:pt-0 @2xl:pl-8">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 id="sample-deck-editor" className="truncate text-sm font-semibold text-ink">
+            {sample.name}
+          </h2>
+          <span className="shrink-0 text-[13px] text-ink-muted tabular-nums">
+            {formatSeconds(getDurationMs(sample, trimmedFrameCount))}
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={isBusy || isRecording}
+          onClick={() => {
+            void onPreviewSample();
+          }}
+        >
+          <Play aria-hidden="true" />
+          Preview clip
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-[13px] font-semibold text-ink">Trim</h3>
+        <div>
+          <div className="relative h-16 overflow-hidden rounded-control border border-line bg-surface-sunken">
+            <WaveformCanvas
+              ariaLabel={`${sample.name} waveform, frames ${startFrame} to ${endFrame} play`}
+              samples={waveform}
+              className="block h-full w-full"
+              {...waveformColors}
+            />
+            {windowStartPercent > 0 ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 left-0 border-r border-ink bg-surface-1/80"
+                style={{ width: `${windowStartPercent}%` }}
+              />
+            ) : null}
+            {windowEndPercent < 100 ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-0 right-0 border-l border-ink bg-surface-1/80"
+                style={{ width: `${100 - windowEndPercent}%` }}
+              />
+            ) : null}
+          </div>
+          <p className="mt-1.5 text-xs text-ink-muted tabular-nums">
+            {`Frames ${formatFrames(startFrame)} to ${formatFrames(endFrame)} of ${formatFrames(sample.frameCount)}`}
+          </p>
+        </div>
+        <SampleTrimControl
+          disabled={isRecording}
+          label="Start"
+          sliderLabel="Trim start"
+          max={Math.max(0, sample.frameCount - trimmedFrameCount)}
+          onChange={onMoveTrimWindow}
+          value={startFrame}
+        />
+        <SampleTrimControl
+          disabled={isRecording}
+          label="Length"
+          sliderLabel="Trim length"
+          max={sample.frameCount}
+          onChange={onResizeTrimWindow}
+          value={trimmedFrameCount}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs leading-snug text-ink-muted">
+            {hasPendingTrim ? "Keeps only the highlighted part. This can't be undone." : "The whole clip plays."}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            disabled={!hasPendingTrim || isRecording || isBusy}
+            data-agent-confirm={`Cuts ${sample.name} down to frames ${startFrame} to ${endFrame} for good`}
+            onClick={onApplyTrim}
+          >
+            Apply trim
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h3 className="text-[13px] font-semibold text-ink">Pitch</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-medium text-ink-muted">Base note</span>
+          <div className="w-24">
+            <NotePicker
+              accentColor="var(--voice-sample)"
+              ariaLabel="Sample base note"
+              disabled={isRecording}
+              selectedNote={sample.baseNote}
+              onSelectNote={(note) => {
+                onSetSampleBaseNote(note);
+              }}
+            />
+          </div>
+          {sample.detectedBaseNote === null ? (
+            <span className="text-xs text-ink-muted">No stable note detected</span>
+          ) : sample.detectedBaseNote === sample.baseNote ? (
+            <span className="text-xs text-ink-muted">Matches the suggested note</span>
+          ) : (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={isRecording}
+              onClick={() => {
+                onSetSampleBaseNote(sample.detectedBaseNote ?? sample.baseNote);
+              }}
+            >
+              Use suggested {sample.detectedBaseNote}
+            </Button>
+          )}
+        </div>
+        <p className="text-xs leading-relaxed text-ink-muted">
+          {engineMode === "inspired"
+            ? "PCM steps transpose the clip from this note."
+            : "Authentic mode plays the clip as a one-shot trigger, so the base note only applies in Inspired mode."}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function SampleTrimControl({
   disabled,
   label,
-  labelId,
+  sliderLabel,
   max,
-  min = 0,
   onChange,
   value,
 }: {
   disabled: boolean;
   label: string;
-  labelId: string;
+  sliderLabel: string;
   max: number;
-  min?: number;
   onChange: (value: number) => void;
   value: number;
 }) {
+  const clampedValue = Math.max(0, Math.min(value, max));
+  const isFixed = max <= 0;
+
   return (
-    <div className="grid gap-1.5">
-      <div className="flex items-center justify-between font-[var(--oc-mono)] text-[9px] uppercase tracking-[0.16em] text-white/38">
-        <label htmlFor={labelId}>{label}</label>
-        <span>{value} fr</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px] font-medium text-ink-muted">{label}</span>
+        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+          <NumberField
+            label={`${label} in frames`}
+            min={0}
+            max={max}
+            step={1}
+            disabled={disabled || isFixed}
+            value={clampedValue}
+            onValueChange={onChange}
+            inputClassName="w-16"
+          />
+          frames
+        </span>
       </div>
-      <input
-        id={labelId}
-        aria-label={`Sample trim ${label.toLowerCase()}`}
-        type="range"
-        min={min}
-        max={max}
+      <Slider
+        className="px-2"
+        label={sliderLabel}
+        min={0}
+        max={Math.max(1, max)}
         step={1}
-        value={String(Math.max(min, Math.min(value, max)))}
-        disabled={disabled}
-        className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-sample)] disabled:cursor-not-allowed disabled:opacity-40"
-        onChange={(event) => {
-          onChange(Number(event.currentTarget.value));
-        }}
-      />
-      <Input
-        aria-label={`Sample trim ${label.toLowerCase()} frame`}
-        type="number"
-        min={min}
-        max={max}
-        step={1}
-        value={String(Math.max(min, Math.min(value, max)))}
-        disabled={disabled}
-        className="h-7 border-white/[0.08] bg-black/30 px-2 font-[var(--oc-mono)] text-[10px] text-white"
-        onChange={(event) => {
-          onChange(Number(event.currentTarget.value));
-        }}
+        disabled={disabled || isFixed}
+        value={clampedValue}
+        onValueChange={onChange}
       />
     </div>
   );
 }
 
-function getPermissionLabel(permissionState: SampleRecorderPermissionState) {
-  switch (permissionState) {
-    case "granted":
-      return "Granted";
-    case "denied":
-      return "Blocked";
-    case "unsupported":
-      return "Unsupported";
-    default:
-      return "Not asked";
+function getRecorderMessage({
+  errorMessage,
+  permissionState,
+  recordingDurationMs,
+  status,
+}: {
+  errorMessage: string | null;
+  permissionState: SampleRecorderPermissionState;
+  recordingDurationMs: number;
+  status: SampleRecorderStatus;
+}): RecorderMessage {
+  if (permissionState === "unsupported") {
+    return { tone: "error", text: "This browser can't record from a microphone. Try a current Chrome, Firefox or Safari." };
   }
+
+  switch (status) {
+    case "requesting-permission":
+      return { tone: "status", text: "Allow microphone access in the browser prompt to start recording." };
+    case "recording":
+      return {
+        tone: "status",
+        text: `Recording ${formatSeconds(recordingDurationMs)} of ${maxRecordingLabel}. It stops by itself at the limit.`,
+      };
+    case "processing":
+      return { tone: "status", text: "Saving the clip…" };
+    case "error":
+      return { tone: "error", text: errorMessage ?? "Recording failed. Check your microphone and try again." };
+  }
+
+  if (permissionState === "denied") {
+    return {
+      tone: "error",
+      text: "Microphone access is blocked. Allow it in your browser's site settings, then press Record.",
+    };
+  }
+
+  return permissionState === "granted"
+    ? { tone: "status", text: `Records up to ${maxRecordingSentence} from your microphone.` }
+    : {
+        tone: "status",
+        text: `Records up to ${maxRecordingSentence} from your microphone. Your browser asks for access first.`,
+      };
 }
 
-function formatSampleDurationLabel(durationMs: number) {
+type WaveformColorSet = { backgroundColor: string; glowColor: string; gridColor: string; lineColor: string };
+
+const darkSchemeQuery = "(prefers-color-scheme: dark)";
+
+function subscribeToColorScheme(onChange: () => void) {
+  const query = typeof window.matchMedia === "function" ? window.matchMedia(darkSchemeQuery) : null;
+  query?.addEventListener("change", onChange);
+
+  return () => {
+    query?.removeEventListener("change", onChange);
+  };
+}
+
+function getColorSchemeSnapshot() {
+  return typeof window.matchMedia === "function" && window.matchMedia(darkSchemeQuery).matches;
+}
+
+// Canvas strokes can't read CSS variables, so resolve the theme tokens and re-read them when the scheme flips.
+function useWaveformColors() {
+  const isDark = useSyncExternalStore(subscribeToColorScheme, getColorSchemeSnapshot, () => false);
+
+  return useMemo(() => {
+    const style = typeof document === "undefined" ? null : window.getComputedStyle(document.documentElement);
+    const token = (name: string) => style?.getPropertyValue(name).trim() || "currentColor";
+    const base = { backgroundColor: "transparent", glowColor: "transparent", gridColor: token("--line") };
+    const colors: Record<"editor" | "thumbnail", WaveformColorSet> = {
+      editor: { ...base, lineColor: token("--ink") },
+      thumbnail: { ...base, lineColor: token("--ink-muted") },
+    };
+
+    return colors;
+  }, [isDark]);
+}
+
+function getDurationMs(sample: SampleAsset, frameCount: number) {
+  return sample.sampleRate <= 0 ? 0 : Math.round((frameCount / sample.sampleRate) * 1000);
+}
+
+const frameFormat = new Intl.NumberFormat("en-US");
+
+function formatFrames(frameCount: number) {
+  return frameFormat.format(frameCount);
+}
+
+function formatSeconds(durationMs: number) {
   return `${(Math.max(0, durationMs) / 1000).toFixed(2)}s`;
 }
