@@ -133,7 +133,7 @@ const LaneHead = memo(function LaneHead({
   const volumePercent = toTrackVolumePercent(volume);
 
   return (
-    <div className="flex min-w-0 flex-col gap-[5px] pt-1.5 pb-1 lg:pr-3">
+    <div className="flex min-w-0 flex-col gap-1 pt-1 lg:pr-3">
       <div className="flex items-center gap-[5px]">
         <h3 className="mr-auto min-w-0 truncate font-screen text-[27px] leading-[0.9] font-normal text-(--voice) [text-shadow:0_0_9px_color-mix(in_srgb,var(--voice)_70%,transparent)]">
           {label}
@@ -174,7 +174,7 @@ const LaneHead = memo(function LaneHead({
           </Tooltip>
         ) : null}
       </div>
-      <div className="graticule relative h-16 overflow-hidden rounded-[4px]">
+      <div className="graticule relative h-10 overflow-hidden rounded-[4px] lg:h-auto lg:max-h-16 lg:min-h-5 lg:flex-1">
         <TrackWaveformCanvas
           ariaLabel={`${label} waveform`}
           className="absolute inset-x-0 top-1 h-[calc(100%-0.5rem)]"
