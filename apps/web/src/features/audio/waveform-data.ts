@@ -1,18 +1,24 @@
-import { trackOrder, type TrackId } from "ochoit-lib";
+import type { TrackId } from "ochoit-lib";
 
 export const WAVEFORM_SAMPLE_SIZE = 256;
 const defaultMidpoint = 128;
-
-const previewLevelsByTrackId: Record<TrackId, readonly number[]> = {
-  pulse1: [18, 18, 18, 7, 7, 18, 18, 18, 7, 7, 18, 18],
-  pulse2: [16, 16, 8, 8, 16, 16, 8, 8, 16, 16, 8, 8],
-  triangle: [4, 8, 12, 16, 20, 16, 12, 8, 4, 8, 12, 16],
-  noise: [5, 16, 8, 20, 7, 14, 11, 19, 6, 17, 9, 15],
-  sample: [3, 9, 18, 13, 7, 17, 10, 5, 14, 8, 12, 4],
-};
+const traceAmplitude = 90;
+const triangleLevelCount = 16;
+const noiseHoldSamples = 8;
+const noiseSeed = 0b101_1001_1100_0101;
 
 function clampByte(value: number) {
   return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function traceByte(level: number) {
+  return clampByte(defaultMidpoint + level * traceAmplitude);
+}
+
+function createTrace(sampleSize: number, levelAt: (progress: number, sampleIndex: number) => number) {
+  return Uint8Array.from({ length: sampleSize }, (_, sampleIndex) =>
+    traceByte(levelAt(sampleIndex / sampleSize, sampleIndex)),
+  );
 }
 
 export function createFlatWaveform(sampleSize = WAVEFORM_SAMPLE_SIZE, midpoint = defaultMidpoint) {
@@ -21,31 +27,56 @@ export function createFlatWaveform(sampleSize = WAVEFORM_SAMPLE_SIZE, midpoint =
   return waveform;
 }
 
-export function createPreviewWaveform(levels: readonly number[], sampleSize = WAVEFORM_SAMPLE_SIZE) {
-  if (levels.length === 0) {
-    return createFlatWaveform(sampleSize);
-  }
+function createPulseTrace(duty: number, periods: number, sampleSize = WAVEFORM_SAMPLE_SIZE) {
+  return createTrace(sampleSize, (progress) => ((progress * periods) % 1 < duty ? 1 : -1));
+}
 
-  const maxLevel = Math.max(...levels, 1);
-  const lastLevelIndex = levels.length - 1;
+function createTriangleTrace(periods: number, sampleSize = WAVEFORM_SAMPLE_SIZE) {
+  const topLevel = triangleLevelCount - 1;
 
-  return Uint8Array.from({ length: sampleSize }, (_, sampleIndex) => {
-    const progress = sampleSize === 1 ? 0 : sampleIndex / (sampleSize - 1);
-    const scaledIndex = progress * lastLevelIndex;
-    const lowerIndex = Math.floor(scaledIndex);
-    const upperIndex = Math.min(lastLevelIndex, lowerIndex + 1);
-    const mix = scaledIndex - lowerIndex;
-    const interpolatedLevel =
-      levels[lowerIndex] + (levels[upperIndex] - levels[lowerIndex]) * mix;
-    const amplitude = (interpolatedLevel / maxLevel) * 92;
-    const phase = progress * Math.PI * 6;
-
-    return clampByte(defaultMidpoint + Math.sin(phase) * amplitude);
+  return createTrace(sampleSize, (progress) => {
+    const phase = (progress * periods) % 1;
+    const step = Math.round((1 - Math.abs(2 * phase - 1)) * topLevel);
+    return (step / topLevel) * 2 - 1;
   });
 }
 
-export const previewWaveformByTrackId = Object.fromEntries(
-  trackOrder.map((trackId) => [trackId, createPreviewWaveform(previewLevelsByTrackId[trackId])]),
-) as Record<TrackId, Uint8Array>;
+// The NES noise channel's 15-bit LFSR (feedback from bits 0 and 1), read four bits at a time so each held step
+// lands on one of 16 levels. A fixed seed keeps the idle trace identical on every render.
+function createNoiseTrace(sampleSize = WAVEFORM_SAMPLE_SIZE) {
+  let register = noiseSeed;
+  let level = 0;
 
-export const sampleDeckPreviewWaveform = createPreviewWaveform(previewLevelsByTrackId.sample, 192);
+  const clockLevel = () => {
+    for (let clock = 0; clock < 4; clock += 1) {
+      const feedback = (register ^ (register >> 1)) & 1;
+      register = (register >> 1) | (feedback << 14);
+    }
+
+    return ((register & 0b1111) / 15) * 2 - 1;
+  };
+
+  return createTrace(sampleSize, (_, sampleIndex) => {
+    if (sampleIndex % noiseHoldSamples === 0) {
+      level = clockLevel();
+    }
+
+    return level;
+  });
+}
+
+function createSampleBurstTrace() {
+  return createTrace(WAVEFORM_SAMPLE_SIZE, (progress) => {
+    const angle = progress * Math.PI * 2 * 7;
+    const tone = (Math.sin(angle) + 0.35 * Math.sin(angle * 2.6)) / 1.1;
+    return tone * Math.exp(-3 * progress);
+  });
+}
+
+export const previewWaveformByTrackId: Record<TrackId, Uint8Array> = {
+  pulse1: createPulseTrace(0.25, 4),
+  pulse2: createPulseTrace(0.5, 4),
+  triangle: createTriangleTrace(3),
+  noise: createNoiseTrace(),
+  sample: createSampleBurstTrace(),
+};
