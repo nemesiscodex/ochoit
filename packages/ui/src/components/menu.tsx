@@ -29,7 +29,7 @@ function MenuContent({ className, sideOffset = 6, ...props }: StyledProps<typeof
 }
 
 const itemClass =
-  "relative flex min-h-8 cursor-pointer items-center gap-2 rounded-[5px] px-2 py-1.5 outline-none select-none data-highlighted:bg-band-raised data-disabled:cursor-not-allowed data-disabled:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-ink-muted";
+  "relative flex min-h-8 cursor-pointer pointer-coarse:min-h-[44px] items-center gap-2 rounded-[5px] px-2 py-1.5 outline-none select-none data-highlighted:bg-band-raised data-disabled:cursor-not-allowed data-disabled:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-ink-muted";
 
 function MenuItem({ className, ...props }: StyledProps<typeof MenuItemPart>) {
   return <MenuItemPart className={cn(itemClass, className)} {...props} />;

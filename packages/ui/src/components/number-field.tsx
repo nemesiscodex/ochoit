@@ -41,7 +41,7 @@ function NumberField({
     >
       <NumberInputGroup
         className={cn(
-          "glass-well inline-flex h-8 items-stretch overflow-hidden rounded-control border transition-colors focus-within:border-focus",
+          "glass-well inline-flex h-8 items-stretch pointer-coarse:h-[44px] overflow-hidden rounded-control border transition-colors focus-within:border-focus",
           tone === "band" ? "border-band-edge" : "border-line-strong",
         )}
       >

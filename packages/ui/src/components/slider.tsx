@@ -44,7 +44,7 @@ function Slider({
       style={accentStyle}
       {...props}
     >
-      <SliderControl className="flex h-6 w-full cursor-pointer items-center touch-none group-data-disabled/slider:cursor-not-allowed">
+      <SliderControl className="flex h-6 w-full cursor-pointer touch-pan-y items-center group-data-disabled/slider:cursor-not-allowed pointer-coarse:h-[44px]">
         <SliderTrack
           className={cn(
             "relative w-full rounded-full",

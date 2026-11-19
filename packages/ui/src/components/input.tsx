@@ -6,7 +6,7 @@ const fieldSurface =
   "w-full min-w-0 rounded-control border border-line-strong bg-surface-sunken text-sm text-ink transition-colors placeholder:text-ink-faint hover:border-ink-muted focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-signal";
 
 function Input({ className, ...props }: StyledProps<typeof InputPart>) {
-  return <InputPart className={cn(fieldSurface, "h-9 px-2.5", className)} {...props} />;
+  return <InputPart className={cn(fieldSurface, "h-9 px-2.5 pointer-coarse:h-[44px]", className)} {...props} />;
 }
 
 function Textarea({ className, ...props }: StyledProps<typeof TextareaPart>) {

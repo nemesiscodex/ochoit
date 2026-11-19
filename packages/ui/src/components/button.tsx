@@ -4,7 +4,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-control border text-sm font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,translate,scale] duration-100 ease-snap select-none active:translate-y-px active:scale-[0.97] data-disabled:cursor-not-allowed data-disabled:opacity-45 data-disabled:active:translate-y-0 data-disabled:active:scale-100 data-pending:cursor-progress [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-control border text-sm font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,translate,scale] duration-100 ease-snap select-none active:translate-y-px active:scale-[0.97] data-disabled:cursor-not-allowed data-disabled:opacity-45 data-disabled:active:translate-y-0 data-disabled:active:scale-100 data-pending:cursor-progress pointer-coarse:min-h-[44px] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
@@ -29,9 +29,9 @@ const buttonVariants = cva(
         sm: "h-8 px-2.5 text-[13px]",
         xs: "h-7 gap-1 px-2 text-xs [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-11 px-4 text-[15px]",
-        icon: "size-9",
-        "icon-sm": "size-8",
-        "icon-xs": "size-7 [&_svg:not([class*='size-'])]:size-3.5",
+        icon: "size-9 pointer-coarse:min-w-[44px]",
+        "icon-sm": "size-8 pointer-coarse:min-w-[44px]",
+        "icon-xs": "size-7 pointer-coarse:min-w-[44px] [&_svg:not([class*='size-'])]:size-3.5",
       },
     },
     defaultVariants: {
