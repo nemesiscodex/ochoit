@@ -157,6 +157,36 @@ describe("sequencer-matrix", () => {
     expect(within(note).getByText("6")).toBeTruthy();
   });
 
+  it("tags authentic PCM triggers by clip number, so clips whose names differ only at the end stay apart", () => {
+    const song = createDefaultSongDocument();
+    const firstClip = song.samples[0];
+
+    if (firstClip === undefined) {
+      throw new Error("Expected the default song to include a sample.");
+    }
+
+    song.meta.engineMode = "authentic";
+    song.samples = [firstClip, { ...firstClip, id: "mic-002", name: "mic-002" }];
+    song.tracks.sample.steps[7] = { ...song.tracks.sample.steps[7], enabled: true, sampleId: firstClip.id };
+    song.tracks.sample.steps[15] = { ...song.tracks.sample.steps[15], enabled: true, sampleId: "mic-002" };
+    renderMatrix({ song });
+
+    expect(within(screen.getByLabelText("PCM step 8")).getByText("#1")).toBeTruthy();
+    expect(within(screen.getByLabelText("PCM step 16")).getByText("#2")).toBeTruthy();
+  });
+
+  it("labels a noise step whose period matches no preset with its mode and period", () => {
+    const song = createEmptySongDocument();
+    song.tracks.noise.steps[0] = { ...song.tracks.noise.steps[0], enabled: true, mode: "short", periodIndex: 2 };
+    song.tracks.noise.steps[1] = { ...song.tracks.noise.steps[1], enabled: true, mode: "long", periodIndex: 9 };
+    song.tracks.noise.steps[2] = { ...song.tracks.noise.steps[2], enabled: true, mode: "short", periodIndex: 1 };
+    renderMatrix({ song });
+
+    expect(within(screen.getByLabelText("Noise step 1")).getByText("S2")).toBeTruthy();
+    expect(within(screen.getByLabelText("Noise step 2")).getByText("L9")).toBeTruthy();
+    expect(within(screen.getByLabelText("Noise step 3")).getByText("hat")).toBeTruthy();
+  });
+
   it("moves the highlight when the playhead advances", () => {
     const { container, movePlayhead } = renderMatrix({ playbackState: "playing", playhead: atStep(4) });
 

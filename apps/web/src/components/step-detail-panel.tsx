@@ -30,6 +30,7 @@ import {
 import type { AudioEngine } from "ochoit-lib/web";
 
 import type { EngineMode } from "@/features/song/pcm-mode";
+import { clipTag } from "@/features/song/song-samples";
 import { labelByTrackId, voiceColorByTrackId } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
 
@@ -384,7 +385,7 @@ function SampleStepDetail({
                 onUpdate({ sampleId });
               }}
             >
-              {samples.map((sample) => (
+              {samples.map((sample, index) => (
                 <ChoiceToggle
                   key={sample.id}
                   value={sample.id}
@@ -399,6 +400,7 @@ function SampleStepDetail({
                     engine?.previewSampleTrigger(sample.id, step.playbackRate);
                   }}
                 >
+                  <span className="shrink-0 opacity-80">{clipTag(index)}</span>
                   <span className="truncate">{sample.name}</span>
                 </ChoiceToggle>
               ))}

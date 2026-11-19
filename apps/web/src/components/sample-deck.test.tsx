@@ -179,6 +179,13 @@ describe("SampleDeck", () => {
     expect(screen.getByRole("heading", { name: longName }).getAttribute("title")).toBe(longName);
   });
 
+  it("tags each clip with the number its PCM steps show", () => {
+    renderDeckWithClips();
+
+    expect(within(getButton("Load sample mic-001")).getByText("#1")).toBeTruthy();
+    expect(within(getButton("Load sample mic-002")).getByText("#2")).toBeTruthy();
+  });
+
   it("moves and resizes the trim window from the sliders and the frame fields", () => {
     const sample = createSample({ trim: { startFrame: 4, endFrame: 10 } });
     const props = renderDeck({ samples: [sample], sample, selectedSampleId: sample.id });

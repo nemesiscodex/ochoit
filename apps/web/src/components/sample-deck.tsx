@@ -14,7 +14,7 @@ import {
   type SampleRecorderPermissionState,
   type SampleRecorderStatus,
 } from "@/features/audio/sample-recorder";
-import { getTrimmedFrameCount, getTrimmedSamplePcm } from "@/features/song/song-samples";
+import { clipTag, getTrimmedFrameCount, getTrimmedSamplePcm } from "@/features/song/song-samples";
 
 type SampleAsset = SongDocument["samples"][number];
 
@@ -175,11 +175,14 @@ function ClipList({
 }) {
   const clipRows = useMemo(
     () =>
-      [...samples].reverse().map((entry) => ({
-        entry,
-        waveform: createWaveformFromPcm(getTrimmedSamplePcm(entry), 48),
-        durationMs: getDurationMs(entry, getTrimmedFrameCount(entry)),
-      })),
+      samples
+        .map((entry, index) => ({
+          entry,
+          tag: clipTag(index),
+          waveform: createWaveformFromPcm(getTrimmedSamplePcm(entry), 48),
+          durationMs: getDurationMs(entry, getTrimmedFrameCount(entry)),
+        }))
+        .reverse(),
     [samples],
   );
 
@@ -208,7 +211,7 @@ function ClipList({
         </p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {clipRows.map(({ entry, waveform, durationMs }) => {
+          {clipRows.map(({ entry, tag, waveform, durationMs }) => {
             const isSelected = entry.id === selectedSampleId;
 
             return (
@@ -240,8 +243,11 @@ function ClipList({
                     />
                   </span>
                   <span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 font-mono text-[13px] leading-none font-semibold">
-                    <span className="truncate text-ink" title={entry.name}>
-                      {entry.name}
+                    <span className="flex min-w-0 items-baseline gap-1.5">
+                      <span className="shrink-0 text-ink-muted">{tag}</span>
+                      <span className="truncate text-ink" title={entry.name}>
+                        {entry.name}
+                      </span>
                     </span>
                     <span className="text-[12px] text-ink-muted">{formatSeconds(durationMs)}</span>
                   </span>

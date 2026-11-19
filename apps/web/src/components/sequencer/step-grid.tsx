@@ -13,6 +13,7 @@ import { memo, useMemo, useRef, type MouseEvent as ReactMouseEvent, type RefObje
 import type { PlayheadStore } from "@/features/audio/playhead-store";
 import { usePlayheadSelector } from "@/features/audio/use-playhead-selector";
 import type { StepDrag } from "@/features/sequencer/step-drag";
+import { clipTag } from "@/features/song/song-samples";
 import { labelByTrackId } from "@/components/sequencer-theme";
 import {
   beatEdgeClass,
@@ -97,19 +98,24 @@ function getTriggerCellData(
 
     return {
       enabled: step.enabled,
-      label: step.enabled ? (getNoiseTriggerPresetForStep(step)?.shortLabel ?? step.mode) : "",
+      label: step.enabled ? (getNoiseTriggerPresetForStep(step)?.shortLabel ?? noiseConfigTag(step)) : "",
       volume: step.volume,
     };
   }
 
   const step = track.steps[stepIndex];
-  const sample = step.sampleId === null ? null : (samples.find((entry) => entry.id === step.sampleId) ?? null);
+  const sampleIndex = step.sampleId === null ? -1 : samples.findIndex((entry) => entry.id === step.sampleId);
 
   return {
     enabled: step.enabled,
-    label: !step.enabled ? "" : engineMode === "inspired" ? step.note : (sample?.name ?? "PCM"),
+    label: !step.enabled ? "" : engineMode === "inspired" ? step.note : sampleIndex < 0 ? "PCM" : clipTag(sampleIndex),
     volume: step.volume,
   };
+}
+
+// The preset short labels are 3 to 4 characters; a period no preset uses gets the same length: S2, L12.
+function noiseConfigTag(step: Extract<Track, { kind: "noise" }>["steps"][number]) {
+  return `${step.mode === "short" ? "S" : "L"}${step.periodIndex}`;
 }
 
 type MelodicArrangementPreviewEntry = {

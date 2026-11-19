@@ -13,6 +13,12 @@ function clampFrame(frame: number, frameCount: number) {
   return Math.max(0, Math.min(frameCount, Math.round(frame)));
 }
 
+// A step cell fits 3 to 5 characters and clip names tend to differ only at the end (mic-001, mic-002), so cells name a
+// clip by its place in the song's clip list; the clip list and step editor show the same tag.
+export function clipTag(sampleIndex: number) {
+  return `#${sampleIndex + 1}`;
+}
+
 export function getTrimmedFrameCount(sample: SerializedSampleAsset) {
   return Math.max(0, sample.trim.endFrame - sample.trim.startFrame);
 }
