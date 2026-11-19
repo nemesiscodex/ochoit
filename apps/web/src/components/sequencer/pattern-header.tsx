@@ -394,15 +394,17 @@ function KeyboardBindingKey({
       data-keyboard-key={binding.key}
       aria-label={`${binding.keyLabel} keyboard note ${binding.note ?? "unavailable"}`}
       className={cn(
-        "flex min-w-0 items-baseline justify-between gap-1 rounded-[4px] border px-1.5 py-0.5 transition-[background-color,translate] duration-75",
+        "flex min-w-0 flex-col items-center gap-[3px] overflow-hidden rounded-[4px] border px-px py-1 transition-[background-color,translate] duration-75",
         binding.lane === "black" ? "border-line-strong bg-surface-sunken" : "border-line-strong bg-surface-2",
         !binding.isPlayable && "opacity-40",
         isSelected && "border-ink shadow-[0_0_8px_color-mix(in_srgb,var(--ink)_40%,transparent)]",
         isPressed && "translate-y-px bg-screen-edge/40",
       )}
     >
-      <span className="truncate font-mono text-[12px] leading-none font-semibold">{binding.note ?? "None"}</span>
-      <span className="text-xs text-ink-muted">{binding.keyLabel}</span>
+      <span className="font-mono text-[12px] leading-none font-semibold whitespace-nowrap max-[400px]:text-[10px]">
+        {binding.note ?? "·"}
+      </span>
+      <span className="text-[11px] leading-none text-ink-muted">{binding.keyLabel}</span>
     </div>
   );
 }
