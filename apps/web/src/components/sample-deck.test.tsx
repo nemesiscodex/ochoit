@@ -167,6 +167,18 @@ describe("SampleDeck", () => {
     expect(props.onDeleteSample).toHaveBeenCalledWith("mic-002");
   });
 
+  it("keeps a long clip name readable in full where the list shortens it", () => {
+    const longName = "Q3 Board Deck — FINAL (revised) v12 [approved by legal]";
+    const clip = createSample({ id: "mic-001", name: longName });
+
+    renderDeck({ samples: [clip], sample: clip, selectedSampleId: clip.id });
+
+    const listName = within(screen.getByRole("list")).getByText(longName);
+
+    expect(listName.getAttribute("title")).toBe(longName);
+    expect(screen.getByRole("heading", { name: longName }).getAttribute("title")).toBe(longName);
+  });
+
   it("moves and resizes the trim window from the sliders and the frame fields", () => {
     const sample = createSample({ trim: { startFrame: 4, endFrame: 10 } });
     const props = renderDeck({ samples: [sample], sample, selectedSampleId: sample.id });

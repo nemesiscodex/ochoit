@@ -68,7 +68,7 @@ export const SampleDeck = memo(function SampleDeck({
 
   return (
     <div className="@container">
-      <div className="grid items-start gap-6 @2xl:grid-cols-2 @2xl:gap-8">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 @2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] @2xl:gap-8">
         <div className="flex flex-col gap-6">
           <RecordControl
             canRecord={recorderPermissionState !== "unsupported" && !isBusy && (isRecording || !sampleLimitReached)}
@@ -240,7 +240,9 @@ function ClipList({
                     />
                   </span>
                   <span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 font-mono text-[13px] leading-none font-semibold">
-                    <span className="truncate text-ink">{entry.name}</span>
+                    <span className="truncate text-ink" title={entry.name}>
+                      {entry.name}
+                    </span>
                     <span className="text-[12px] text-ink-muted">{formatSeconds(durationMs)}</span>
                   </span>
                   {isSelected ? <Check aria-hidden="true" className="size-4 shrink-0 text-ink" /> : null}
@@ -298,7 +300,11 @@ function SampleEditor({
     <section aria-labelledby="sample-deck-editor" className="flex flex-col gap-5 border-t border-line pt-5 @2xl:border-t-0 @2xl:border-l @2xl:pt-0 @2xl:pl-8">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h2 id="sample-deck-editor" className="truncate font-screen text-[24px] leading-none font-normal text-ink">
+          <h2
+            id="sample-deck-editor"
+            title={sample.name}
+            className="line-clamp-2 font-screen text-[24px] leading-[0.95] font-normal [overflow-wrap:anywhere] text-ink"
+          >
             {sample.name}
           </h2>
           <span className="shrink-0 font-screen text-[20px] leading-none text-ink-muted">
