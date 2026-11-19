@@ -14,14 +14,17 @@ import {
 
 const liveWaveformIntervalMs = 1000 / 30;
 const frameJitterMs = 2;
+const darkSchemeQuery = "(prefers-color-scheme: dark)";
 
-type WaveformCanvasProps = Partial<WaveformColors> & {
+type WaveformColorProps = Partial<WaveformColors>;
+
+type WaveformCanvasProps = WaveformColorProps & {
   ariaLabel: string;
   samples: ArrayLike<number>;
   className?: string;
 };
 
-type TrackWaveformCanvasProps = Partial<WaveformColors> & {
+type TrackWaveformCanvasProps = WaveformColorProps & {
   ariaLabel: string;
   engine: AudioEngine | null;
   trackId: TrackId;
@@ -30,12 +33,35 @@ type TrackWaveformCanvasProps = Partial<WaveformColors> & {
   className?: string;
 };
 
-function useWaveformSurface(colors: WaveformColors) {
+const cssVariablePattern = /^var\((--[\w-]+)\)$/;
+
+// Canvas cannot read CSS variables, so colours come from the canvas's computed style: an unset colour uses its
+// `color`, `background-color` and border colour, and a `var(--token)` colour is looked up on it.
+function readCanvasColors(canvas: HTMLCanvasElement, colors: WaveformColorProps): WaveformColors {
+  const style = window.getComputedStyle(canvas);
+  const resolve = (value: string | undefined, computed: string, fallback: string) => {
+    if (value === undefined) {
+      return computed || fallback;
+    }
+
+    const variable = cssVariablePattern.exec(value.trim())?.[1];
+
+    return variable === undefined ? value : style.getPropertyValue(variable).trim() || fallback;
+  };
+
+  return {
+    backgroundColor: resolve(colors.backgroundColor, style.backgroundColor, "transparent"),
+    glowColor: resolve(colors.glowColor, "", "transparent"),
+    gridColor: resolve(colors.gridColor, style.borderTopColor, defaultWaveformColors.gridColor),
+    lineColor: resolve(colors.lineColor, style.color, defaultWaveformColors.lineColor),
+  };
+}
+
+function useWaveformSurface({ backgroundColor, glowColor, gridColor, lineColor }: WaveformColorProps, className?: string) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const painterRef = useRef<ReturnType<typeof createWaveformPainter> | null>(null);
   const samplesRef = useRef<ArrayLike<number> | null>(null);
-  const colorsRef = useRef(colors);
-  colorsRef.current = colors;
+  const colorsRef = useRef<WaveformColors>(defaultWaveformColors);
 
   const draw = useCallback((samples: ArrayLike<number>) => {
     samplesRef.current = samples;
@@ -80,45 +106,47 @@ function useWaveformSurface(colors: WaveformColors) {
     };
   }, []);
 
-  const { backgroundColor, glowColor, gridColor, lineColor } = colors;
-
   useEffect(() => {
-    if (samplesRef.current !== null) {
-      painterRef.current?.paint(samplesRef.current, colorsRef.current);
+    const canvas = canvasRef.current;
+
+    if (canvas === null) {
+      return;
     }
-  }, [backgroundColor, glowColor, gridColor, lineColor]);
+
+    const updateColors = () => {
+      colorsRef.current = readCanvasColors(canvas, { backgroundColor, glowColor, gridColor, lineColor });
+
+      if (samplesRef.current !== null) {
+        painterRef.current?.paint(samplesRef.current, colorsRef.current);
+      }
+    };
+
+    updateColors();
+
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const schemeQuery = window.matchMedia(darkSchemeQuery);
+    schemeQuery.addEventListener("change", updateColors);
+
+    return () => {
+      schemeQuery.removeEventListener("change", updateColors);
+    };
+  }, [backgroundColor, glowColor, gridColor, lineColor, className]);
 
   return { canvasRef, draw };
 }
 
-function resolveColors(colors: Partial<WaveformColors>): WaveformColors {
-  return {
-    backgroundColor: colors.backgroundColor ?? defaultWaveformColors.backgroundColor,
-    glowColor: colors.glowColor ?? defaultWaveformColors.glowColor,
-    gridColor: colors.gridColor ?? defaultWaveformColors.gridColor,
-    lineColor: colors.lineColor ?? defaultWaveformColors.lineColor,
-  };
-}
-
-export function WaveformCanvas({ ariaLabel, samples, className, ...colorOverrides }: WaveformCanvasProps) {
-  const { backgroundColor, glowColor, gridColor, lineColor } = resolveColors(colorOverrides);
-  const colors = useMemo(
-    () => ({ backgroundColor, glowColor, gridColor, lineColor }),
-    [backgroundColor, glowColor, gridColor, lineColor],
-  );
-  const { canvasRef, draw } = useWaveformSurface(colors);
+export function WaveformCanvas({ ariaLabel, samples, className, ...colors }: WaveformCanvasProps) {
+  const { canvasRef, draw } = useWaveformSurface(colors, className);
 
   useEffect(() => {
     draw(samples);
   }, [draw, samples]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      role="img"
-      aria-label={ariaLabel}
-      className={cn("block h-full w-full rounded-none", className)}
-    />
+    <canvas ref={canvasRef} role="img" aria-label={ariaLabel} className={cn("block h-full w-full", className)} />
   );
 }
 
@@ -129,14 +157,9 @@ export function TrackWaveformCanvas({
   fallbackWaveform,
   sampleSize = WAVEFORM_SAMPLE_SIZE,
   className,
-  ...colorOverrides
+  ...colors
 }: TrackWaveformCanvasProps) {
-  const { backgroundColor, glowColor, gridColor, lineColor } = resolveColors(colorOverrides);
-  const colors = useMemo(
-    () => ({ backgroundColor, glowColor, gridColor, lineColor }),
-    [backgroundColor, glowColor, gridColor, lineColor],
-  );
-  const { canvasRef, draw } = useWaveformSurface(colors);
+  const { canvasRef, draw } = useWaveformSurface(colors, className);
   const idleWaveform = useMemo(
     () => fallbackWaveform ?? createFlatWaveform(sampleSize),
     [fallbackWaveform, sampleSize],
@@ -185,11 +208,6 @@ export function TrackWaveformCanvas({
   }, [draw, engine, idleWaveform, sampleSize, trackId]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      role="img"
-      aria-label={ariaLabel}
-      className={cn("block h-full w-full rounded-none", className)}
-    />
+    <canvas ref={canvasRef} role="img" aria-label={ariaLabel} className={cn("block h-full w-full", className)} />
   );
 }

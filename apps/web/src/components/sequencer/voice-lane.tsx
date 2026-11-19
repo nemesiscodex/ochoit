@@ -1,0 +1,204 @@
+import { Button } from "@ochoit/ui/components/button";
+import { Slider } from "@ochoit/ui/components/slider";
+import { Toggle } from "@ochoit/ui/components/toggle";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
+import { cn } from "@ochoit/ui/lib/utils";
+import { Circle, FileText, Volume2, VolumeX } from "lucide-react";
+import type { SongDocument, SongEdit, Track, TrackId } from "ochoit-lib";
+import type { AudioEngine } from "ochoit-lib/web";
+import { memo, useCallback } from "react";
+
+import type { PlayheadStore } from "@/features/audio/playhead-store";
+import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
+import type { RecordTrackId } from "@/features/sequencer/quantized-recorder";
+import type { StepDrag } from "@/features/sequencer/step-drag";
+import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
+import { labelByTrackId, voiceClassesByTrackId } from "@/components/sequencer-theme";
+import { StepDetailPanel } from "@/components/step-detail-panel";
+import { TrackWaveformCanvas } from "@/components/waveform-canvas";
+import { laneColumnsClass } from "@/components/sequencer/grid-geometry";
+import type { RowAction } from "@/components/sequencer/row-action";
+import { CompactStepGrid } from "@/components/sequencer/step-grid";
+
+export const VoiceLane = memo(function VoiceLane({
+  dragState,
+  engine,
+  engineMode,
+  isPlaying,
+  isRecording,
+  onEdit,
+  onOpenArrangementEditor,
+  onRowAction,
+  playhead,
+  recordTrackId,
+  samples,
+  selectedStepIndex,
+  selectedStepIndexes,
+  stepDurationMs,
+  track,
+}: {
+  dragState: StepDrag | null;
+  engine: AudioEngine | null;
+  engineMode: SongDocument["meta"]["engineMode"];
+  isPlaying: boolean;
+  isRecording: boolean;
+  onEdit: (edit: SongEdit) => void;
+  onOpenArrangementEditor: (trackId: TrackId) => void;
+  onRowAction: (action: RowAction) => void;
+  playhead: PlayheadStore;
+  recordTrackId: RecordTrackId | null;
+  samples: SongDocument["samples"];
+  selectedStepIndex: number | null;
+  selectedStepIndexes: readonly number[];
+  stepDurationMs: number;
+  track: Track;
+}) {
+  const deselect = useCallback(() => {
+    onRowAction({ type: "deselect" });
+  }, [onRowAction]);
+
+  return (
+    <div
+      data-voice-lane={track.id}
+      className={cn("grid", laneColumnsClass, isRecording && "bg-signal/5 inset-ring-2 inset-ring-signal")}
+    >
+      <LaneHead
+        engine={engine}
+        isRecording={isRecording}
+        muted={track.muted}
+        onEdit={onEdit}
+        onOpenArrangementEditor={onOpenArrangementEditor}
+        onRowAction={onRowAction}
+        recordTrackId={recordTrackId}
+        trackId={track.id}
+        volume={track.volume}
+      />
+      <div className="min-w-0 self-center p-3">
+        <CompactStepGrid
+          dragState={dragState}
+          engineMode={engineMode}
+          isPlaying={isPlaying}
+          onRowAction={onRowAction}
+          playhead={playhead}
+          samples={samples}
+          selectedStepIndexes={selectedStepIndexes}
+          track={track}
+        />
+        {selectedStepIndex !== null ? (
+          <StepDetailPanel
+            engine={engine}
+            engineMode={engineMode}
+            onDeselect={deselect}
+            onEdit={onEdit}
+            samples={samples}
+            stepDurationMs={stepDurationMs}
+            stepIndex={selectedStepIndex}
+            track={track}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
+// Reads only the track's mixer fields, so step edits, selection and drags skip it.
+const LaneHead = memo(function LaneHead({
+  engine,
+  isRecording,
+  muted,
+  onEdit,
+  onOpenArrangementEditor,
+  onRowAction,
+  recordTrackId,
+  trackId,
+  volume,
+}: {
+  engine: AudioEngine | null;
+  isRecording: boolean;
+  muted: boolean;
+  onEdit: (edit: SongEdit) => void;
+  onOpenArrangementEditor: (trackId: TrackId) => void;
+  onRowAction: (action: RowAction) => void;
+  recordTrackId: RecordTrackId | null;
+  trackId: TrackId;
+  volume: number;
+}) {
+  const label = labelByTrackId[trackId];
+  const volumePercent = toTrackVolumePercent(volume);
+
+  return (
+    <div className="relative flex min-w-0 flex-col gap-2 border-b border-line py-3 pr-3 pl-5 lg:border-r lg:border-b-0">
+      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1.5", voiceClassesByTrackId[trackId].swatch)} />
+      <div className="flex items-center gap-1">
+        <h3 className="mr-auto min-w-0 truncate font-wide text-sm font-bold">{label}</h3>
+        <Toggle
+          size="icon-sm"
+          aria-label={`${muted ? "Unmute" : "Mute"} ${label}`}
+          pressed={muted}
+          onPressedChange={() => {
+            onEdit({ type: "toggle-track-mute", trackId });
+          }}
+        >
+          {muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
+        </Toggle>
+        {recordTrackId !== null ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Toggle
+                  variant="signal"
+                  size="icon-sm"
+                  aria-label={`${isRecording ? "Stop recording" : "Record"} ${label}`}
+                  pressed={isRecording}
+                  onPressedChange={() => {
+                    onRowAction({ type: "toggle-recording", trackId: recordTrackId });
+                  }}
+                />
+              }
+            >
+              <Circle aria-hidden="true" className={cn(isRecording && "fill-current")} />
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {isRecording ? `Stop recording ${label}` : `Record ${label} from step 1 with the keyboard`}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="xs"
+          aria-label={`Edit ${label} arrangement as text`}
+          onClick={() => {
+            onOpenArrangementEditor(trackId);
+          }}
+        >
+          <FileText aria-hidden="true" />
+          Edit as text
+        </Button>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="h-9 min-w-0 flex-1 overflow-hidden rounded-control bg-surface-sunken">
+          <TrackWaveformCanvas
+            ariaLabel={`${label} waveform`}
+            className={voiceClassesByTrackId[trackId].wave}
+            engine={engine}
+            fallbackWaveform={previewWaveformByTrackId[trackId]}
+            trackId={trackId}
+          />
+        </div>
+        <div className={cn("flex w-28 shrink-0 items-center gap-2", muted && "opacity-60")}>
+          <Slider
+            label={`${label} volume`}
+            min={TRACK_VOLUME_PERCENT_RANGE.min}
+            max={TRACK_VOLUME_PERCENT_RANGE.max}
+            step={TRACK_VOLUME_PERCENT_RANGE.step}
+            value={volumePercent}
+            onValueChange={(next) => {
+              onEdit({ type: "set-track-volume", trackId, volume: next / TRACK_VOLUME_PERCENT_RANGE.max });
+            }}
+          />
+          <span className="w-9 shrink-0 text-right text-xs tabular-nums text-ink-muted">{volumePercent}%</span>
+        </div>
+      </div>
+    </div>
+  );
+});
