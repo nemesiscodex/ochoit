@@ -24,3 +24,12 @@ The web UI is built on [UI SDK](https://ui-sdk.dev) (`@ui-sdk/react`, `@ui-sdk/c
 - Voice colours mean "this voice" and nothing else. Green (`go`, the `go` button variant) is only the Play button. Red (`signal`) means record or a destructive action.
 - Check contrast on the real colours: text 4.5:1, control edges and focus 3:1.
 - Tests stub the browser top-layer APIs in `apps/web/src/test-setup.ts`. Popup positioning and animation still need a check in a real browser.
+
+## UI quality skills
+
+Emil Kowalski's skills (MIT, `emilkowalski/skills`) live in `.agents/skills`:
+
+- `emil-design-eng`: design-engineering judgment for components and motion.
+- `break-ui`: stress-test a screen with realistic worst-case data. For Ochoit, that means 64-step and 128-step songs, long song and clip names, four full clips and extreme tempos, not only the 16-step demo.
+- `mobile-native`: phone polish.
+- `learn-taste`: turn the user's design corrections into rules.
