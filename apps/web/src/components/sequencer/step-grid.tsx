@@ -29,7 +29,9 @@ import type { DragPreview, RowAction } from "@/components/sequencer/row-action";
 const noSelectedStepIndexSet: ReadonlySet<number> = new Set();
 const gridCellChunkSize = 16;
 
-const cellTextClass = "font-mono text-[13px] font-semibold leading-none max-md:text-[12px]";
+// Sized so the longest labels (crsh, C#8) fit a phone cell: 34px at 375, 25px at 320.
+const cellTextClass =
+  "font-mono text-[13px] font-semibold leading-none max-[359px]:text-[11px] max-[359px]:tracking-[-0.05em] min-[360px]:max-md:text-[12px] min-[360px]:max-md:tracking-[-0.02em]";
 const cellBaseClass = `relative flex min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[4px] border select-none transition-[background-color,border-color] duration-100 focus-visible:z-20 ${cellTextClass}`;
 // Resting notes stay flat; only the selection and the playhead glow.
 const filledClass = "border-(--voice) bg-(--voice)/13 text-[color-mix(in_srgb,var(--voice)_82%,white)]";
@@ -376,7 +378,7 @@ const TriggerStepCell = memo(function TriggerStepCell({
       <StepNumber index={index} />
       {enabled ? (
         <>
-          <span className="max-w-full truncate px-1 pt-1.5">{label}</span>
+          <span className="max-w-full truncate pt-1.5">{label}</span>
           <VolumeBar volume={volume} />
         </>
       ) : null}
