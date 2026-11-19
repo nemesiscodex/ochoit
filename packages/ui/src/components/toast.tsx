@@ -3,19 +3,49 @@ import { Toast, ToastClose, ToastDescription, ToastRegion, ToastTitle, toast } f
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+const phoneQuery = "(max-width: 47.99rem)";
+
+// On a phone a corner toast lands on the sequencer's first lane, so it drops in from the top centre instead.
+function useIsPhone() {
+  const [isPhone, setIsPhone] = useState(false);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const query = window.matchMedia(phoneQuery);
+    const update = () => setIsPhone(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  return isPhone;
+}
+
 // The region needs browser layout APIs, so it mounts after hydration.
 function Toaster() {
   const [mounted, setMounted] = useState(false);
+  const isPhone = useIsPhone();
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
   return (
-    <ToastRegion side="bottom" align="end" className="fixed right-4 bottom-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
+    <ToastRegion
+      side={isPhone ? "top" : "bottom"}
+      align={isPhone ? "center" : "end"}
+      className={cn(
+        "fixed z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2",
+        isPhone ? "top-2 left-1/2 -translate-x-1/2" : "right-4 bottom-4",
+      )}
+    >
       {() => (
         <Toast
           className={cn(
             "relative flex items-start gap-3 rounded-panel border border-band-edge bg-band py-3 pr-10 pl-4 text-band-ink shadow-pop",
-            "transition-[opacity,translate] duration-200 ease-out data-starting-style:translate-y-2 data-starting-style:opacity-0 data-ending-style:opacity-0",
+            "transition-[opacity,translate] duration-200 ease-out data-starting-style:opacity-0 data-ending-style:opacity-0",
+            isPhone ? "data-starting-style:-translate-y-2" : "data-starting-style:translate-y-2",
             "data-[type=error]:border-signal",
           )}
         >
