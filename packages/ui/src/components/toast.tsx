@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 const phoneQuery = "(max-width: 47.99rem)";
 
-// On a phone a corner toast lands on the sequencer's first lane, so it drops in from the top centre instead.
+// On a phone a corner toast lands on the first voice lane, so it drops in at the top centre, under the row with Play.
 function useIsPhone() {
   const [isPhone, setIsPhone] = useState(false);
 
@@ -37,7 +37,7 @@ function Toaster() {
       align={isPhone ? "center" : "end"}
       className={cn(
         "fixed z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2",
-        isPhone ? "top-2 left-1/2 -translate-x-1/2" : "right-4 bottom-4",
+        isPhone ? "top-[50px] left-1/2 -translate-x-1/2" : "right-4 bottom-4",
       )}
     >
       {() => (
