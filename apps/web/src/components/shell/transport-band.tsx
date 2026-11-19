@@ -60,7 +60,7 @@ type TransportBandProps = {
 export const TransportBand = memo(function TransportBand(props: TransportBandProps) {
   return (
     <header className="bg-band text-band-ink">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3 md:px-6">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-2.5 md:px-6">
         <div className="flex items-center gap-2.5">
           <img src="/ochoit-logo.png" alt="" width={28} height={28} className="size-7 rounded-[5px] object-contain" />
           <h1 className="font-wide text-lg leading-none font-bold">Ochoit</h1>
@@ -191,7 +191,7 @@ function BandMix({
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
       <BandNumberField
         label="Tempo"
         value={bpm}
@@ -245,7 +245,12 @@ function BandMix({
           if (next.has("lo-fi") !== oldSpeakerMode) onEdit({ type: "set-old-speaker-mode", enabled: next.has("lo-fi") });
         }}
       >
-        <ViewToggle value="ruler" label="Sequencer ruler" tooltip="Show the step ruler and keyboard note labels" icon={<Ruler />}/>
+        <ViewToggle
+          value="ruler"
+          label="Sequencer ruler"
+          tooltip="Show the step ruler and keyboard note labels"
+          icon={<Ruler />}
+        />
         <ViewToggle
           value="hover-preview"
           label="Sequencer hover preview"
@@ -317,6 +322,10 @@ function BandNumberField({
         min={min}
         max={max}
         step={step}
+        onKeyDown={(event) => {
+          // Enter commits on keydown; its keypress would then press the first button of a confirm dialog the commit opens.
+          if (event.key === "Enter") event.preventDefault();
+        }}
         onValueChange={setDraft}
         onValueCommit={(committed) => {
           setDraft(null);
@@ -343,12 +352,12 @@ function BandActions({
     <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
       <Button variant="band" size="sm" onClick={onOpenExamples}>
         <ListMusic aria-hidden="true" />
-        <span className="max-sm:sr-only">Examples</span>
+        Examples
       </Button>
       <Menu>
         <MenuTrigger render={<Button variant="band" size="sm" />}>
           <Link aria-hidden="true" />
-          <span className="max-sm:sr-only">Share</span>
+          Share
           <ChevronDown aria-hidden="true" className="size-3.5 text-band-muted" />
         </MenuTrigger>
         <MenuContent align="end">

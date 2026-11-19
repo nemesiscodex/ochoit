@@ -1,6 +1,7 @@
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ochoit/ui/components/tabs";
 import { toast } from "@ochoit/ui/components/toast";
 import { useShortcut } from "@ui-sdk/react/shortcuts";
+import { CircleAlert } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 import {
   type ArrangementTextFormat,
@@ -498,10 +499,13 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
         {errorMessage === null ? null : (
           <div
             role="alert"
-            className="rounded-panel border border-signal bg-surface-1 px-4 py-3 text-sm xl:col-span-2"
+            className="flex items-start gap-3 rounded-panel border border-signal bg-surface-1 px-4 py-3 text-sm xl:col-span-2"
           >
-            <p className="font-semibold text-signal">Audio didn't start</p>
-            <p className="mt-0.5 text-ink-muted">{errorMessage} Press Start audio to try again.</p>
+            <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-signal" />
+            <div>
+              <p className="font-semibold">Audio didn't start</p>
+              <p className="mt-0.5 text-ink-muted">{errorMessage} Press Start audio to try again.</p>
+            </div>
           </div>
         )}
 
