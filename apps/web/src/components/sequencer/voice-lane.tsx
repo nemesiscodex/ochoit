@@ -174,7 +174,7 @@ const LaneHead = memo(function LaneHead({
           </Tooltip>
         ) : null}
       </div>
-      <div className="graticule relative h-10 overflow-hidden rounded-[4px] lg:h-auto lg:max-h-16 lg:min-h-5 lg:flex-1">
+      <div className="graticule relative h-10 overflow-hidden rounded-[4px] lg:h-auto lg:max-h-16 lg:min-h-10 lg:flex-1">
         <TrackWaveformCanvas
           ariaLabel={`${label} waveform`}
           className="absolute inset-x-0 top-1 h-[calc(100%-0.5rem)]"

@@ -9,10 +9,10 @@ export const stepHeightPx = 48;
 // Wrapped rows get a gutter that names each row's first step; the column header leaves the same gap.
 export const rowStartGutterClass = "w-[22px] shrink-0";
 
-// Beside the lane head (lg), a lone row matches the head's shortest height (84px less the grid's 8px padding), so a
-// short song leaves no empty band under its cells. Wrapped rows are 48px and the head's scope grows into the space.
+// Beside the lane head (lg), a lone row matches the head's height with its scope at the 40px floor, so a short song
+// leaves no empty band under its cells and the scope stays readable. Wrapped rows are 48px and the scope grows.
 export function stepRowsClass(rowCount: number) {
-  return rowCount === 1 ? "auto-rows-[60px] lg:auto-rows-[76px]" : "auto-rows-[48px]";
+  return rowCount === 1 ? "auto-rows-[60px] lg:auto-rows-[96px]" : "auto-rows-[48px]";
 }
 
 const fallbackStepWidthPx = 40;
