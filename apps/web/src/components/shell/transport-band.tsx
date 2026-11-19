@@ -215,8 +215,8 @@ function ExamplesButton({
       variant="band"
       data-nudge={nudging || undefined}
       className={cn(
-        "glass-well glow-text px-2.5 border-screen-edge from-transparent to-transparent text-screen-ink hover:border-screen-ink",
-        nudging && "nudge",
+        "glass-well glow-text relative border-screen-edge from-transparent to-transparent px-2.5 text-screen-ink hover:border-screen-ink",
+        "after:pointer-events-none after:absolute after:-inset-[3px] after:rounded-[8px] after:opacity-0 after:shadow-[0_0_0_2px_var(--screen-ink),0_0_18px_4px_rgb(170_205_255/0.55)] after:transition-opacity after:duration-300 after:ease-snap data-nudge:after:opacity-100",
       )}
       onClick={() => {
         stopNudging();

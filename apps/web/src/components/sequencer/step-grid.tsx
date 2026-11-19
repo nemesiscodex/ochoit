@@ -29,7 +29,7 @@ const noSelectedStepIndexSet: ReadonlySet<number> = new Set();
 const gridCellChunkSize = 16;
 
 const cellTextClass = "font-mono text-[13px] font-semibold leading-none max-md:text-[12px]";
-const cellBaseClass = `relative flex min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[4px] border select-none transition-[background-color,box-shadow,border-color] duration-100 focus-visible:z-20 ${cellTextClass}`;
+const cellBaseClass = `relative flex min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[4px] border select-none transition-[background-color,border-color] duration-100 focus-visible:z-20 ${cellTextClass}`;
 // Resting notes stay flat; only the selection and the playhead glow.
 const filledClass = "border-(--voice) bg-(--voice)/13 text-[color-mix(in_srgb,var(--voice)_82%,white)]";
 const selectedFilledClass =
