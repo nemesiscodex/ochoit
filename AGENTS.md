@@ -33,3 +33,9 @@ Emil Kowalski's skills (MIT, `emilkowalski/skills`) live in `.agents/skills`:
 - `break-ui`: stress-test a screen with realistic worst-case data. For Ochoit, that means 64-step and 128-step songs, long song and clip names, four full clips and extreme tempos, not only the 16-step demo.
 - `mobile-native`: phone polish.
 - `learn-taste`: turn the user's design corrections into rules.
+
+## Taste rules from the project owner
+
+- **Ochoit must look like an 8-bit toy.** It is a playful chiptune music toy, so the UI needs retro character and must never read as a plain productivity app. Why: the owner called a clean, neutral rebuild "too boring for the site theme/goal/purpose".
+- **Judge layout on a real song.** Check every layout change with the 64-step Mario example loaded, and at 390px wide, side by side with the previous version, before shipping. A 16-step demo hides the problems. Why: a version that looked fine on a 16-step demo was "worse than initially" on real songs.
+- **Play leads the band.** When stopped, Play is the most prominent control in the top band (green, the `go` token), and Examples sits right next to it. Why (inferred, owner approved the fix): the original's green Play and visible Examples button are what made the app inviting.
