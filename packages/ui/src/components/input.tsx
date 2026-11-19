@@ -14,7 +14,7 @@ function Textarea({ className, ...props }: StyledProps<typeof TextareaPart>) {
     <TextareaPart
       className={cn(
         fieldSurface,
-        "min-h-24 bg-glass px-3 py-2 font-mono text-[13px] leading-relaxed text-screen-ink shadow-[inset_0_2px_4px_rgb(0_0_0/0.7)]",
+        "min-h-24 overscroll-contain bg-glass px-3 py-2 font-mono text-[13px] leading-relaxed text-screen-ink shadow-[inset_0_2px_4px_rgb(0_0_0/0.7)]",
         className,
       )}
       {...props}

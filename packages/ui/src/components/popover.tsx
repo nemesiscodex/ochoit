@@ -19,7 +19,7 @@ function PopoverContent({
       sideOffset={sideOffset}
       collisionPadding={collisionPadding}
       className={cn(
-        "max-h-(--available-height) max-w-[calc(100vw-1rem)] overflow-auto rounded-panel border border-line-strong bg-surface-2 p-3 text-ink shadow-pop",
+        "max-h-(--available-height) max-w-[calc(100vw-1rem)] overflow-auto overscroll-contain rounded-panel border border-line-strong bg-surface-2 p-3 text-ink shadow-pop",
         "origin-(--transform-origin) transition-[opacity,scale] duration-100 data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0",
         className,
       )}
