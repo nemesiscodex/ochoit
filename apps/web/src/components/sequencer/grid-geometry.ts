@@ -24,10 +24,9 @@ function getViewportColumnCount() {
   return window.matchMedia(mediumViewportQuery).matches ? 16 : 8;
 }
 
+// Starts at the server's 16 columns so hydration matches, then follows the viewport.
 export function useStepColumnCount() {
-  const [columnCount, setColumnCount] = useState(() =>
-    typeof window === "undefined" || typeof window.matchMedia !== "function" ? 16 : getViewportColumnCount(),
-  );
+  const [columnCount, setColumnCount] = useState(16);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {

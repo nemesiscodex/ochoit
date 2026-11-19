@@ -545,7 +545,7 @@ export function SequencerMatrix({
   }, []);
 
   return (
-    <div className="overflow-hidden rounded-panel border border-line bg-surface-1">
+    <div className="overflow-hidden rounded-panel border border-line bg-surface-1 text-ink">
       {rulerVisible ? (
         <PatternHeader
           activeKeyboardKey={activeKeyboardKey}

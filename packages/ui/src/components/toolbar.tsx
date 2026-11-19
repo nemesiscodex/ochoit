@@ -14,7 +14,6 @@ function Toolbar({ className, ...props }: StyledProps<typeof ToolbarPart>) {
 
 type ToolbarButtonProps = StyledProps<typeof ToolbarButtonPart> & VariantProps<typeof buttonVariants>;
 
-// The toolbar keeps a disabled item focusable with aria-disabled, so style data-disabled rather than :disabled.
 function ToolbarButton({ className, variant = "outline", size = "sm", ...props }: ToolbarButtonProps) {
   return <ToolbarButtonPart className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }

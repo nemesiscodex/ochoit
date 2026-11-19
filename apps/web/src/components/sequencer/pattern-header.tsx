@@ -272,7 +272,7 @@ const RulerStepCell = memo(function RulerStepCell({
     <div
       aria-current={isActive ? "step" : undefined}
       className={cn(
-        "rounded-[4px] py-0.5 text-center text-[11px] tabular-nums transition-colors duration-100",
+        "rounded-[4px] py-0.5 text-center text-[11px] tabular-nums",
         beatEdgeClass(index),
         isActive
           ? "bg-ink font-bold text-surface-1"

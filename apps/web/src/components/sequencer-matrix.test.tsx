@@ -1297,4 +1297,18 @@ describe("sequencer-matrix", () => {
 
     expect(screen.queryByLabelText("Triangle step 1 editor")).toBeNull();
   });
+
+  it("moves focus through the pattern toolbar with arrow keys without moving the step selection", () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+
+    const removeSteps = screen.getByRole("button", { name: "Remove 4 steps" });
+    removeSteps.focus();
+    fireEvent.keyDown(removeSteps, { key: "ArrowRight" });
+
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add 4 steps" }));
+    expect(screen.getByLabelText("Pulse I step 2").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("toolbar", { name: "Pattern" })).toBeTruthy();
+  });
 });

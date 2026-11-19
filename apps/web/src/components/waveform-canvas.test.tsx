@@ -74,4 +74,21 @@ describe("waveform-canvas", () => {
     expect(mockContext.lineTo).toHaveBeenCalled();
     expect(mockContext.stroke).toHaveBeenCalled();
   });
+
+  it("resolves a CSS variable colour on the canvas so the token's light or dark value is drawn", () => {
+    // jsdom does not inherit custom properties, so the stylesheet's resolved values are stood in for here.
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      color: "rgb(9, 9, 9)",
+      backgroundColor: "rgba(0, 0, 0, 0)",
+      borderTopColor: "rgb(4, 5, 6)",
+      getPropertyValue: (name: string) => (name === "--wave-test-line" ? " rgb(1, 2, 3)" : ""),
+    } as unknown as CSSStyleDeclaration);
+
+    render(
+      <WaveformCanvas ariaLabel="Token waveform" samples={new Uint8Array([128, 180, 92])} lineColor="var(--wave-test-line)" />,
+    );
+
+    expect(mockContext.strokeStyle).toBe("rgb(1, 2, 3)");
+    expect(mockContext.fillStyle).toBe("rgba(0, 0, 0, 0)");
+  });
 });

@@ -530,7 +530,7 @@ const MelodicNoteBlock = memo(function MelodicNoteBlock({
       aria-label={segment.isFirstSegment ? stepName : `${stepName} continuation`}
       aria-selected={isSelected || undefined}
       className={cn(
-        "pointer-events-auto relative z-10 flex h-full min-w-0 cursor-grab touch-manipulation items-start overflow-hidden rounded-[5px] px-2 pt-1.5 text-left text-xs font-semibold tabular-nums select-none",
+        "pointer-events-auto relative z-10 flex h-full min-w-0 cursor-grab touch-manipulation items-start overflow-hidden rounded-[5px] px-1 pt-1.5 md:px-2 text-left text-xs font-semibold tabular-nums select-none",
         beatEdgeClass(segment.segmentStepIndex, segment.segmentStepIndex + segment.columnSpan - 1),
         segment.isPreview
           ? segment.isPreviewInvalid
