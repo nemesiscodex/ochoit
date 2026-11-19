@@ -112,7 +112,6 @@ function BandPlayback({
       <Button
         ref={playButtonRef}
         variant={isPlaying ? "primary" : "band"}
-        data-playing={isPlaying ? "" : undefined}
         onClick={() => {
           void onPlay();
         }}
