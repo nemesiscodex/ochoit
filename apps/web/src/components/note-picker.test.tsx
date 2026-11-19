@@ -49,7 +49,7 @@ describe("note-picker", () => {
     fireEvent.click(screen.getByLabelText("Test note picker"));
 
     expect(screen.getByRole("dialog", { name: "Note picker" })).toBeTruthy();
-    expect(screen.getByText("Select Note")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Select note C4" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("calls onSelectNote and closes the grid when a note is clicked", () => {

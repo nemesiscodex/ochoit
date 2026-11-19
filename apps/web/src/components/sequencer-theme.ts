@@ -1,36 +1,4 @@
-import { type Track, type TrackId } from "ochoit-lib";
-
-export const accentByTrackId: Record<TrackId, string> = {
-  pulse1: "border-[var(--oc-pulse1)]/40 bg-[var(--oc-pulse1)]/10 text-[var(--oc-pulse1)]",
-  pulse2: "border-[var(--oc-pulse2)]/40 bg-[var(--oc-pulse2)]/10 text-[var(--oc-pulse2)]",
-  triangle: "border-[var(--oc-triangle)]/40 bg-[var(--oc-triangle)]/10 text-[var(--oc-triangle)]",
-  noise: "border-[var(--oc-noise)]/40 bg-[var(--oc-noise)]/10 text-[var(--oc-noise)]",
-  sample: "border-[var(--oc-sample)]/40 bg-[var(--oc-sample)]/10 text-[var(--oc-sample)]",
-};
-
-export const voiceColorByTrackId: Record<TrackId, string> = {
-  pulse1: "var(--oc-pulse1)",
-  pulse2: "var(--oc-pulse2)",
-  triangle: "var(--oc-triangle)",
-  noise: "var(--oc-noise)",
-  sample: "var(--oc-sample)",
-};
-
-export const waveformLineColorByTrackId: Record<TrackId, string> = {
-  pulse1: "#ffcf4a",
-  pulse2: "#5cb8ff",
-  triangle: "#4ae06a",
-  noise: "#ff6b4a",
-  sample: "#ff5ea0",
-};
-
-export const waveformGlowColorByTrackId: Record<TrackId, string> = {
-  pulse1: "rgba(255, 207, 74, 0.34)",
-  pulse2: "rgba(92, 184, 255, 0.32)",
-  triangle: "rgba(74, 224, 106, 0.28)",
-  noise: "rgba(255, 107, 74, 0.34)",
-  sample: "rgba(255, 94, 160, 0.34)",
-};
+import type { TrackId } from "ochoit-lib";
 
 export const labelByTrackId: Record<TrackId, string> = {
   pulse1: "Pulse I",
@@ -40,39 +8,31 @@ export const labelByTrackId: Record<TrackId, string> = {
   sample: "PCM",
 };
 
-export const shortLabelByTrackId: Record<TrackId, string> = {
-  pulse1: "PU1",
-  pulse2: "PU2",
-  triangle: "TRI",
-  noise: "NOS",
-  sample: "PCM",
+export const voiceColorByTrackId: Record<TrackId, string> = {
+  pulse1: "var(--voice-pulse1)",
+  pulse2: "var(--voice-pulse2)",
+  triangle: "var(--voice-triangle)",
+  noise: "var(--voice-noise)",
+  sample: "var(--voice-sample)",
 };
 
-export function getStepLabel(track: Track, index: number) {
-  switch (track.kind) {
-    case "pulse": {
-      const step = track.steps[index];
-      return step.enabled ? step.note : "·";
-    }
-    case "triangle": {
-      const step = track.steps[index];
-      return step.enabled ? step.note : "·";
-    }
-    case "noise": {
-      const step = track.steps[index];
-      if (!step.enabled) {
-        return "·";
-      }
+// Tailwind only generates classes it can read whole in the source, so each voice spells its classes out.
+// In light mode the waveform line mixes in ink: a bright voice colour on the pale well falls under 3:1.
+export const voiceClassesByTrackId: Record<TrackId, { fill: string; swatch: string; wave: string }> = {
+  pulse1: { fill: "bg-voice-pulse1 text-voice-ink", swatch: "bg-voice-pulse1", wave: "text-[color-mix(in_oklab,var(--voice-pulse1)_62%,var(--ink))] dark:text-voice-pulse1" },
+  pulse2: { fill: "bg-voice-pulse2 text-voice-ink", swatch: "bg-voice-pulse2", wave: "text-[color-mix(in_oklab,var(--voice-pulse2)_62%,var(--ink))] dark:text-voice-pulse2" },
+  triangle: { fill: "bg-voice-triangle text-voice-ink", swatch: "bg-voice-triangle", wave: "text-[color-mix(in_oklab,var(--voice-triangle)_62%,var(--ink))] dark:text-voice-triangle" },
+  noise: { fill: "bg-voice-noise text-voice-ink", swatch: "bg-voice-noise", wave: "text-[color-mix(in_oklab,var(--voice-noise)_62%,var(--ink))] dark:text-voice-noise" },
+  sample: { fill: "bg-voice-sample text-voice-ink", swatch: "bg-voice-sample", wave: "text-[color-mix(in_oklab,var(--voice-sample)_62%,var(--ink))] dark:text-voice-sample" },
+};
 
-      return step.mode === "short" ? "sn" : "nz";
-    }
-    case "sample": {
-      const step = track.steps[index];
-      if (!step.enabled) {
-        return "·";
-      }
+// The sample deck and shell still read these; the waveform canvas resolves the CSS variables itself.
+export const waveformLineColorByTrackId: Record<TrackId, string> = voiceColorByTrackId;
 
-      return step.sampleId === null ? "pcm" : "hit";
-    }
-  }
-}
+export const waveformGlowColorByTrackId: Record<TrackId, string> = {
+  pulse1: "transparent",
+  pulse2: "transparent",
+  triangle: "transparent",
+  noise: "transparent",
+  sample: "transparent",
+};

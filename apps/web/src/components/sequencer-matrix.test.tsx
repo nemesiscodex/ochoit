@@ -49,6 +49,16 @@ function setCellRect(element: HTMLElement, left: number, top: number, width: num
   });
 }
 
+function resizeHandle(name: string) {
+  const handle = document.querySelector<HTMLElement>(`[data-resize-handle="${name}"]`);
+
+  if (handle === null) {
+    throw new Error(`Expected the resize handle "${name}"`);
+  }
+
+  return handle;
+}
+
 function renderMatrix(overrides: Partial<MatrixProps> = {}) {
   const onEdit = vi.fn<(edit: SongEdit) => void>();
   const props: MatrixProps = {
@@ -1074,7 +1084,7 @@ describe("sequencer-matrix", () => {
 
     setCellWidth(firstCell, 20);
 
-    fireEvent.mouseDown(screen.getByLabelText("Resize end of Pulse I step 1"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseDown(resizeHandle("Resize end of Pulse I step 1"), { clientX: 0, clientY: 0 });
     fireEvent.mouseMove(window, { clientX: 40, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: 40, clientY: 0 });
 
@@ -1093,7 +1103,7 @@ describe("sequencer-matrix", () => {
 
     setCellWidth(firstCell, 20);
 
-    fireEvent.mouseDown(screen.getByLabelText("Resize start of Pulse I step 5"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseDown(resizeHandle("Resize start of Pulse I step 5"), { clientX: 0, clientY: 0 });
     fireEvent.mouseMove(window, { clientX: -40, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: -40, clientY: 0 });
 
@@ -1128,7 +1138,7 @@ describe("sequencer-matrix", () => {
     setCellRect(step1, 24, 0, 20);
     setCellRect(step8, 0, 52, 20);
 
-    fireEvent.mouseDown(screen.getByLabelText("Resize end of Pulse I step 8"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseDown(resizeHandle("Resize end of Pulse I step 8"), { clientX: 0, clientY: 0 });
     fireEvent.mouseMove(window, { clientX: -144, clientY: 52 });
     fireEvent.mouseUp(window, { clientX: -144, clientY: 52 });
 
@@ -1153,7 +1163,7 @@ describe("sequencer-matrix", () => {
 
     setCellWidth(firstCell, 20);
 
-    fireEvent.mouseDown(screen.getByLabelText("Resize end of Pulse I step 1"), { clientX: 0, clientY: 0 });
+    fireEvent.mouseDown(resizeHandle("Resize end of Pulse I step 1"), { clientX: 0, clientY: 0 });
     fireEvent.mouseMove(window, { clientX: 100, clientY: 0 });
     fireEvent.mouseUp(window, { clientX: 100, clientY: 0 });
 
@@ -1286,5 +1296,19 @@ describe("sequencer-matrix", () => {
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(screen.queryByLabelText("Triangle step 1 editor")).toBeNull();
+  });
+
+  it("moves focus through the pattern toolbar with arrow keys without moving the step selection", () => {
+    renderMatrix();
+
+    fireEvent.click(screen.getByLabelText("Pulse I step 2"));
+
+    const removeSteps = screen.getByRole("button", { name: "Remove 4 steps" });
+    removeSteps.focus();
+    fireEvent.keyDown(removeSteps, { key: "ArrowRight" });
+
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add 4 steps" }));
+    expect(screen.getByLabelText("Pulse I step 2").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("toolbar", { name: "Pattern" })).toBeTruthy();
   });
 });

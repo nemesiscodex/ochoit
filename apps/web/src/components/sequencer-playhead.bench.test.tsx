@@ -23,7 +23,7 @@ vi.mock("react/jsx-dev-runtime", async (importOriginal) => {
         elementCounter.stepElements += 1;
       }
 
-      if (typeof props?.className === "string" && props.className.includes("oc-voice-row")) {
+      if (props !== null && typeof props["data-voice-lane"] === "string") {
         elementCounter.rows += 1;
       }
 
@@ -266,7 +266,7 @@ describe("sequencer playhead cost (128-step song, 5 tracks)", () => {
     const props = { ...createProps(), playbackState: "stopped" as const };
     const meter = createCostMeter();
     const { view, harness } = renderStatefulMatrix(props, meter.onRender);
-    const pulseRow = screen.getByLabelText("Pulse I step 1").closest<HTMLElement>("[role='row']");
+    const pulseRow = screen.getByLabelText("Pulse I step 1").closest<HTMLElement>("[data-step-grid]");
     const firstGridCell = pulseRow?.querySelector<HTMLElement>("[data-step-index='0']");
 
     if (firstGridCell === null || firstGridCell === undefined) {

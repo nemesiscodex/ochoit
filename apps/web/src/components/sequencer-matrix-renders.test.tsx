@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AudioEngine } from "ochoit-lib/web";
 
 import { SequencerMatrix } from "@/components/sequencer-matrix";
-import { labelByTrackId, voiceColorByTrackId } from "@/components/sequencer-theme";
+import { labelByTrackId } from "@/components/sequencer-theme";
 import { createPlayheadStore } from "@/features/audio/playhead-store";
-import { applySongEdit, createEmptySongDocument, trackOrder, type SongDocument, type SongEdit } from "ochoit-lib";
+import { applySongEdit, createEmptySongDocument, trackOrder, type SongDocument, type SongEdit, type TrackId } from "ochoit-lib";
 
 type RenderedElement = { type: unknown; props: Record<string, unknown> };
 
@@ -79,9 +79,7 @@ function recordRenders(update: () => void) {
   const isSweep = ({ props }: RenderedElement) =>
     props["aria-hidden"] === "true" && typeof (props.style as { left?: unknown } | undefined)?.left === "string";
   // A row's root element is created only when the row's own render function runs.
-  const rowLabelByColor = new Map(trackOrder.map((trackId) => [voiceColorByTrackId[trackId], labelByTrackId[trackId]]));
-  const isRowRoot = ({ props }: RenderedElement) =>
-    typeof props.className === "string" && props.className.includes("oc-voice-row");
+  const isRowRoot = ({ props }: RenderedElement) => typeof props["data-voice-lane"] === "string";
 
   return {
     stepElements: elements
@@ -95,7 +93,7 @@ function recordRenders(update: () => void) {
       .sort(),
     rows: elements
       .filter(isRowRoot)
-      .map(({ props }) => rowLabelByColor.get((props.style as { borderLeftColor: string }).borderLeftColor))
+      .map(({ props }) => labelByTrackId[props["data-voice-lane"] as TrackId])
       .sort(),
     rowHeadings: elements.filter(({ type }) => type === "h3").map(({ props }) => String(props.children)),
     created: (componentName: string) => elements.filter(({ type }) => getComponentName(type) === componentName).length,
@@ -218,7 +216,7 @@ describe("sequencer-matrix render scope", () => {
     renderMatrix(song);
 
     const noiseCell = screen.getByLabelText("Noise step 2");
-    const noiseRow = noiseCell.closest<HTMLElement>("[role='row']");
+    const noiseRow = noiseCell.closest<HTMLElement>("[data-step-grid]");
     const firstNoiseCell = noiseRow?.querySelector<HTMLElement>("[data-step-index='0']");
 
     if (firstNoiseCell === null || firstNoiseCell === undefined) {
@@ -247,7 +245,7 @@ describe("sequencer-matrix render scope", () => {
     renderMatrix(song);
 
     const note = screen.getByLabelText("Pulse I step 1");
-    const firstPulseCell = note.closest<HTMLElement>("[role='row']")?.querySelector<HTMLElement>("[data-step-index='0']");
+    const firstPulseCell = note.closest<HTMLElement>("[data-step-grid]")?.querySelector<HTMLElement>("[data-step-index='0']");
 
     if (firstPulseCell === null || firstPulseCell === undefined) {
       throw new Error("Expected the Pulse I grid");
