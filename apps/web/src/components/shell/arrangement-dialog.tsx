@@ -26,11 +26,11 @@ export type ArrangementEditor = {
 };
 
 const swatchClassByTrackId: Record<TrackId, string> = {
-  pulse1: "bg-voice-pulse1",
-  pulse2: "bg-voice-pulse2",
-  triangle: "bg-voice-triangle",
-  noise: "bg-voice-noise",
-  sample: "bg-voice-sample",
+  pulse1: "bg-voice-pulse1 shadow-[0_0_6px_var(--voice-pulse1)]",
+  pulse2: "bg-voice-pulse2 shadow-[0_0_6px_var(--voice-pulse2)]",
+  triangle: "bg-voice-triangle shadow-[0_0_6px_var(--voice-triangle)]",
+  noise: "bg-voice-noise shadow-[0_0_6px_var(--voice-noise)]",
+  sample: "bg-voice-sample shadow-[0_0_6px_var(--voice-sample)]",
 };
 
 export function reformatArrangementDraft(draft: string, textFormat: ArrangementTextFormat) {

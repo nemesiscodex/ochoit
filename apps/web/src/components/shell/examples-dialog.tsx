@@ -50,8 +50,8 @@ export function ExamplesDialog({
                 className="flex flex-col gap-3 rounded-panel border border-line bg-surface-2 p-4 sm:flex-row sm:items-start sm:justify-between"
               >
                 <div className="min-w-0">
-                  <h3 className="font-wide text-base font-bold text-pretty">{example.name}</h3>
-                  <p className="text-[13px] text-ink-muted">by {example.author}</p>
+                  <h3 className="font-screen text-[24px] leading-none font-normal text-pretty">{example.name}</h3>
+                  <p className="mt-1 text-[13px] text-ink-muted">by {example.author}</p>
                   <p className="mt-2 max-w-[60ch] text-sm text-pretty text-ink-muted">{example.summary}</p>
                 </div>
                 <Button

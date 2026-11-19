@@ -3,7 +3,7 @@ import { NumberField } from "@ochoit/ui/components/number-field";
 import { Slider } from "@ochoit/ui/components/slider";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Check, Mic, Play, Square, Trash2 } from "lucide-react";
-import { memo, useMemo, useSyncExternalStore } from "react";
+import { memo, useMemo } from "react";
 import { SONG_MAX_SAMPLE_COUNT, type SongDocument } from "ochoit-lib";
 
 import { NotePicker } from "@/components/note-picker";
@@ -65,7 +65,6 @@ export const SampleDeck = memo(function SampleDeck({
   const isRecording = recorderStatus === "recording";
   const isBusy = recorderStatus === "requesting-permission" || recorderStatus === "processing";
   const sampleLimitReached = samples.length >= SONG_MAX_SAMPLE_COUNT;
-  const waveformColors = useWaveformColors();
 
   return (
     <div className="@container">
@@ -86,7 +85,6 @@ export const SampleDeck = memo(function SampleDeck({
           <ClipList
             samples={samples}
             selectedSampleId={selectedSampleId}
-            waveformColors={waveformColors.thumbnail}
             onDeleteSample={onDeleteSample}
             onSelectSample={onSelectSample}
           />
@@ -97,7 +95,6 @@ export const SampleDeck = memo(function SampleDeck({
             sample={sample}
             isBusy={isBusy}
             isRecording={isRecording}
-            waveformColors={waveformColors.editor}
             onApplyTrim={onApplyTrim}
             onMoveTrimWindow={onMoveTrimWindow}
             onPreviewSample={onPreviewSample}
@@ -168,13 +165,11 @@ function RecordControl({
 function ClipList({
   samples,
   selectedSampleId,
-  waveformColors,
   onDeleteSample,
   onSelectSample,
 }: {
   samples: SongDocument["samples"];
   selectedSampleId: string | null;
-  waveformColors: WaveformColorSet;
   onDeleteSample: (sampleId: string) => void;
   onSelectSample: (sampleId: string) => void;
 }) {
@@ -191,10 +186,10 @@ function ClipList({
   return (
     <section aria-labelledby="sample-deck-clips" className="flex flex-col gap-2.5">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 id="sample-deck-clips" className="text-sm font-semibold text-ink">
+        <h2 id="sample-deck-clips" className="font-screen text-[24px] leading-none font-normal text-ink">
           Clips
         </h2>
-        <span className="text-[13px] text-ink-muted tabular-nums">
+        <span className="font-screen text-[20px] leading-none text-ink-muted">
           {samples.length} of {SONG_MAX_SAMPLE_COUNT}
         </span>
       </div>
@@ -212,7 +207,7 @@ function ClipList({
           Record a sound to add your first clip. A song holds up to {SONG_MAX_SAMPLE_COUNT} clips for the PCM voice.
         </p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-1.5">
           {clipRows.map(({ entry, waveform, durationMs }) => {
             const isSelected = entry.id === selectedSampleId;
 
@@ -220,30 +215,33 @@ function ClipList({
               <li
                 key={entry.id}
                 className={cn(
-                  "flex items-center gap-1 rounded-control border pr-1 transition-colors",
-                  isSelected ? "border-ink bg-surface-2 shadow-raised" : "border-transparent hover:bg-surface-2",
+                  "flex items-center gap-1 rounded-[8px] border pr-1 transition-colors",
+                  isSelected ? "border-ink bg-surface-2" : "border-transparent hover:bg-surface-2",
                 )}
               >
                 <Button
                   variant="ghost"
                   aria-label={`Load sample ${entry.name}`}
                   aria-pressed={isSelected}
-                  className="h-auto min-w-0 flex-1 justify-start gap-3 border-0 p-1.5 text-left hover:bg-transparent active:translate-y-0"
+                  className="h-auto min-w-0 flex-1 justify-start gap-2.5 border-0 p-1 text-left hover:bg-transparent active:translate-y-0"
                   onClick={() => {
                     onSelectSample(entry.id);
                   }}
                 >
-                  <span aria-hidden="true" className="block h-8 w-20 shrink-0 overflow-hidden rounded-[4px] bg-surface-sunken">
+                  <span
+                    aria-hidden="true"
+                    className="glass-well block h-8 w-[76px] shrink-0 overflow-hidden rounded-[6px] p-0.5 ring-1 ring-black/80"
+                  >
                     <WaveformCanvas
                       ariaLabel={`${entry.name} waveform`}
                       samples={waveform}
                       className="block h-full w-full"
-                      {...waveformColors}
+                      {...pcmTraceColors}
                     />
                   </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-[13px] font-medium text-ink">{entry.name}</span>
-                    <span className="text-xs text-ink-muted tabular-nums">{formatSeconds(durationMs)}</span>
+                  <span className="flex min-w-0 flex-1 items-baseline justify-between gap-2 font-screen leading-none font-normal">
+                    <span className="truncate text-[22px] text-ink">{entry.name}</span>
+                    <span className="text-[20px] text-ink-muted">{formatSeconds(durationMs)}</span>
                   </span>
                   {isSelected ? <Check aria-hidden="true" className="size-4 shrink-0 text-ink" /> : null}
                 </Button>
@@ -273,7 +271,6 @@ function SampleEditor({
   sample,
   isBusy,
   isRecording,
-  waveformColors,
   onApplyTrim,
   onMoveTrimWindow,
   onPreviewSample,
@@ -284,7 +281,6 @@ function SampleEditor({
   sample: SampleAsset;
   isBusy: boolean;
   isRecording: boolean;
-  waveformColors: WaveformColorSet;
   onApplyTrim: () => void;
   onMoveTrimWindow: (startFrame: number) => void;
   onPreviewSample: () => Promise<void>;
@@ -302,10 +298,10 @@ function SampleEditor({
     <section aria-labelledby="sample-deck-editor" className="flex flex-col gap-5 border-t border-line pt-5 @2xl:border-t-0 @2xl:border-l @2xl:pt-0 @2xl:pl-8">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h2 id="sample-deck-editor" className="truncate text-sm font-semibold text-ink">
+          <h2 id="sample-deck-editor" className="truncate font-screen text-[24px] leading-none font-normal text-ink">
             {sample.name}
           </h2>
-          <span className="shrink-0 text-[13px] text-ink-muted tabular-nums">
+          <span className="shrink-0 font-screen text-[20px] leading-none text-ink-muted">
             {formatSeconds(getDurationMs(sample, trimmedFrameCount))}
           </span>
         </div>
@@ -323,26 +319,26 @@ function SampleEditor({
       </div>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-[13px] font-semibold text-ink">Trim</h3>
+        <h3 className="font-screen text-[24px] leading-none font-normal text-ink">Trim</h3>
         <div>
-          <div className="relative h-16 overflow-hidden rounded-control border border-line bg-surface-sunken">
+          <div className="glass-well relative h-[78px] overflow-hidden rounded-[6px] py-[3px] ring-1 ring-black/80">
             <WaveformCanvas
               ariaLabel={`${sample.name} waveform, frames ${startFrame} to ${endFrame} play`}
               samples={waveform}
               className="block h-full w-full"
-              {...waveformColors}
+              {...pcmTraceColors}
             />
             {windowStartPercent > 0 ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-y-0 left-0 border-r border-ink bg-surface-1/80"
+                className="absolute inset-y-0 left-0 border-r-2 border-beam bg-glass/70"
                 style={{ width: `${windowStartPercent}%` }}
               />
             ) : null}
             {windowEndPercent < 100 ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-y-0 right-0 border-l border-ink bg-surface-1/80"
+                className="absolute inset-y-0 right-0 border-l-2 border-beam bg-glass/70"
                 style={{ width: `${100 - windowEndPercent}%` }}
               />
             ) : null}
@@ -385,9 +381,9 @@ function SampleEditor({
       </div>
 
       <div className="flex flex-col gap-3">
-        <h3 className="text-[13px] font-semibold text-ink">Pitch</h3>
+        <h3 className="font-screen text-[24px] leading-none font-normal text-ink">Pitch</h3>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-medium text-ink-muted">Base note</span>
+          <span className="text-sm text-ink">Base note</span>
           <div className="w-24">
             <NotePicker
               accentColor="var(--voice-sample)"
@@ -447,8 +443,8 @@ function SampleTrimControl({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] font-medium text-ink-muted">{label}</span>
-        <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <span className="text-sm text-ink">{label}</span>
+        <span className="flex items-center gap-2 text-[13px] text-ink-muted">
           <NumberField
             label={`${label} in frames`}
             min={0}
@@ -520,39 +516,7 @@ function getRecorderMessage({
       };
 }
 
-type WaveformColorSet = { backgroundColor: string; glowColor: string; gridColor: string; lineColor: string };
-
-const darkSchemeQuery = "(prefers-color-scheme: dark)";
-
-function subscribeToColorScheme(onChange: () => void) {
-  const query = typeof window.matchMedia === "function" ? window.matchMedia(darkSchemeQuery) : null;
-  query?.addEventListener("change", onChange);
-
-  return () => {
-    query?.removeEventListener("change", onChange);
-  };
-}
-
-function getColorSchemeSnapshot() {
-  return typeof window.matchMedia === "function" && window.matchMedia(darkSchemeQuery).matches;
-}
-
-// Canvas strokes can't read CSS variables, so resolve the theme tokens and re-read them when the scheme flips.
-function useWaveformColors() {
-  const isDark = useSyncExternalStore(subscribeToColorScheme, getColorSchemeSnapshot, () => false);
-
-  return useMemo(() => {
-    const style = typeof document === "undefined" ? null : window.getComputedStyle(document.documentElement);
-    const token = (name: string) => style?.getPropertyValue(name).trim() || "currentColor";
-    const base = { backgroundColor: "transparent", glowColor: "transparent", gridColor: token("--line") };
-    const colors: Record<"editor" | "thumbnail", WaveformColorSet> = {
-      editor: { ...base, lineColor: token("--ink") },
-      thumbnail: { ...base, lineColor: token("--ink-muted") },
-    };
-
-    return colors;
-  }, [isDark]);
-}
+const pcmTraceColors = { glowColor: "var(--voice-sample)", lineColor: "var(--trace-sample)" };
 
 function getDurationMs(sample: SampleAsset, frameCount: number) {
   return sample.sampleRate <= 0 ? 0 : Math.round((frameCount / sample.sampleRate) * 1000);
