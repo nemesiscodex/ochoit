@@ -115,4 +115,15 @@ describe("root route head", () => {
       content: "Ochoit browser-based 8-bit music workstation",
     });
   });
+
+  it("lets a phone draw under the notch and tints its status bar like the band", async () => {
+    const headFn = Route.options.head;
+    const head = await headFn?.({} as Parameters<NonNullable<typeof headFn>>[0]);
+
+    expect(head?.meta).toContainEqual({
+      name: "viewport",
+      content: "width=device-width, initial-scale=1, viewport-fit=cover",
+    });
+    expect(head?.meta).toContainEqual({ name: "theme-color", content: "#2b2930" });
+  });
 });

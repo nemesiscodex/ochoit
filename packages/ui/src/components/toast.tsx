@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 
 const phoneQuery = "(max-width: 47.99rem)";
 
-// On a phone a corner toast lands on the first voice lane, so it drops in at the top centre, under the row with Play
-// (the band's first row from 640px, its second below).
+// On a phone a corner toast lands on the voice lanes, so it drops in at the top centre and keeps the Play row clear:
+// below 640px it covers the brand row above Play, from 640px it sits under the first row, which holds Play.
 function useIsPhone() {
   const [isPhone, setIsPhone] = useState(false);
 
@@ -38,7 +38,9 @@ function Toaster() {
       align={isPhone ? "center" : "end"}
       className={cn(
         "fixed z-50 w-[min(22rem,calc(100vw-2rem))]",
-        isPhone ? "top-[50px] left-1/2 -translate-x-1/2 max-sm:top-[94px]" : "right-4 bottom-4",
+        isPhone
+          ? "top-[calc(8px+env(safe-area-inset-top))] left-1/2 -translate-x-1/2 sm:top-[calc(62px+env(safe-area-inset-top))]"
+          : "right-[calc(1rem+env(safe-area-inset-right))] bottom-[calc(1rem+env(safe-area-inset-bottom))]",
       )}
     >
       {() => (
@@ -54,7 +56,7 @@ function Toaster() {
           </div>
           <ToastClose
             aria-label="Dismiss"
-            className="absolute top-2.5 right-2.5 inline-flex size-6 cursor-pointer items-center justify-center rounded-[4px] text-band-muted hover:bg-band-raised hover:text-band-ink"
+            className="absolute top-2.5 right-2.5 inline-flex size-6 cursor-pointer pointer-coarse:before:absolute pointer-coarse:before:-inset-2.5 items-center justify-center rounded-[4px] text-band-muted hover:bg-band-raised hover:text-band-ink"
           >
             <X className="size-3.5" />
           </ToastClose>

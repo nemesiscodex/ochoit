@@ -63,7 +63,7 @@ type TransportBandProps = {
 
 export const TransportBand = memo(function TransportBand(props: TransportBandProps) {
   return (
-    <header className="border-b border-black/60 bg-band bg-linear-to-b from-surface-2 to-band text-band-ink shadow-[0_1px_0_rgb(255_255_255/0.05)]">
+    <header className="border-b border-black/60 bg-band bg-linear-to-b from-surface-2 to-band pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-band-ink shadow-[0_1px_0_rgb(255_255_255/0.05)]">
       <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2.5 px-3 py-2.5 md:px-4 xl:gap-x-2.5">
         <div className="flex items-center gap-2 max-md:flex-1">
           <span aria-hidden="true" className="flex h-[22px] gap-0.5">
