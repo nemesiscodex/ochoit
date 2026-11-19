@@ -44,7 +44,7 @@ function NumberField({
       <NumberInputGroup
         className={cn(
           "inline-flex h-9 items-stretch overflow-hidden rounded-control border transition-colors focus-within:border-focus",
-          tone === "band" ? "border-band-raised bg-band-raised" : "border-line-strong bg-surface-2",
+          tone === "band" ? "border-band-edge bg-band-raised" : "border-line-strong bg-surface-2",
         )}
       >
         {steppers ? (

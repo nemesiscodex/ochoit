@@ -501,7 +501,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
             role="alert"
             className="flex items-start gap-3 rounded-panel border border-signal bg-surface-1 px-4 py-3 text-sm xl:col-span-2"
           >
-            <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-signal" />
+            <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-signal-text" />
             <div>
               <p className="font-semibold">Audio didn't start</p>
               <p className="mt-0.5 text-ink-muted">{errorMessage} Press Start audio to try again.</p>

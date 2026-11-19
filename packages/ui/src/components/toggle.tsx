@@ -9,7 +9,7 @@ const toggleVariants = cva(
       variant: {
         default:
           "border-line bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink data-pressed:border-ink data-pressed:bg-ink data-pressed:text-surface-2",
-        band: "border-band-raised bg-transparent text-band-muted hover:text-band-ink data-pressed:border-band-ink data-pressed:bg-band-ink data-pressed:text-band",
+        band: "border-band-edge bg-transparent text-band-muted hover:text-band-ink data-pressed:border-band-ink data-pressed:bg-band-ink data-pressed:text-band",
         signal:
           "border-line bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink data-pressed:border-signal data-pressed:bg-signal data-pressed:text-signal-ink",
       },

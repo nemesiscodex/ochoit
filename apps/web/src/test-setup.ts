@@ -6,6 +6,7 @@ HTMLElement.prototype.togglePopover ??= function togglePopover() {
   return true;
 };
 Element.prototype.getAnimations ??= () => [];
+Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 globalThis.ResizeObserver ??= class ResizeObserver {
   observe() {}

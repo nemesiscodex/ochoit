@@ -117,8 +117,6 @@ describe("workstation-shell", () => {
   let anchorClick: ReturnType<typeof vi.fn<() => void>>;
 
   beforeEach(() => {
-    // jsdom has no scrollIntoView; the share menu calls it to reveal the highlighted item.
-    Element.prototype.scrollIntoView = function scrollIntoView() {};
     mockUseAudioEngine.mockReset();
     mockUseSampleRecorder.mockReset();
     mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult());

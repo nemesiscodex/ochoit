@@ -10,11 +10,11 @@ function Toaster() {
   if (!mounted) return null;
 
   return (
-    <ToastRegion side="bottom" align="end" className="fixed right-4 bottom-4 z-[300] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
+    <ToastRegion side="bottom" align="end" className="fixed right-4 bottom-4 z-50 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
       {() => (
         <Toast
           className={cn(
-            "relative flex items-start gap-3 rounded-panel border border-band-raised bg-band py-3 pr-10 pl-4 text-band-ink shadow-pop",
+            "relative flex items-start gap-3 rounded-panel border border-band-edge bg-band py-3 pr-10 pl-4 text-band-ink shadow-pop",
             "transition-[opacity,translate] duration-200 ease-out data-starting-style:translate-y-2 data-starting-style:opacity-0 data-ending-style:opacity-0",
             "data-[type=error]:border-signal",
           )}

@@ -151,7 +151,7 @@ function BandPlayback({
           >
             Start audio
           </Button>
-          <p id={audioNoteId} className="max-w-[24ch] text-[13px] leading-snug text-band-muted">
+          <p id={audioNoteId} className="sr-only">
             Browsers need one click before they play sound.
           </p>
         </>
@@ -374,14 +374,22 @@ function BandActions({
           </MenuItem>
         </MenuContent>
       </Menu>
-      <Button variant="band" size="sm" pendingAnnouncement="Preparing WAV" onClick={onDownloadWav}>
-        <Download aria-hidden="true" />
-        <span className="max-sm:sr-only">Download WAV</span>
-      </Button>
-      <Button variant="band" size="sm" onClick={onNewSong}>
-        <FilePlus2 aria-hidden="true" />
-        <span className="max-sm:sr-only">New song</span>
-      </Button>
+      <Tooltip type="label">
+        <TooltipTrigger
+          render={<Button variant="band" size="sm" pendingAnnouncement="Preparing WAV" onClick={onDownloadWav} />}
+        >
+          <Download aria-hidden="true" />
+          <span className="max-2xl:sr-only">Download WAV</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Download WAV</TooltipContent>
+      </Tooltip>
+      <Tooltip type="label">
+        <TooltipTrigger render={<Button variant="band" size="sm" onClick={onNewSong} />}>
+          <FilePlus2 aria-hidden="true" />
+          <span className="max-2xl:sr-only">New song</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">New song</TooltipContent>
+      </Tooltip>
       <a
         href={repositoryUrl}
         target="_blank"

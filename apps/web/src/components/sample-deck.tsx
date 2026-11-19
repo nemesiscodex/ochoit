@@ -157,7 +157,7 @@ function RecordControl({
         {message.tone === "status" ? message.text : null}
       </p>
       {message.tone === "error" ? (
-        <p role="alert" className="text-[13px] leading-snug font-medium text-signal">
+        <p role="alert" className="text-[13px] leading-snug font-medium text-signal-text">
           {message.text}
         </p>
       ) : null}
@@ -252,7 +252,7 @@ function ClipList({
                   size="icon-sm"
                   aria-label={`Delete sample ${entry.name}`}
                   data-agent-confirm={`Deletes the clip ${entry.name} and clears its PCM steps`}
-                  className="hover:text-signal"
+                  className="hover:text-signal-text"
                   onClick={() => {
                     onDeleteSample(entry.id);
                   }}

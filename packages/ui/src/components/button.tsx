@@ -16,9 +16,9 @@ const buttonVariants = cva(
           "border-transparent bg-transparent text-ink-muted hover:bg-surface-sunken hover:text-ink aria-expanded:bg-surface-sunken data-open:bg-surface-sunken",
         primary: "border-signal bg-signal text-signal-ink shadow-raised hover:border-signal-hover hover:bg-signal-hover",
         danger:
-          "border-line bg-transparent text-signal hover:border-signal hover:bg-signal hover:text-signal-ink",
+          "border-line bg-transparent text-signal-text hover:border-signal hover:bg-signal hover:text-signal-ink",
         band:
-          "border-band-raised bg-band-raised text-band-ink hover:border-band-muted/60 hover:bg-band-raised/70 aria-expanded:border-band-muted data-open:border-band-muted",
+          "border-band-edge bg-band-raised text-band-ink hover:border-band-muted/60 hover:bg-band-raised/70 aria-expanded:border-band-muted data-open:border-band-muted",
       },
       size: {
         default: "h-9 px-3",

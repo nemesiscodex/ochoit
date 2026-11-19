@@ -84,7 +84,7 @@ export const PatternHeader = memo(function PatternHeader({
           </p>
           <p
             aria-live="polite"
-            className={cn("mt-0.5 text-sm", recordingTrackId !== null ? "font-semibold text-signal" : "text-ink-muted")}
+            className={cn("mt-0.5 text-sm", recordingTrackId !== null ? "font-semibold text-signal-text" : "text-ink-muted")}
           >
             {keyboardTargetSummary}
           </p>

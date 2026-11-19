@@ -19,7 +19,7 @@ function FieldDescription({ className, ...props }: StyledProps<typeof FieldDescr
 }
 
 function FieldError({ className, ...props }: StyledProps<typeof FieldErrorPart>) {
-  return <FieldErrorPart className={cn("text-xs font-medium text-signal", className)} {...props} />;
+  return <FieldErrorPart className={cn("text-xs font-medium text-signal-text", className)} {...props} />;
 }
 
 export { Field, FieldDescription, FieldError, FieldLabel };
