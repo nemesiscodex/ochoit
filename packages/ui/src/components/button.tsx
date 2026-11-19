@@ -16,6 +16,7 @@ const buttonVariants = cva(
           "border-transparent bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink aria-expanded:bg-surface-2 data-open:bg-surface-2",
         primary:
           "border-signal-edge bg-signal bg-linear-to-b from-[color-mix(in_srgb,var(--signal)_88%,white)] to-signal text-signal-ink shadow-raised hover:to-signal-hover",
+        go: "border-go-edge bg-linear-to-b from-go-hover to-go font-semibold text-go-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.35),0_2px_0_#0d0c0f,0_0_16px_-3px_var(--go)] hover:from-go-edge hover:to-go-hover",
         danger:
           "border-line-strong bg-transparent text-signal-text hover:border-signal-edge hover:bg-signal hover:text-signal-ink",
         band:

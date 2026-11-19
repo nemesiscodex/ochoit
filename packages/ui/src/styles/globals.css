@@ -32,6 +32,10 @@
   --signal-edge: #ef6a72;
   --signal-text: #ff8088;
   --signal-ink: #ffffff;
+  --go: #3ee07f;
+  --go-hover: #5ef095;
+  --go-edge: #a6f7c6;
+  --go-ink: #03150a;
   --focus: #ffffff;
   --scrim: rgb(5 4 8 / 0.62);
 
@@ -89,6 +93,10 @@
   --color-signal-edge: var(--signal-edge);
   --color-signal-text: var(--signal-text);
   --color-signal-ink: var(--signal-ink);
+  --color-go: var(--go);
+  --color-go-hover: var(--go-hover);
+  --color-go-edge: var(--go-edge);
+  --color-go-ink: var(--go-ink);
   --color-focus: var(--focus);
   --color-scrim: var(--scrim);
   --color-glass: var(--glass);
@@ -220,6 +228,26 @@
     inset 2px 0 0 var(--beam),
     inset -2px 0 0 var(--beam),
     0 0 14px 1px rgb(170 205 255 / 0.4);
+}
+
+/* A one-time "try me" pulse; reduced motion keeps a still ring instead. */
+@utility nudge {
+  animation: nudge 1.2s ease-in-out 3;
+  box-shadow: 0 0 0 2px var(--screen-ink);
+
+  @media (prefers-reduced-motion: no-preference) {
+    box-shadow: none;
+  }
+}
+
+@keyframes nudge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(170 205 255 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--screen-ink), 0 0 18px 4px rgb(170 205 255 / 0.55);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

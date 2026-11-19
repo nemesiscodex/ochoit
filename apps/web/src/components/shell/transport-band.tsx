@@ -3,7 +3,7 @@ import { Field, FieldLabel } from "@ochoit/ui/components/field";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@ochoit/ui/components/menu";
 import { NumberField } from "@ochoit/ui/components/number-field";
 import { Slider } from "@ochoit/ui/components/slider";
-import { Toggle, ToggleGroup, ToggleIcon } from "@ochoit/ui/components/toggle";
+import { Toggle, ToggleGroup } from "@ochoit/ui/components/toggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ochoit/ui/components/tooltip";
 import { cn } from "@ochoit/ui/lib/utils";
 import {
@@ -12,18 +12,16 @@ import {
   FilePlus2,
   FileText,
   Github,
-  Headphones,
   Import,
   Link,
   ListMusic,
   Play,
-  Ruler,
   Square,
-  Tv,
+  Volume2,
 } from "lucide-react";
 import { SONG_BPM_RANGE, SONG_LOOP_LENGTH_RANGE, type SongEdit } from "ochoit-lib";
 import type { AudioEngine } from "ochoit-lib/web";
-import { memo, useId, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 
 import type { AudioBootstrapState } from "@/features/audio/use-audio-engine";
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
@@ -66,14 +64,14 @@ type TransportBandProps = {
 export const TransportBand = memo(function TransportBand(props: TransportBandProps) {
   return (
     <header className="border-b border-black/60 bg-band bg-linear-to-b from-surface-2 to-band text-band-ink shadow-[0_1px_0_rgb(255_255_255/0.05)]">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2.5 px-3 py-2.5 md:px-4">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2.5 px-3 py-2.5 md:px-4">
         <div className="flex items-center gap-2 max-md:flex-1">
           <span aria-hidden="true" className="flex h-[22px] gap-0.5">
             {brandStripeClasses.map((stripeClass) => (
               <i key={stripeClass} className={cn("w-[3px] rounded-[1px]", stripeClass)} />
             ))}
           </span>
-          <h1 className="font-wordmark text-[19px] leading-none font-bold tracking-[0.02em]">Ochoit</h1>
+          <h1 className="font-wordmark text-[17px] leading-none font-bold tracking-[0.02em]">Ochoit</h1>
         </div>
         <BandPlayback
           engineState={props.engineState}
@@ -82,6 +80,7 @@ export const TransportBand = memo(function TransportBand(props: TransportBandPro
           onStartAudio={props.onStartAudio}
           onStop={props.onStop}
         />
+        <ExamplesButton engineState={props.engineState} onOpenExamples={props.onOpenExamples} />
         <BandMix
           bpm={props.bpm}
           hoverPreviewEnabled={props.hoverPreviewEnabled}
@@ -98,7 +97,6 @@ export const TransportBand = memo(function TransportBand(props: TransportBandPro
           onDownloadWav={props.onDownloadWav}
           onLoadSongFromLink={props.onLoadSongFromLink}
           onNewSong={props.onNewSong}
-          onOpenExamples={props.onOpenExamples}
           onOpenSongText={props.onOpenSongText}
         />
       </div>
@@ -115,13 +113,14 @@ function BandPlayback({
 }: Pick<TransportBandProps, "engineState" | "isPlaying" | "onPlay" | "onStartAudio" | "onStop">) {
   const audioNoteId = useId();
   const playButtonRef = useRef<HTMLButtonElement>(null);
-  const audioReady = engineState === "running" || engineState === "suspended";
+  const audioReady = isAudioReady(engineState);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1">
       <Button
         ref={playButtonRef}
-        variant={isPlaying ? "primary" : "band"}
+        variant="go"
+        className={cn("px-4", isPlaying && "translate-y-px shadow-pressed")}
         onClick={() => {
           void onPlay();
         }}
@@ -141,7 +140,7 @@ function BandPlayback({
         Stop
       </Button>
       {audioReady ? (
-        <span className="ml-1 inline-flex items-center gap-2 text-sm whitespace-nowrap text-band-muted">
+        <span className="ml-1 inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap text-band-muted">
           <span
             aria-hidden="true"
             className="size-2 rounded-full bg-beam shadow-[0_0_0_2px_#0d0c0f,0_0_8px_2px_rgb(210_230_255/0.75)]"
@@ -151,7 +150,8 @@ function BandPlayback({
       ) : (
         <>
           <Button
-            variant="primary"
+            variant="band"
+            size="sm"
             aria-describedby={audioNoteId}
             pendingAnnouncement="Starting audio"
             onClick={async () => {
@@ -170,6 +170,62 @@ function BandPlayback({
         </>
       )}
     </div>
+  );
+}
+
+function isAudioReady(engineState: AudioBootstrapState) {
+  return engineState === "running" || engineState === "suspended";
+}
+
+const examplesNudgeMs = 3600;
+
+// Pulses once, the first time audio comes on, to point a newcomer at a song they can play straight away.
+function useFirstAudioNudge(engineState: AudioBootstrapState) {
+  const audioReady = isAudioReady(engineState);
+  const [nudging, setNudging] = useState(false);
+  const wasReady = useRef(audioReady);
+
+  useEffect(() => {
+    if (!audioReady || wasReady.current) {
+      return;
+    }
+
+    wasReady.current = true;
+    setNudging(true);
+    const timer = window.setTimeout(() => {
+      setNudging(false);
+    }, examplesNudgeMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [audioReady]);
+
+  return [nudging, () => setNudging(false)] as const;
+}
+
+function ExamplesButton({
+  engineState,
+  onOpenExamples,
+}: Pick<TransportBandProps, "engineState" | "onOpenExamples">) {
+  const [nudging, stopNudging] = useFirstAudioNudge(engineState);
+
+  return (
+    <Button
+      variant="band"
+      data-nudge={nudging || undefined}
+      className={cn(
+        "glass-well glow-text px-2.5 border-screen-edge from-transparent to-transparent text-screen-ink hover:border-screen-ink",
+        nudging && "nudge",
+      )}
+      onClick={() => {
+        stopNudging();
+        onOpenExamples();
+      }}
+    >
+      <ListMusic aria-hidden="true" />
+      Examples
+    </Button>
   );
 }
 
@@ -203,7 +259,7 @@ function BandMix({
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 md:border-l md:border-line md:pl-3">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2.5">
       <BandNumberField
         label="Tempo"
         value={bpm}
@@ -224,13 +280,11 @@ function BandMix({
           onEdit({ type: "set-loop-length", loopLength: nextLoopLength });
         }}
       />
-      <div className="flex items-center gap-2.5 max-md:w-full">
-        <span aria-hidden="true" className="text-[13.5px] text-band-muted">
-          Master
-        </span>
+      <div className="flex items-center gap-2 max-md:w-full">
+        <Volume2 aria-hidden="true" className="size-4 text-band-muted" />
         <Slider
           label="Master volume"
-          className="w-24 max-md:flex-1"
+          className="w-16 max-md:flex-1"
           accent="var(--band-ink)"
           value={masterPercent}
           min={TRACK_VOLUME_PERCENT_RANGE.min}
@@ -240,10 +294,7 @@ function BandMix({
             onEdit({ type: "set-master-volume", volume: percent / 100 });
           }}
         />
-        <span
-          aria-hidden="true"
-          className="glass-well glow-text inline-flex h-8 w-[52px] items-center justify-center rounded-control border border-band-edge font-screen text-[22px] leading-none"
-        >
+        <span aria-hidden="true" className="w-8 font-mono text-[12px] font-semibold text-band-ink">
           {masterPercent}%
         </span>
       </div>
@@ -262,43 +313,48 @@ function BandMix({
         <ViewToggle
           value="ruler"
           label="Sequencer ruler"
-          tooltip="Show the step ruler and keyboard note labels"
-          icon={<Ruler />}
+          text="Ruler"
+          tooltip="Show the pattern header, step ruler and keyboard note labels"
         />
         <ViewToggle
           value="hover-preview"
           label="Sequencer hover preview"
+          text="Preview"
           tooltip="Play a step's sound when you point at it"
-          icon={<Headphones />}
         />
         <ViewToggle
           value="lo-fi"
           label="Lo-fi speaker filter"
+          text="Lo-fi"
           tooltip="Sound like a small old TV speaker"
-          icon={<Tv />}
         />
       </ToggleGroup>
     </div>
   );
 }
 
+// The lit LED, not only the pressed shading, says the option is on.
 function ViewToggle({
   value,
   label,
+  text,
   tooltip,
-  icon,
 }: {
   value: ViewOption;
   label: string;
+  text: string;
   tooltip: string;
-  icon: ReactNode;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <Toggle value={value} variant="band" size="icon-sm" aria-label={label}>
-            <ToggleIcon>{icon}</ToggleIcon>
+          <Toggle value={value} variant="band" size="sm" aria-label={label} className="group gap-1.5 px-2">
+            <span
+              aria-hidden="true"
+              className="size-2 rounded-full bg-band-raised-lo shadow-[inset_0_0_0_1px_var(--band-edge)] group-data-pressed:bg-beam group-data-pressed:shadow-[0_0_0_2px_#0d0c0f,0_0_8px_2px_rgb(210_230_255/0.75)]"
+            />
+            {text}
           </Toggle>
         }
       />
@@ -326,7 +382,7 @@ function BandNumberField({
   const [draft, setDraft] = useState<number | null>(null);
 
   return (
-    <Field className="flex-row items-center gap-1.5">
+    <Field className="flex-row items-center gap-1">
       <FieldLabel className="text-[13.5px] font-normal text-band-muted">{label}</FieldLabel>
       <NumberField
         label={label}
@@ -356,18 +412,13 @@ function BandActions({
   onDownloadWav,
   onLoadSongFromLink,
   onNewSong,
-  onOpenExamples,
   onOpenSongText,
 }: Pick<
   TransportBandProps,
-  "onCopyShareLink" | "onDownloadWav" | "onLoadSongFromLink" | "onNewSong" | "onOpenExamples" | "onOpenSongText"
+  "onCopyShareLink" | "onDownloadWav" | "onLoadSongFromLink" | "onNewSong" | "onOpenSongText"
 >) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 xl:ml-auto">
-      <Button variant="band" size="sm" onClick={onOpenExamples}>
-        <ListMusic aria-hidden="true" />
-        Examples
-      </Button>
       <Menu>
         <MenuTrigger render={<Button variant="band" size="sm" />}>
           <Link aria-hidden="true" />
@@ -394,14 +445,14 @@ function BandActions({
           render={<Button variant="band" size="sm" pendingAnnouncement="Preparing WAV" onClick={onDownloadWav} />}
         >
           <Download aria-hidden="true" />
-          <span className="max-2xl:sr-only">Download WAV</span>
+          <span className="max-xl:sr-only">Download WAV</span>
         </TooltipTrigger>
         <TooltipContent side="bottom">Download WAV</TooltipContent>
       </Tooltip>
       <Tooltip type="label">
         <TooltipTrigger render={<Button variant="band" size="sm" onClick={onNewSong} />}>
           <FilePlus2 aria-hidden="true" />
-          <span className="max-2xl:sr-only">New song</span>
+          <span className="max-xl:sr-only">New song</span>
         </TooltipTrigger>
         <TooltipContent side="bottom">New song</TooltipContent>
       </Tooltip>

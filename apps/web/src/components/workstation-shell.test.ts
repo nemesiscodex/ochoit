@@ -434,6 +434,31 @@ describe("workstation-shell", () => {
     expect(screen.getByText("Audio on")).toBeTruthy();
   });
 
+  it("points at Examples the first time audio comes on, until Examples is opened", () => {
+    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "idle"));
+
+    const { rerender } = renderWorkstationShell();
+    const examplesButton = screen.getByRole("button", { name: "Examples" });
+
+    expect(examplesButton.hasAttribute("data-nudge")).toBe(false);
+
+    mockUseAudioEngine.mockReturnValue(createUseAudioEngineResult("stopped", "running"));
+    rerender(createWorkstationShellElement());
+
+    expect(examplesButton.getAttribute("data-nudge")).toBe("true");
+
+    fireEvent.click(examplesButton);
+
+    expect(screen.getByRole("dialog", { name: "Examples" })).toBeTruthy();
+    expect(examplesButton.hasAttribute("data-nudge")).toBe(false);
+  });
+
+  it("does not point at Examples when audio was already on", () => {
+    renderWorkstationShell();
+
+    expect(screen.getByRole("button", { name: "Examples" }).hasAttribute("data-nudge")).toBe(false);
+  });
+
   it("starts audio and playback with one press of Play while audio is off", () => {
     const idle = createUseAudioEngineResult("stopped", "idle");
     mockUseAudioEngine.mockReturnValue(idle);
