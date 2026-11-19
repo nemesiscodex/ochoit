@@ -64,7 +64,7 @@ type TransportBandProps = {
 export const TransportBand = memo(function TransportBand(props: TransportBandProps) {
   return (
     <header className="border-b border-black/60 bg-band bg-linear-to-b from-surface-2 to-band text-band-ink shadow-[0_1px_0_rgb(255_255_255/0.05)]">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2.5 px-3 py-2.5 md:px-4">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-2.5 px-3 py-2.5 md:px-4 xl:gap-x-2.5">
         <div className="flex items-center gap-2 max-md:flex-1">
           <span aria-hidden="true" className="flex h-[22px] gap-0.5">
             {brandStripeClasses.map((stripeClass) => (
@@ -116,7 +116,7 @@ function BandPlayback({
   const audioReady = isAudioReady(engineState);
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1 max-sm:order-1 max-sm:basis-full">
       <Button
         ref={playButtonRef}
         variant="go"
@@ -258,8 +258,9 @@ function BandMix({
     ...(oldSpeakerMode ? (["lo-fi"] as const) : []),
   ];
 
+  // Below xl the mix group takes a row of its own, so the band breaks in planned places, not wherever it runs out.
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2.5">
+    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2.5 max-sm:order-2 md:max-xl:order-last md:max-xl:basis-full">
       <BandNumberField
         label="Tempo"
         value={bpm}
@@ -280,7 +281,7 @@ function BandMix({
           onEdit({ type: "set-loop-length", loopLength: nextLoopLength });
         }}
       />
-      <div className="flex items-center gap-2 max-md:w-full">
+      <div className="flex items-center gap-2 max-md:min-w-36 max-md:flex-1">
         <Volume2 aria-hidden="true" className="size-4 text-band-muted" />
         <Slider
           label="Master volume"
@@ -418,7 +419,7 @@ function BandActions({
   "onCopyShareLink" | "onDownloadWav" | "onLoadSongFromLink" | "onNewSong" | "onOpenSongText"
 >) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 xl:ml-auto">
+    <div className="flex flex-wrap items-center gap-1.5 max-sm:order-3 md:ml-auto">
       <Menu>
         <MenuTrigger render={<Button variant="band" size="sm" />}>
           <Link aria-hidden="true" />
@@ -445,14 +446,14 @@ function BandActions({
           render={<Button variant="band" size="sm" pendingAnnouncement="Preparing WAV" onClick={onDownloadWav} />}
         >
           <Download aria-hidden="true" />
-          <span className="max-xl:sr-only">Download WAV</span>
+          <span className="max-[1440px]:sr-only">Download WAV</span>
         </TooltipTrigger>
         <TooltipContent side="bottom">Download WAV</TooltipContent>
       </Tooltip>
       <Tooltip type="label">
         <TooltipTrigger render={<Button variant="band" size="sm" onClick={onNewSong} />}>
           <FilePlus2 aria-hidden="true" />
-          <span className="max-xl:sr-only">New song</span>
+          <span className="max-[1440px]:sr-only">New song</span>
         </TooltipTrigger>
         <TooltipContent side="bottom">New song</TooltipContent>
       </Tooltip>
