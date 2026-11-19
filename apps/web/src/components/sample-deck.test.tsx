@@ -230,6 +230,13 @@ describe("SampleDeck", () => {
     expect(props.onSetSampleBaseNote).toHaveBeenCalledWith("A3");
 
     cleanup();
+    const matchedSample = createSample({ baseNote: "A3" });
+    renderDeck({ samples: [matchedSample], sample: matchedSample, selectedSampleId: matchedSample.id });
+
+    expect(screen.queryByRole("button", { name: "Use suggested A3" })).toBeNull();
+    expect(screen.getByText("Matches the suggested note")).toBeTruthy();
+
+    cleanup();
     const quietSample = createSample({ detectedBaseNote: null });
     renderDeck({ engineMode: "authentic", samples: [quietSample], sample: quietSample, selectedSampleId: quietSample.id });
 

@@ -348,7 +348,7 @@ function SampleEditor({
             ) : null}
           </div>
           <p className="mt-1.5 text-xs text-ink-muted tabular-nums">
-            {`Frames ${startFrame} to ${endFrame} of ${sample.frameCount}`}
+            {`Frames ${formatFrames(startFrame)} to ${formatFrames(endFrame)} of ${formatFrames(sample.frameCount)}`}
           </p>
         </div>
         <SampleTrimControl
@@ -401,6 +401,8 @@ function SampleEditor({
           </div>
           {sample.detectedBaseNote === null ? (
             <span className="text-xs text-ink-muted">No stable note detected</span>
+          ) : sample.detectedBaseNote === sample.baseNote ? (
+            <span className="text-xs text-ink-muted">Matches the suggested note</span>
           ) : (
             <Button
               variant="outline"
@@ -554,6 +556,12 @@ function useWaveformColors() {
 
 function getDurationMs(sample: SampleAsset, frameCount: number) {
   return sample.sampleRate <= 0 ? 0 : Math.round((frameCount / sample.sampleRate) * 1000);
+}
+
+const frameFormat = new Intl.NumberFormat("en-US");
+
+function formatFrames(frameCount: number) {
+  return frameFormat.format(frameCount);
 }
 
 function formatSeconds(durationMs: number) {
