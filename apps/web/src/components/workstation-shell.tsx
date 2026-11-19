@@ -1772,7 +1772,7 @@ function SampleTrimControl({
         min={min}
         max={max}
         step={1}
-        value={Math.max(min, Math.min(value, max))}
+        value={String(Math.max(min, Math.min(value, max)))}
         disabled={disabled}
         className="h-2 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] accent-[var(--oc-sample)] disabled:cursor-not-allowed disabled:opacity-40"
         onChange={(event) => {
@@ -1785,7 +1785,7 @@ function SampleTrimControl({
         min={min}
         max={max}
         step={1}
-        value={Math.max(min, Math.min(value, max))}
+        value={String(Math.max(min, Math.min(value, max)))}
         disabled={disabled}
         className="h-7 border-white/[0.08] bg-black/30 px-2 font-[var(--oc-mono)] text-[10px] text-white"
         onChange={(event) => {

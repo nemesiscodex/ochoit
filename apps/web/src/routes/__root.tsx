@@ -1,5 +1,4 @@
-import { Toaster } from "@ochoit/ui/components/sonner";
-import { TooltipProvider } from "@ochoit/ui/components/tooltip";
+import { Toaster } from "@ochoit/ui/components/toast";
 import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
@@ -136,7 +135,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Anybody:wght@400;700;900&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap",
       },
     ],
   }),
@@ -146,21 +145,19 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function RootDocument() {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
       <body>
-        <TooltipProvider>
-          <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
-            <Header />
-            <div className="overflow-auto">
-              <Outlet />
-            </div>
+        <div className="grid h-svh grid-rows-[auto_1fr] overflow-hidden">
+          <Header />
+          <div className="overflow-auto">
+            <Outlet />
           </div>
-          <Toaster richColors />
-          <TanStackRouterDevtools position="bottom-left" />
-        </TooltipProvider>
+        </div>
+        <Toaster />
+        <TanStackRouterDevtools position="bottom-left" />
         <Scripts />
       </body>
     </html>

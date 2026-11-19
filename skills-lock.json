@@ -6,15 +6,15 @@
       "sourceType": "github",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
     },
-    "shadcn": {
-      "source": "shadcn/ui",
-      "sourceType": "github",
-      "computedHash": "507f011a70e8b3ae242bdc0bb5b39fd91a1d4049a0f3c281991ccf84973d591c"
-    },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
       "computedHash": "7ffd0c504279d479f75816b14eb7855ac6de2ae494a97bbe6e43e973ded5dbd9"
+    },
+    "ui-sdk": {
+      "source": "vercel-labs/ui",
+      "sourceType": "github",
+      "computedHash": "9a60caf01da3d47beedf627bf1505d922dccc93b04f294c6aa64edf01c46b3ba"
     },
     "vercel-composition-patterns": {
       "source": "vercel-labs/agent-skills",
