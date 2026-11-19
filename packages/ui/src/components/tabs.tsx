@@ -13,9 +13,9 @@ function Tabs({ className, ...props }: StyledProps<typeof TabsPart>) {
 
 function TabsList({ className, children, ...props }: StyledContainerProps<typeof TabsListPart>) {
   return (
-    <TabsListPart className={cn("relative flex items-stretch gap-4 border-b border-line px-4", className)} {...props}>
+    <TabsListPart className={cn("relative flex items-stretch gap-5 border-b border-line px-4 pt-1", className)} {...props}>
       {children}
-      <TabsIndicator className="absolute bottom-[-1px] left-(--active-tab-left) h-0.5 w-(--active-tab-width) bg-ink transition-[left,width] duration-150 ease-out" />
+      <TabsIndicator className="absolute bottom-[-1px] left-(--active-tab-left) h-[3px] w-(--active-tab-width) bg-ink transition-[left,width] duration-150 ease-out" />
     </TabsListPart>
   );
 }
@@ -24,7 +24,7 @@ function TabsTab({ className, ...props }: StyledProps<typeof TabsTabPart>) {
   return (
     <TabsTabPart
       className={cn(
-        "inline-flex h-10 cursor-pointer items-center gap-1.5 text-sm font-medium text-ink-faint transition-colors hover:text-ink data-selected:text-ink data-disabled:cursor-not-allowed data-disabled:opacity-45",
+        "inline-flex h-11 cursor-pointer items-center gap-1.5 font-screen text-[23px] leading-none text-ink-muted transition-colors hover:text-ink data-selected:text-ink data-disabled:cursor-not-allowed data-disabled:opacity-45",
         className,
       )}
       {...props}

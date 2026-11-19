@@ -462,7 +462,6 @@ describe("workstation-shell", () => {
     renderWorkstationShell();
 
     expect(screen.getByRole("heading", { level: 1, name: "Ochoit" })).toBeTruthy();
-    expect(document.querySelector('img[src="/ochoit-logo.png"]')).toBeTruthy();
 
     const githubLink = screen.getByRole("link", { name: "Open GitHub repository" });
 

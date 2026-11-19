@@ -8,10 +8,12 @@ const toggleVariants = cva(
     variants: {
       variant: {
         default:
-          "border-line bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink data-pressed:border-ink data-pressed:bg-ink data-pressed:text-surface-2",
-        band: "border-band-edge bg-transparent text-band-muted hover:text-band-ink data-pressed:border-band-ink data-pressed:bg-band-ink data-pressed:text-band",
+          "border-line-strong bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink data-pressed:border-ink data-pressed:bg-ink data-pressed:text-surface-0",
+        band: "border-band-edge bg-linear-to-b from-band-raised to-band-raised-lo text-band-muted shadow-raised hover:text-band-ink data-pressed:translate-y-px data-pressed:from-surface-sunken data-pressed:to-band-raised-lo data-pressed:text-beam data-pressed:shadow-pressed data-pressed:[&_svg]:drop-shadow-[0_0_4px_rgb(200_225_255/0.8)]",
         signal:
-          "border-line bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink data-pressed:border-signal data-pressed:bg-signal data-pressed:text-signal-ink",
+          "border-line-strong bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink data-pressed:border-signal-edge data-pressed:bg-signal data-pressed:text-signal-ink",
+        screen:
+          "border-screen-edge bg-screen-edge/10 text-screen-ink hover:bg-screen-edge/25 data-pressed:border-screen-ink data-pressed:bg-screen-ink data-pressed:text-glass data-pressed:shadow-[0_0_10px_rgb(170_205_255/0.45)]",
       },
       size: {
         default: "h-9 px-3",

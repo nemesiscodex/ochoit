@@ -20,7 +20,6 @@ import {
   Ruler,
   Square,
   Tv,
-  Volume2,
 } from "lucide-react";
 import { SONG_BPM_RANGE, SONG_LOOP_LENGTH_RANGE, type SongEdit } from "ochoit-lib";
 import type { AudioEngine } from "ochoit-lib/web";
@@ -31,6 +30,13 @@ import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/son
 
 const repositoryUrl = "https://github.com/nemesiscodex/ochoit";
 const numberFormat = { useGrouping: false } satisfies Intl.NumberFormatOptions;
+const brandStripeClasses = [
+  "bg-voice-pulse1 shadow-[0_0_6px_var(--voice-pulse1)]",
+  "bg-voice-pulse2 shadow-[0_0_6px_var(--voice-pulse2)]",
+  "bg-voice-triangle shadow-[0_0_6px_var(--voice-triangle)]",
+  "bg-voice-noise shadow-[0_0_6px_var(--voice-noise)]",
+  "bg-voice-sample shadow-[0_0_6px_var(--voice-sample)]",
+];
 
 type ViewOption = "ruler" | "hover-preview" | "lo-fi";
 
@@ -59,11 +65,15 @@ type TransportBandProps = {
 
 export const TransportBand = memo(function TransportBand(props: TransportBandProps) {
   return (
-    <header className="bg-band text-band-ink">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-2.5 px-4 py-2.5 md:px-6">
-        <div className="flex items-center gap-2.5">
-          <img src="/ochoit-logo.png" alt="" width={28} height={28} className="size-7 rounded-[5px] object-contain" />
-          <h1 className="font-wide text-lg leading-none font-bold">Ochoit</h1>
+    <header className="border-b border-black/60 bg-band bg-linear-to-b from-surface-2 to-band text-band-ink shadow-[0_1px_0_rgb(255_255_255/0.05)]">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-2.5 px-3 py-2.5 md:px-4">
+        <div className="flex items-center gap-2 max-md:flex-1">
+          <span aria-hidden="true" className="flex h-[22px] gap-0.5">
+            {brandStripeClasses.map((stripeClass) => (
+              <i key={stripeClass} className={cn("w-[3px] rounded-[1px]", stripeClass)} />
+            ))}
+          </span>
+          <h1 className="font-wordmark text-[19px] leading-none font-bold tracking-[0.02em]">Ochoit</h1>
         </div>
         <BandPlayback
           engineState={props.engineState}
@@ -108,7 +118,7 @@ function BandPlayback({
   const audioReady = engineState === "running" || engineState === "suspended";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       <Button
         ref={playButtonRef}
         variant={isPlaying ? "primary" : "band"}
@@ -131,8 +141,11 @@ function BandPlayback({
         Stop
       </Button>
       {audioReady ? (
-        <span className="ml-1 inline-flex items-center gap-1.5 text-[13px] text-band-muted">
-          <Volume2 aria-hidden="true" className="size-4" />
+        <span className="ml-1 inline-flex items-center gap-2 text-sm whitespace-nowrap text-band-muted">
+          <span
+            aria-hidden="true"
+            className="size-2 rounded-full bg-beam shadow-[0_0_0_2px_#0d0c0f,0_0_8px_2px_rgb(210_230_255/0.75)]"
+          />
           Audio on
         </span>
       ) : (
@@ -190,7 +203,7 @@ function BandMix({
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 md:border-l md:border-line md:pl-3">
       <BandNumberField
         label="Tempo"
         value={bpm}
@@ -211,15 +224,14 @@ function BandMix({
           onEdit({ type: "set-loop-length", loopLength: nextLoopLength });
         }}
       />
-      <div className="flex items-center gap-2.5">
-        <span aria-hidden="true" className="text-[13px] font-medium text-band-muted">
+      <div className="flex items-center gap-2.5 max-md:w-full">
+        <span aria-hidden="true" className="text-[13.5px] text-band-muted">
           Master
         </span>
         <Slider
           label="Master volume"
-          className="w-24 [&_[data-slot=slider-track]]:bg-band-muted/45"
+          className="w-24 max-md:flex-1"
           accent="var(--band-ink)"
-          thumbClassName="bg-band"
           value={masterPercent}
           min={TRACK_VOLUME_PERCENT_RANGE.min}
           max={TRACK_VOLUME_PERCENT_RANGE.max}
@@ -228,7 +240,10 @@ function BandMix({
             onEdit({ type: "set-master-volume", volume: percent / 100 });
           }}
         />
-        <span aria-hidden="true" className="w-9 text-right text-[13px] text-band-muted tabular-nums">
+        <span
+          aria-hidden="true"
+          className="glass-well glow-text inline-flex h-8 w-[52px] items-center justify-center rounded-control border border-band-edge font-screen text-[22px] leading-none"
+        >
           {masterPercent}%
         </span>
       </div>
@@ -311,8 +326,8 @@ function BandNumberField({
   const [draft, setDraft] = useState<number | null>(null);
 
   return (
-    <Field className="flex-row items-center gap-2">
-      <FieldLabel className="text-band-muted">{label}</FieldLabel>
+    <Field className="flex-row items-center gap-1.5">
+      <FieldLabel className="text-[13.5px] font-normal text-band-muted">{label}</FieldLabel>
       <NumberField
         label={label}
         tone="band"
@@ -348,7 +363,7 @@ function BandActions({
   "onCopyShareLink" | "onDownloadWav" | "onLoadSongFromLink" | "onNewSong" | "onOpenExamples" | "onOpenSongText"
 >) {
   return (
-    <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
+    <div className="flex flex-wrap items-center gap-1.5 xl:ml-auto">
       <Button variant="band" size="sm" onClick={onOpenExamples}>
         <ListMusic aria-hidden="true" />
         Examples

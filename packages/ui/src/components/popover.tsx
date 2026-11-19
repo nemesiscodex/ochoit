@@ -29,7 +29,7 @@ function PopoverContent({
 }
 
 function PopoverTitle({ className, ...props }: StyledProps<typeof PopoverTitlePart>) {
-  return <PopoverTitlePart className={cn("text-sm font-bold font-wide", className)} {...props} />;
+  return <PopoverTitlePart className={cn("font-screen text-[22px] leading-none font-normal", className)} {...props} />;
 }
 
 function PopoverDescription({ className, ...props }: StyledProps<typeof PopoverDescriptionPart>) {

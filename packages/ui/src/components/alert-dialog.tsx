@@ -21,7 +21,7 @@ function AlertDialogContent<Payload = unknown>({ className, ...props }: AlertDia
   return (
     <AlertDialogContentPart<Payload>
       className={cn(
-        "inset-0 m-auto h-fit flex w-[min(28rem,calc(100vw-2rem))] flex-col gap-4 rounded-panel border border-line-strong bg-surface-1 p-5 text-ink shadow-pop",
+        "inset-0 m-auto h-fit flex w-[min(28rem,calc(100vw-2rem))] flex-col gap-4 rounded-panel border border-line bg-surface-1 p-5 text-ink shadow-pop",
         "backdrop:bg-scrim backdrop:backdrop-blur-[2px]",
         "transition-[opacity,translate] duration-150 ease-out data-starting-style:translate-y-2 data-starting-style:opacity-0 data-ending-style:translate-y-2 data-ending-style:opacity-0",
         className,
@@ -33,7 +33,7 @@ function AlertDialogContent<Payload = unknown>({ className, ...props }: AlertDia
 
 function AlertDialogTitle({ className, ...props }: StyledProps<typeof AlertDialogTitlePart>) {
   return (
-    <AlertDialogTitlePart className={cn("text-lg font-bold font-wide tracking-tight text-pretty", className)} {...props} />
+    <AlertDialogTitlePart className={cn("font-screen text-[28px] leading-none font-normal text-pretty", className)} {...props} />
   );
 }
 

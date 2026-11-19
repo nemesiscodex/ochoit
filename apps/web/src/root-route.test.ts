@@ -12,7 +12,7 @@ describe("root route head", () => {
 
     expect(head?.links).toContainEqual({
       rel: "stylesheet",
-      href: "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap",
+      href: "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400..700&family=Silkscreen:wght@400;700&family=VT323&display=swap",
     });
   });
 

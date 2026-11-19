@@ -13,7 +13,7 @@ function DialogContent({ className, ...props }: StyledProps<typeof DialogContent
   return (
     <DialogContentPart
       className={cn(
-        "inset-0 m-auto h-fit flex max-h-[min(44rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-panel border border-line-strong bg-surface-1 p-0 text-ink shadow-pop",
+        "inset-0 m-auto h-fit flex max-h-[min(44rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-panel border border-line bg-surface-1 p-0 text-ink shadow-pop",
         "backdrop:bg-scrim backdrop:backdrop-blur-[2px]",
         "transition-[opacity,translate] duration-150 ease-out data-starting-style:translate-y-2 data-starting-style:opacity-0 data-ending-style:translate-y-2 data-ending-style:opacity-0",
         "data-[presentation=sheet]:mb-0 data-[presentation=sheet]:w-full data-[presentation=sheet]:max-w-none data-[presentation=sheet]:rounded-b-none",
@@ -50,7 +50,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function DialogTitle({ className, ...props }: StyledProps<typeof DialogTitlePart>) {
-  return <DialogTitlePart className={cn("text-lg font-bold font-wide tracking-tight", className)} {...props} />;
+  return <DialogTitlePart className={cn("font-screen text-[28px] leading-none font-normal", className)} {...props} />;
 }
 
 function DialogDescription({ className, ...props }: StyledProps<typeof DialogDescriptionPart>) {

@@ -5,78 +5,68 @@
 @source "../**/*.{ts,tsx}";
 
 /*
- * Ochoit tokens. The light theme is the console's grey plastic with its dark
- * front band; the dark theme keeps the same roles at night. Voice colours come
- * from the NES 2C02 palette and only ever mean "this voice".
+ * Ochoit is the TV the NES was plugged into. The case (band, inspector, dialogs) is dark plastic; the sequencer is
+ * the glowing glass. `crt-glass` re-points the surface and ink tokens at the glass, so a kit component inside it takes
+ * the screen's colours without a second set of class names. Voice colours only ever mean "this voice".
  */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  --surface-0: #d8d9d5;
-  --surface-1: #eeeeeb;
-  --surface-2: #fafaf8;
-  --surface-sunken: #e2e3df;
-  --band: #2d2e32;
-  --band-raised: #3b3c41;
-  --band-edge: #7c7e85;
-  --band-ink: #ecece8;
-  --band-muted: #9fa0a5;
-  --ink: #1b1c1f;
-  --ink-muted: #46484d;
-  --ink-faint: #5f6166;
-  --line: #c4c5c1;
-  --line-strong: #a3a4a0;
-  --signal: #c61f2a;
-  --signal-hover: #ad1a24;
-  --signal-text: #c61f2a;
+  --surface-0: #1e1c21;
+  --surface-1: #242227;
+  --surface-2: #2b2930;
+  --surface-sunken: #141317;
+  --band: #26242a;
+  --band-raised: #34323a;
+  --band-raised-lo: #27252b;
+  --band-edge: #8a8691;
+  --band-ink: #efe9dd;
+  --band-muted: #ada7b2;
+  --ink: #efe9dd;
+  --ink-muted: #ada7b2;
+  --ink-faint: #a29ca8;
+  --line: #3a3740;
+  --line-strong: #8a8691;
+  --signal: #c8202b;
+  --signal-hover: #b01b25;
+  --signal-edge: #ef6a72;
+  --signal-text: #ff8088;
   --signal-ink: #ffffff;
-  --focus: #1f5fd1;
-  --scrim: rgb(27 28 31 / 0.45);
+  --focus: #ffffff;
+  --scrim: rgb(5 4 8 / 0.62);
+
+  --glass: #050912;
+  --glass-lit: #0b1428;
+  --screen-ink: #dbe8ff;
+  --screen-muted: #93a7cc;
+  --screen-edge: #5a74a6;
+  --graticule: rgb(90 130 210 / 0.16);
+  --beam: #eef5ff;
+  --glow: rgb(160 200 255 / 0.55);
 
   --voice-pulse1: #fca044;
   --voice-pulse2: #3cbcfc;
-  --voice-triangle: #58d854;
+  --voice-triangle: #58f898;
   --voice-noise: #9878f8;
   --voice-sample: #f878f8;
-  --voice-ink: #1b1c1f;
+  --voice-ink: #0a0610;
 
-  --shadow-raised: 0 1px 0 rgb(255 255 255 / 0.7) inset, 0 1px 2px rgb(27 28 31 / 0.18);
-  --shadow-pop: 0 12px 32px -12px rgb(27 28 31 / 0.45), 0 2px 6px rgb(27 28 31 / 0.12);
-}
+  /* The bright core of a voice's trace: 62% voice, 38% white. Hex because canvas cannot resolve color-mix(). */
+  --trace-pulse1: #fdc48b;
+  --trace-pulse2: #86d5fd;
+  --trace-triangle: #97fbbf;
+  --trace-noise: #bfabfb;
+  --trace-sample: #fbabfb;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-
-    --surface-0: #232427;
-    --surface-1: #2b2c30;
-    --surface-2: #35363b;
-    --surface-sunken: #1f2023;
-    --band: #18191b;
-    --band-raised: #2a2b2f;
-    --band-edge: #686a70;
-    --band-ink: #ecece8;
-    --band-muted: #93949a;
-    --ink: #ecece8;
-    --ink-muted: #b9bac0;
-    --ink-faint: #999ba0;
-    --line: #3b3c41;
-    --line-strong: #4f5157;
-    --signal: #d63a43;
-    --signal-hover: #c4313a;
-    --signal-text: #ff7b82;
-    --signal-ink: #ffffff;
-    --focus: #6ea2ff;
-    --scrim: rgb(0 0 0 / 0.55);
-
-    --shadow-raised: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 1px 2px rgb(0 0 0 / 0.4);
-    --shadow-pop: 0 16px 40px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.35);
-  }
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 2px 0 #0d0c0f;
+  --shadow-pressed: inset 0 2px 3px rgb(0 0 0 / 0.55), 0 1px 0 #0d0c0f;
+  --shadow-pop: 0 18px 44px -14px rgb(0 0 0 / 0.8), 0 2px 8px rgb(0 0 0 / 0.45);
 }
 
 @theme inline {
-  --font-sans: "Archivo", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+  --font-screen: "VT323", ui-monospace, monospace;
+  --font-wordmark: "Silkscreen", "VT323", monospace;
 
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
@@ -84,6 +74,7 @@
   --color-surface-sunken: var(--surface-sunken);
   --color-band: var(--band);
   --color-band-raised: var(--band-raised);
+  --color-band-raised-lo: var(--band-raised-lo);
   --color-band-edge: var(--band-edge);
   --color-band-ink: var(--band-ink);
   --color-band-muted: var(--band-muted);
@@ -94,10 +85,19 @@
   --color-line-strong: var(--line-strong);
   --color-signal: var(--signal);
   --color-signal-hover: var(--signal-hover);
+  --color-signal-edge: var(--signal-edge);
   --color-signal-text: var(--signal-text);
   --color-signal-ink: var(--signal-ink);
   --color-focus: var(--focus);
   --color-scrim: var(--scrim);
+  --color-glass: var(--glass);
+  --color-glass-lit: var(--glass-lit);
+  --color-screen-ink: var(--screen-ink);
+  --color-screen-muted: var(--screen-muted);
+  --color-screen-edge: var(--screen-edge);
+  --color-graticule: var(--graticule);
+  --color-beam: var(--beam);
+  --color-glow: var(--glow);
   --color-voice-pulse1: var(--voice-pulse1);
   --color-voice-pulse2: var(--voice-pulse2);
   --color-voice-triangle: var(--voice-triangle);
@@ -106,9 +106,10 @@
   --color-voice-ink: var(--voice-ink);
 
   --radius-control: 6px;
-  --radius-panel: 10px;
+  --radius-panel: 14px;
 
   --shadow-raised: var(--shadow-raised);
+  --shadow-pressed: var(--shadow-pressed);
   --shadow-pop: var(--shadow-pop);
 }
 
@@ -121,7 +122,9 @@
   }
 
   body {
-    background: var(--surface-0);
+    background:
+      radial-gradient(120% 80% at 50% 0%, #26242a 0%, var(--surface-0) 60%),
+      var(--surface-0);
     color: var(--ink);
     font-feature-settings: "tnum" 1;
   }
@@ -136,16 +139,86 @@
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--focus) 30%, transparent);
+    background: color-mix(in srgb, var(--screen-edge) 55%, transparent);
   }
 }
 
-@utility font-wide {
-  font-stretch: 125%;
+@utility glow-text {
+  text-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
 }
 
-@utility font-narrow {
-  font-stretch: 75%;
+@utility crt-rim {
+  padding: 9px;
+  border-radius: 32px;
+  background: linear-gradient(180deg, #121115, #0c0b0e);
+  box-shadow:
+    inset 0 2px 6px rgb(0 0 0 / 0.8),
+    0 1px 0 rgb(255 255 255 / 0.06),
+    0 -1px 0 rgb(0 0 0 / 0.6);
+
+  @media (max-width: 47.99rem) {
+    padding: 7px;
+    border-radius: 24px;
+  }
+}
+
+/* Scanlines and the vignette are background layers, under the content, so they never dim text. */
+@utility crt-glass {
+  --surface-0: var(--glass);
+  --surface-1: var(--glass-lit);
+  --surface-2: #111d38;
+  --surface-sunken: #070d1c;
+  --ink: var(--screen-ink);
+  --ink-muted: var(--screen-muted);
+  --ink-faint: var(--screen-muted);
+  --line: rgb(90 130 210 / 0.24);
+  --line-strong: var(--screen-edge);
+  --shadow-raised: none;
+  --shadow-pop: 0 0 0 1px var(--screen-edge), 0 18px 44px -14px rgb(0 0 0 / 0.9);
+
+  border-radius: 26px / 24px;
+  color: var(--screen-ink);
+  background:
+    repeating-linear-gradient(180deg, transparent 0 2px, rgb(0 0 0 / 0.17) 2px 3px),
+    radial-gradient(70% 55% at 22% 0%, rgb(140 175 255 / 0.07), transparent 70%),
+    radial-gradient(85% 90% at 50% 48%, var(--glass-lit) 0%, #08101f 55%, var(--glass) 100%);
+  box-shadow: inset 0 0 40px 4px rgb(0 0 0 / 0.65);
+
+  @media (max-width: 47.99rem) {
+    border-radius: 18px;
+    box-shadow: inset 0 0 24px 2px rgb(0 0 0 / 0.6);
+  }
+}
+
+@utility glass-well {
+  background: radial-gradient(120% 120% at 50% 40%, var(--glass-lit), var(--glass));
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.7);
+  color: var(--screen-ink);
+}
+
+/* The canvas draws the centre line, so the graticule is only the grid. */
+@utility graticule {
+  background-color: rgb(10 20 40 / 0.6);
+  background-image:
+    linear-gradient(90deg, var(--graticule) 1px, transparent 1px),
+    linear-gradient(180deg, var(--graticule) 1px, transparent 1px);
+  background-size: 33px 100%, 100% 15px;
+  background-position: -1px 0, 0 -1px;
+  box-shadow: inset 0 0 0 1px rgb(90 130 210 / 0.22);
+}
+
+@utility fader-cap {
+  border: 1px solid #0d0c0f;
+  background: repeating-linear-gradient(90deg, #d9d4ca 0 2px, #9f9a91 2px 3px);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.6);
+}
+
+@utility beam {
+  background-image: linear-gradient(90deg, rgb(200 222 255 / 0.06), rgb(200 222 255 / 0.2) 50%, rgb(200 222 255 / 0.06));
+  box-shadow:
+    inset 2px 0 0 var(--beam),
+    inset -2px 0 0 var(--beam),
+    0 0 14px 1px rgb(170 205 255 / 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {

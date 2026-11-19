@@ -11,14 +11,17 @@ const buttonVariants = cva(
         default:
           "border-line-strong bg-surface-2 text-ink shadow-raised hover:bg-surface-1 aria-expanded:bg-surface-1 data-open:bg-surface-1",
         outline:
-          "border-line bg-transparent text-ink hover:border-line-strong hover:bg-surface-2 aria-expanded:bg-surface-2 data-open:bg-surface-2",
+          "border-line-strong bg-transparent text-ink hover:bg-surface-2 aria-expanded:bg-surface-2 data-open:bg-surface-2",
         ghost:
-          "border-transparent bg-transparent text-ink-muted hover:bg-surface-sunken hover:text-ink aria-expanded:bg-surface-sunken data-open:bg-surface-sunken",
-        primary: "border-signal bg-signal text-signal-ink shadow-raised hover:border-signal-hover hover:bg-signal-hover",
+          "border-transparent bg-transparent text-ink-muted hover:bg-surface-2 hover:text-ink aria-expanded:bg-surface-2 data-open:bg-surface-2",
+        primary:
+          "border-signal-edge bg-signal bg-linear-to-b from-[color-mix(in_srgb,var(--signal)_88%,white)] to-signal text-signal-ink shadow-raised hover:to-signal-hover",
         danger:
-          "border-line bg-transparent text-signal-text hover:border-signal hover:bg-signal hover:text-signal-ink",
+          "border-line-strong bg-transparent text-signal-text hover:border-signal-edge hover:bg-signal hover:text-signal-ink",
         band:
-          "border-band-edge bg-band-raised text-band-ink hover:border-band-muted/60 hover:bg-band-raised/70 aria-expanded:border-band-muted data-open:border-band-muted",
+          "border-band-edge bg-linear-to-b from-band-raised to-band-raised-lo font-semibold text-band-ink shadow-raised hover:from-[color-mix(in_srgb,var(--band-raised)_88%,white)] aria-expanded:shadow-pressed data-open:shadow-pressed",
+        screen:
+          "border-screen-edge bg-screen-edge/10 text-screen-ink hover:bg-screen-edge/25 aria-expanded:bg-screen-edge/25 data-open:bg-screen-edge/25",
       },
       size: {
         default: "h-9 px-3",

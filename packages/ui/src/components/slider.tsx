@@ -18,7 +18,8 @@ type SliderProps = Omit<
   onValueCommit?: (value: number) => void;
   label: string;
   accent?: string;
-  thumbClassName?: string;
+  // "fader" is the ribbed cap on the case; "glow" is the lit bar used on the screen.
+  look?: "fader" | "glow";
 };
 
 function Slider({
@@ -28,7 +29,7 @@ function Slider({
   onValueCommit,
   label,
   accent = "var(--ink)",
-  thumbClassName,
+  look = "fader",
   style,
   ...props
 }: SliderProps) {
@@ -44,13 +45,22 @@ function Slider({
       {...props}
     >
       <SliderControl className="flex h-6 w-full cursor-pointer items-center touch-none group-data-disabled/slider:cursor-not-allowed">
-        <SliderTrack className="relative h-1.5 w-full rounded-full bg-line">
+        <SliderTrack
+          className={cn(
+            "relative w-full rounded-full",
+            look === "fader"
+              ? "h-1.5 bg-surface-sunken shadow-[inset_0_1px_2px_rgb(0_0_0/0.8),0_0_0_1px_var(--line-strong)]"
+              : "h-1 bg-line-strong shadow-[0_0_6px_color-mix(in_srgb,var(--slider-accent)_40%,transparent)]",
+          )}
+        >
           <SliderIndicator className="h-full rounded-full bg-(--slider-accent)" />
           <SliderThumb
             aria-label={label}
             className={cn(
-              "top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-(--slider-accent) bg-surface-2 shadow-raised transition-[scale] duration-100 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus data-dragging:scale-110",
-              thumbClassName,
+              "top-1/2 -translate-x-1/2 -translate-y-1/2 transition-[scale] duration-100 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus data-dragging:scale-110",
+              look === "fader"
+                ? "fader-cap h-5 w-3.5 rounded-[3px]"
+                : "h-4 w-2 rounded-[2px] bg-white shadow-[0_0_6px_var(--slider-accent)]",
             )}
           />
         </SliderTrack>

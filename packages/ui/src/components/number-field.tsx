@@ -27,10 +27,8 @@ function NumberField({
   inputClassName,
   ...props
 }: NumberFieldProps) {
-  const stepperClass = cn(
-    "inline-flex h-full w-7 shrink-0 cursor-pointer items-center justify-center transition-colors data-disabled:cursor-not-allowed data-disabled:opacity-40 [&_svg]:size-3.5",
-    tone === "band" ? "text-band-muted hover:text-band-ink" : "text-ink-faint hover:text-ink",
-  );
+  const stepperClass =
+    "inline-flex h-full w-7 shrink-0 cursor-pointer items-center justify-center text-screen-muted transition-colors hover:text-screen-ink data-disabled:cursor-not-allowed data-disabled:opacity-40 [&_svg]:size-3.5";
 
   return (
     <NumberInput
@@ -43,8 +41,8 @@ function NumberField({
     >
       <NumberInputGroup
         className={cn(
-          "inline-flex h-9 items-stretch overflow-hidden rounded-control border transition-colors focus-within:border-focus",
-          tone === "band" ? "border-band-edge bg-band-raised" : "border-line-strong bg-surface-2",
+          "glass-well inline-flex h-8 items-stretch overflow-hidden rounded-control border transition-colors focus-within:border-focus",
+          tone === "band" ? "border-band-edge" : "border-line-strong",
         )}
       >
         {steppers ? (
@@ -55,8 +53,7 @@ function NumberField({
         <NumberInputControl
           aria-label={label}
           className={cn(
-            "w-12 min-w-0 bg-transparent text-center text-sm font-semibold tabular-nums outline-none",
-            tone === "band" ? "text-band-ink" : "text-ink",
+            "glow-text w-12 min-w-0 bg-transparent text-center font-screen text-[24px] leading-none text-screen-ink outline-none",
             inputClassName,
           )}
         />

@@ -465,7 +465,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
   });
 
   return (
-    <div className="flex min-h-svh flex-col bg-surface-0 text-ink">
+    <div className="flex min-h-svh flex-col text-ink">
       <a
         href="#sequencer"
         className="sr-only rounded-control bg-surface-2 px-3 py-2 text-sm font-medium text-ink shadow-pop focus:not-sr-only focus:absolute focus:top-2 focus:left-2"
@@ -495,7 +495,7 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
         onNewSong={onNewSong}
       />
 
-      <main className="mx-auto grid w-full max-w-[1600px] flex-1 content-start gap-4 px-4 py-4 md:px-6 md:py-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <main className="mx-auto grid w-full max-w-[1600px] flex-1 content-start gap-3.5 px-2 pt-2.5 pb-4 md:gap-[18px] md:px-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {errorMessage === null ? null : (
           <div
             role="alert"
@@ -524,7 +524,10 @@ export function WorkstationShell({ initialSong }: WorkstationShellProps) {
           />
         </section>
 
-        <aside aria-label="Inspector" className="min-w-0 self-start rounded-panel border border-line bg-surface-1">
+        <aside
+          aria-label="Inspector"
+          className="min-w-0 self-start overflow-hidden rounded-2xl border border-line bg-surface-1 bg-linear-to-b from-surface-1 to-surface-0 shadow-[inset_0_1px_0_rgb(255_255_255/0.05),0_8px_24px_-10px_rgb(0_0_0/0.7)]"
+        >
           <Tabs defaultValue="samples">
             <TabsList aria-label="Inspector">
               <TabsTab value="samples">Samples</TabsTab>
