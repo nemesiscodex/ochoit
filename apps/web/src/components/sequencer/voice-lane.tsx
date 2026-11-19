@@ -13,7 +13,12 @@ import { previewWaveformByTrackId } from "@/features/audio/waveform-data";
 import type { RecordTrackId } from "@/features/sequencer/quantized-recorder";
 import type { StepDrag } from "@/features/sequencer/step-drag";
 import { TRACK_VOLUME_PERCENT_RANGE, toTrackVolumePercent } from "@/features/song/song-mixer";
-import { labelByTrackId, voiceClassesByTrackId } from "@/components/sequencer-theme";
+import {
+  labelByTrackId,
+  voiceStyle,
+  waveformGlowColorByTrackId,
+  waveformLineColorByTrackId,
+} from "@/components/sequencer-theme";
 import { StepDetailPanel } from "@/components/step-detail-panel";
 import { TrackWaveformCanvas } from "@/components/waveform-canvas";
 import { laneColumnsClass } from "@/components/sequencer/grid-geometry";
@@ -60,7 +65,8 @@ export const VoiceLane = memo(function VoiceLane({
   return (
     <div
       data-voice-lane={track.id}
-      className={cn("grid", laneColumnsClass, isRecording && "bg-signal/5 inset-ring-2 inset-ring-signal")}
+      className={cn("grid py-[5px]", laneColumnsClass, isRecording && "bg-signal/5 inset-ring-2 inset-ring-signal")}
+      style={voiceStyle(track.id)}
     >
       <LaneHead
         engine={engine}
@@ -73,7 +79,7 @@ export const VoiceLane = memo(function VoiceLane({
         trackId={track.id}
         volume={track.volume}
       />
-      <div className="min-w-0 self-center p-3">
+      <div className="flex min-w-0 flex-col py-1 max-lg:pt-1.5">
         <CompactStepGrid
           dragState={dragState}
           engineMode={engineMode}
@@ -127,12 +133,15 @@ const LaneHead = memo(function LaneHead({
   const volumePercent = toTrackVolumePercent(volume);
 
   return (
-    <div className="relative flex min-w-0 flex-col gap-2 border-b border-line py-3 pr-3 pl-5 lg:border-r lg:border-b-0">
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1.5", voiceClassesByTrackId[trackId].swatch)} />
-      <div className="flex items-center gap-1">
-        <h3 className="mr-auto min-w-0 truncate font-wide text-sm font-bold">{label}</h3>
+    <div className="flex min-w-0 flex-col gap-[5px] pt-1.5 pb-1 lg:pr-3">
+      <div className="flex items-center gap-[5px]">
+        <h3 className="mr-auto min-w-0 truncate font-screen text-[27px] leading-[0.9] font-normal text-(--voice) [text-shadow:0_0_9px_color-mix(in_srgb,var(--voice)_70%,transparent)]">
+          {label}
+        </h3>
         <Toggle
-          size="icon-sm"
+          variant="screen"
+          size="icon-xs"
+          className="h-[26px] w-7"
           aria-label={`${muted ? "Unmute" : "Mute"} ${label}`}
           pressed={muted}
           onPressedChange={() => {
@@ -147,7 +156,8 @@ const LaneHead = memo(function LaneHead({
               render={
                 <Toggle
                   variant="signal"
-                  size="icon-sm"
+                  size="icon-xs"
+                  className="h-[26px] w-7"
                   aria-label={`${isRecording ? "Stop recording" : "Record"} ${label}`}
                   pressed={isRecording}
                   onPressedChange={() => {
@@ -163,30 +173,24 @@ const LaneHead = memo(function LaneHead({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <Button
-          variant="ghost"
-          size="xs"
-          aria-label={`Edit ${label} arrangement as text`}
-          onClick={() => {
-            onOpenArrangementEditor(trackId);
-          }}
-        >
-          <FileText aria-hidden="true" />
-          Edit as text
-        </Button>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="h-9 min-w-0 flex-1 overflow-hidden rounded-control bg-surface-sunken">
-          <TrackWaveformCanvas
-            ariaLabel={`${label} waveform`}
-            className={voiceClassesByTrackId[trackId].wave}
-            engine={engine}
-            fallbackWaveform={previewWaveformByTrackId[trackId]}
-            trackId={trackId}
-          />
-        </div>
-        <div className={cn("flex w-28 shrink-0 items-center gap-2", muted && "opacity-60")}>
+      <div className="graticule relative h-16 overflow-hidden rounded-[4px]">
+        <TrackWaveformCanvas
+          ariaLabel={`${label} waveform`}
+          className="absolute inset-x-0 top-1 h-[calc(100%-0.5rem)]"
+          engine={engine}
+          fallbackWaveform={previewWaveformByTrackId[trackId]}
+          glowColor={waveformGlowColorByTrackId[trackId]}
+          lineColor={waveformLineColorByTrackId[trackId]}
+          trackId={trackId}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className={cn("flex min-w-0 flex-1 items-center gap-2.5", muted && "opacity-60")}>
           <Slider
+            look="glow"
+            accent="var(--voice)"
+            className="min-w-12 flex-1"
             label={`${label} volume`}
             min={TRACK_VOLUME_PERCENT_RANGE.min}
             max={TRACK_VOLUME_PERCENT_RANGE.max}
@@ -196,8 +200,20 @@ const LaneHead = memo(function LaneHead({
               onEdit({ type: "set-track-volume", trackId, volume: next / TRACK_VOLUME_PERCENT_RANGE.max });
             }}
           />
-          <span className="w-9 shrink-0 text-right text-xs tabular-nums text-ink-muted">{volumePercent}%</span>
+          <span className="w-9 shrink-0 font-screen text-[19px] leading-none text-ink-muted">{volumePercent}%</span>
         </div>
+        <Button
+          variant="screen"
+          size="xs"
+          className="h-[26px] text-[13px]"
+          aria-label={`Edit ${label} arrangement as text`}
+          onClick={() => {
+            onOpenArrangementEditor(trackId);
+          }}
+        >
+          <FileText aria-hidden="true" />
+          Edit as text
+        </Button>
       </div>
     </div>
   );

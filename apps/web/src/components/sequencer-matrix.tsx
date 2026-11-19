@@ -545,53 +545,55 @@ export function SequencerMatrix({
   }, []);
 
   return (
-    <div className="overflow-hidden rounded-panel border border-line bg-surface-1 text-ink">
-      {rulerVisible ? (
-        <PatternHeader
-          activeKeyboardKey={activeKeyboardKey}
-          canUseBeatGrid={canUpdateSongStepsPerBeat(song, SONG_BEAT_GRID_STEPS_PER_BEAT)}
-          canUseEighthGrid={canUpdateSongStepsPerBeat(song, SONG_EIGHTH_GRID_STEPS_PER_BEAT)}
-          keyboardBaseOctave={keyboardBaseOctave}
-          keyboardBindings={keyboardBindings}
-          keyboardModeEnabled={keyboardModeEnabled}
-          isPlaying={isPlaying}
-          keyboardTargetLabel={keyboardNoteTarget?.label ?? null}
-          keyboardTargetNote={keyboardNoteTarget?.note ?? null}
-          loopLength={song.transport.loopLength}
-          onKeyboardBaseOctaveDecrease={lowerKeyboardOctave}
-          onKeyboardBaseOctaveIncrease={raiseKeyboardOctave}
-          onEdit={editSong}
-          onToggleKeyboardMode={toggleKeyboardModeFromRuler}
-          playhead={playhead}
-          recordingTrackId={recordingTrackId}
-          stepsPerBeat={song.transport.stepsPerBeat}
-        />
-      ) : null}
-      <div className="divide-y divide-line">
-        {tracks.map((track) => {
-          const isSelectedTrack = selection?.trackId === track.id;
+    <div className="crt-rim">
+      <div className="crt-glass overflow-hidden px-3 pt-3.5 pb-3.5 md:px-6 md:pt-4">
+        {rulerVisible ? (
+          <PatternHeader
+            activeKeyboardKey={activeKeyboardKey}
+            canUseBeatGrid={canUpdateSongStepsPerBeat(song, SONG_BEAT_GRID_STEPS_PER_BEAT)}
+            canUseEighthGrid={canUpdateSongStepsPerBeat(song, SONG_EIGHTH_GRID_STEPS_PER_BEAT)}
+            keyboardBaseOctave={keyboardBaseOctave}
+            keyboardBindings={keyboardBindings}
+            keyboardModeEnabled={keyboardModeEnabled}
+            isPlaying={isPlaying}
+            keyboardTargetLabel={keyboardNoteTarget?.label ?? null}
+            keyboardTargetNote={keyboardNoteTarget?.note ?? null}
+            loopLength={song.transport.loopLength}
+            onKeyboardBaseOctaveDecrease={lowerKeyboardOctave}
+            onKeyboardBaseOctaveIncrease={raiseKeyboardOctave}
+            onEdit={editSong}
+            onToggleKeyboardMode={toggleKeyboardModeFromRuler}
+            playhead={playhead}
+            recordingTrackId={recordingTrackId}
+            stepsPerBeat={song.transport.stepsPerBeat}
+          />
+        ) : null}
+        <div className="divide-y divide-graticule border-t border-graticule">
+          {tracks.map((track) => {
+            const isSelectedTrack = selection?.trackId === track.id;
 
-          return (
-            <VoiceLane
-              key={track.id}
-              dragState={drag?.trackId === track.id ? drag : null}
-              engine={engine}
-              engineMode={song.meta.engineMode}
-              isPlaying={isPlaying}
-              isRecording={recordingTrackId === track.id}
-              onEdit={editSong}
-              onOpenArrangementEditor={openArrangementEditor}
-              onRowAction={onRowAction}
-              playhead={playhead}
-              recordTrackId={isRecordTarget(song, track.id) ? track.id : null}
-              samples={song.samples}
-              selectedStepIndex={isSelectedTrack ? selection.anchorStepIndex : null}
-              selectedStepIndexes={isSelectedTrack ? selection.selectedStepIndexes : noSelectedSteps}
-              stepDurationMs={stepDurationMs}
-              track={track}
-            />
-          );
-        })}
+            return (
+              <VoiceLane
+                key={track.id}
+                dragState={drag?.trackId === track.id ? drag : null}
+                engine={engine}
+                engineMode={song.meta.engineMode}
+                isPlaying={isPlaying}
+                isRecording={recordingTrackId === track.id}
+                onEdit={editSong}
+                onOpenArrangementEditor={openArrangementEditor}
+                onRowAction={onRowAction}
+                playhead={playhead}
+                recordTrackId={isRecordTarget(song, track.id) ? track.id : null}
+                samples={song.samples}
+                selectedStepIndex={isSelectedTrack ? selection.anchorStepIndex : null}
+                selectedStepIndexes={isSelectedTrack ? selection.selectedStepIndexes : noSelectedSteps}
+                stepDurationMs={stepDurationMs}
+                track={track}
+              />
+            );
+          })}
+        </div>
       </div>
     </div>
   );

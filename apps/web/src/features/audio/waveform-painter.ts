@@ -117,16 +117,19 @@ export function createWaveformPainter(canvas: HTMLCanvasElement) {
       }
     };
 
+    context.lineJoin = "round";
+
+    // A wide translucent stroke is the CRT halo; a canvas shadowBlur or CSS filter would cost a blur every frame.
     context.save();
-    context.globalAlpha = 0.45;
+    context.globalAlpha = 0.24;
     context.strokeStyle = colors.glowColor;
-    context.lineWidth = 3;
+    context.lineWidth = 7;
     drawWavePath();
     context.stroke();
     context.restore();
 
     context.strokeStyle = colors.lineColor;
-    context.lineWidth = 1.5;
+    context.lineWidth = 2;
     drawWavePath();
     context.stroke();
   };

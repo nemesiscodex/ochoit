@@ -13,12 +13,12 @@ import { memo, useMemo, useRef, type MouseEvent as ReactMouseEvent, type RefObje
 import type { PlayheadStore } from "@/features/audio/playhead-store";
 import { usePlayheadSelector } from "@/features/audio/use-playhead-selector";
 import type { StepDrag } from "@/features/sequencer/step-drag";
-import { labelByTrackId, voiceClassesByTrackId } from "@/components/sequencer-theme";
+import { labelByTrackId } from "@/components/sequencer-theme";
 import {
   beatEdgeClass,
   getGridMetrics,
   stepGridClass,
-  stepHeightPx,
+  stepsPerBeatGroup,
   useStepColumnCount,
 } from "@/components/sequencer/grid-geometry";
 import type { DragPreview, RowAction } from "@/components/sequencer/row-action";
@@ -27,12 +27,25 @@ const noSelectedStepIndexSet: ReadonlySet<number> = new Set();
 const gridCellChunkSize = 16;
 
 const cellBaseClass =
-  "relative flex h-12 min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[5px] text-xs font-semibold tabular-nums select-none transition-[background-color,box-shadow] duration-100";
-const emptyWellClass = "bg-surface-sunken text-ink-faint hover:bg-line";
-const filledInsetClass = "inset-ring inset-ring-voice-ink/25";
-const selectedClass = "ring-2 ring-ink ring-offset-2 ring-offset-surface-1";
+  "relative flex min-h-12 min-w-0 cursor-pointer touch-manipulation items-center justify-center rounded-[4px] border font-screen text-[24px] leading-none select-none transition-[background-color,box-shadow,border-color] duration-100 focus-visible:z-20 max-md:text-[21px]";
+const filledClass =
+  "border-[1.5px] border-(--voice) bg-(--voice)/13 text-[color-mix(in_srgb,var(--voice)_82%,white)] shadow-[0_0_10px_-2px_color-mix(in_srgb,var(--voice)_55%,transparent),inset_0_0_12px_-4px_color-mix(in_srgb,var(--voice)_60%,transparent)] [text-shadow:0_0_7px_color-mix(in_srgb,var(--voice)_75%,transparent)]";
+const selectedFilledClass =
+  "border-[1.5px] border-(--voice) bg-(--voice) text-voice-ink shadow-[0_0_16px_1px_color-mix(in_srgb,var(--voice)_70%,transparent)] [text-shadow:none]";
+const selectedEmptyClass =
+  "border-[1.5px] border-(--voice) bg-(--voice)/22 shadow-[0_0_12px_color-mix(in_srgb,var(--voice)_55%,transparent)]";
 const playheadClass =
-  "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:bg-ink/18";
+  "after:pointer-events-none after:absolute after:-inset-x-[3px] after:-inset-y-[3px] after:z-10 after:rounded-[3px] after:beam";
+
+function emptyCellClass(index: number) {
+  return index % stepsPerBeatGroup === 0
+    ? "border-screen-muted/75 bg-screen-edge/15 hover:bg-screen-edge/30"
+    : "border-screen-edge bg-screen-edge/8 hover:bg-screen-edge/25";
+}
+
+function EmptyDot() {
+  return <i aria-hidden="true" className="size-1 bg-screen-muted/50" />;
+}
 
 type TriggerCellData = {
   enabled: boolean;
@@ -162,7 +175,7 @@ export const CompactStepGrid = memo(function CompactStepGrid({
     // Separate memoized layers: a drag move re-renders only the preview layer, and a step edit or
     // selection change leaves the layer it does not touch alone.
     return (
-      <div ref={gridRef} className="relative" role="group" aria-label={gridLabel} data-step-grid="">
+      <div ref={gridRef} className="relative flex-1" role="group" aria-label={gridLabel} data-step-grid="">
         <MelodicGridCellLayer
           isPlaying={isPlaying}
           onRowAction={onRowAction}
@@ -173,7 +186,7 @@ export const CompactStepGrid = memo(function CompactStepGrid({
         />
         <div
           className={cn("pointer-events-none absolute inset-0", stepGridClass)}
-          style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, ${stepHeightPx}px))` }}
+          style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
         >
           <MelodicSegmentLayer
             gridRef={gridRef}
@@ -199,7 +212,7 @@ export const CompactStepGrid = memo(function CompactStepGrid({
   }
 
   return (
-    <div ref={gridRef} className={stepGridClass} role="group" aria-label={gridLabel} data-step-grid="">
+    <div ref={gridRef} className={cn(stepGridClass, "flex-1")} role="group" aria-label={gridLabel} data-step-grid="">
       {triggerCells.map((cellData, index) => {
         const isDragPreview =
           dragState?.mode === "move" &&
@@ -230,8 +243,8 @@ export const CompactStepGrid = memo(function CompactStepGrid({
 
 function VolumeBar({ volume, width = "100%" }: { volume: number; width?: string }) {
   return (
-    <span aria-hidden className="absolute bottom-1.5 left-1.5 h-0.5 rounded-full bg-voice-ink/15" style={{ width: `calc(${width} - 0.75rem)` }}>
-      <span className="block h-full rounded-full bg-voice-ink/60" style={{ width: `${volume * 100}%` }} />
+    <span aria-hidden className="absolute bottom-1.5 left-1.5 h-0.5 rounded-full bg-current/20" style={{ width: `calc(${width} - 0.75rem)` }}>
+      <span className="block h-full rounded-full bg-current/70" style={{ width: `${volume * 100}%` }} />
     </span>
   );
 }
@@ -290,11 +303,10 @@ const TriggerStepCell = memo(function TriggerStepCell({
       className={cn(
         cellBaseClass,
         beatEdgeClass(index),
-        enabled ? cn(voiceClassesByTrackId[trackId].fill, filledInsetClass) : emptyWellClass,
+        enabled ? (isSelected ? selectedFilledClass : filledClass) : isSelected ? selectedEmptyClass : emptyCellClass(index),
         dragPreview === "valid" && "outline-2 outline-offset-1 outline-ink/60 outline-dashed",
         dragPreview === "invalid" && "bg-signal/15 outline-2 outline-offset-1 outline-signal outline-dashed",
         isActive && playheadClass,
-        isSelected && selectedClass,
       )}
       onMouseEnter={() => {
         onRowAction({ type: "preview-step", trackId, stepIndex: index });
@@ -314,7 +326,9 @@ const TriggerStepCell = memo(function TriggerStepCell({
           <span className="max-w-full truncate px-1 pb-1">{label}</span>
           <VolumeBar volume={volume} />
         </>
-      ) : null}
+      ) : (
+        <EmptyDot />
+      )}
     </button>
   );
 });
@@ -343,7 +357,7 @@ const MelodicGridCellLayer = memo(function MelodicGridCellLayer({
   );
 
   return (
-    <div className={stepGridClass}>
+    <div className={cn(stepGridClass, "h-full")}>
       {chunkStarts.map((start) => (
         <MelodicGridCellChunk
           key={start}
@@ -455,9 +469,8 @@ const MelodicGridCell = memo(function MelodicGridCell({
       className={cn(
         cellBaseClass,
         beatEdgeClass(index),
-        isOccupiedByNote ? "pointer-events-none invisible" : emptyWellClass,
+        isOccupiedByNote ? "pointer-events-none invisible" : isSelected ? selectedEmptyClass : emptyCellClass(index),
         isActive && playheadClass,
-        isSelected && selectedClass,
       )}
       onMouseEnter={() => {
         onRowAction({ type: "preview-step", trackId, stepIndex: index });
@@ -465,7 +478,9 @@ const MelodicGridCell = memo(function MelodicGridCell({
       onClick={(event) => {
         onRowAction({ type: "select-step", trackId, stepIndex: index, shiftKey: event.shiftKey });
       }}
-    />
+    >
+      {isOccupiedByNote ? null : <EmptyDot />}
+    </button>
   );
 });
 
@@ -530,16 +545,18 @@ const MelodicNoteBlock = memo(function MelodicNoteBlock({
       aria-label={segment.isFirstSegment ? stepName : `${stepName} continuation`}
       aria-selected={isSelected || undefined}
       className={cn(
-        "pointer-events-auto relative z-10 flex h-full min-w-0 cursor-grab touch-manipulation items-start overflow-hidden rounded-[5px] px-1 pt-1.5 md:px-2 text-left text-xs font-semibold tabular-nums select-none",
+        "pointer-events-auto relative z-10 flex h-full min-w-0 cursor-grab touch-manipulation items-center rounded-[4px] border font-screen text-[24px] leading-none select-none focus-visible:z-20 max-md:text-[21px]",
+        segment.columnSpan === 1 ? "justify-center" : "justify-start px-2",
         beatEdgeClass(segment.segmentStepIndex, segment.segmentStepIndex + segment.columnSpan - 1),
         segment.isPreview
           ? segment.isPreviewInvalid
-            ? "bg-signal/15 text-ink outline-2 -outline-offset-2 outline-signal outline-dashed"
-            : "bg-surface-2/70 text-ink outline-2 -outline-offset-2 outline-ink/60 outline-dashed"
-          : cn(voiceClassesByTrackId[trackId].fill, filledInsetClass),
-        !segment.isFirstSegment && "rounded-l-none",
-        !segment.isLastSegment && "rounded-r-none",
-        isSelected && selectedClass,
+            ? "border-transparent bg-signal/15 text-ink outline-2 -outline-offset-2 outline-signal outline-dashed"
+            : "border-transparent bg-surface-2/70 text-ink outline-2 -outline-offset-2 outline-ink/60 outline-dashed"
+          : isSelected
+            ? selectedFilledClass
+            : filledClass,
+        !segment.isFirstSegment && "rounded-l-none border-l-0",
+        !segment.isLastSegment && "rounded-r-none border-r-0",
       )}
       style={{ gridColumn: `${segment.columnStart} / span ${segment.columnSpan}`, gridRow: segment.rowIndex + 1 }}
       onMouseEnter={() => {
@@ -558,7 +575,7 @@ const MelodicNoteBlock = memo(function MelodicNoteBlock({
       {isActive ? (
         <PlayheadSweep columnSpan={segment.columnSpan} playhead={playhead} segmentStepIndex={segment.segmentStepIndex} />
       ) : null}
-      {segment.isFirstSegment ? <span className="relative truncate">{segment.label}</span> : null}
+      {segment.isFirstSegment ? <span className="relative truncate pb-1">{segment.label}</span> : null}
       {segment.isFirstSegment && !segment.isPreview ? (
         <VolumeBar volume={segment.volume} width={`${100 / segment.columnSpan}%`} />
       ) : null}
@@ -600,7 +617,7 @@ function ResizeHandle({
       aria-hidden
       data-resize-handle={label}
       className={cn(
-        "absolute inset-y-0 w-2.5 cursor-ew-resize after:absolute after:inset-y-2 after:w-0.5 after:rounded-full after:bg-voice-ink/0 after:transition-colors hover:after:bg-voice-ink/45",
+        "absolute inset-y-0 w-2.5 cursor-ew-resize after:absolute after:inset-y-2 after:w-0.5 after:rounded-full after:bg-current/0 after:transition-colors hover:after:bg-current/60",
         edge === "left" ? "left-0 after:left-1" : "right-0 after:right-1",
       )}
       onPointerDown={onStart}
@@ -624,7 +641,7 @@ const PlayheadSweep = memo(function PlayheadSweep({
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 bg-ink/18"
+      className="beam pointer-events-none absolute inset-y-0 rounded-[3px]"
       style={{ width: `${100 / columnSpan}%`, left: `${(100 / columnSpan) * offset}%` }}
     />
   );

@@ -1,5 +1,5 @@
 import { Toggle, ToggleGroup } from "@ochoit/ui/components/toggle";
-import { Toolbar, ToolbarButton, ToolbarGroup, ToolbarSeparator } from "@ochoit/ui/components/toolbar";
+import { Toolbar, ToolbarButton, ToolbarGroup } from "@ochoit/ui/components/toolbar";
 import { cn } from "@ochoit/ui/lib/utils";
 import { Keyboard, Minus, Plus } from "lucide-react";
 import {
@@ -75,16 +75,16 @@ export const PatternHeader = memo(function PatternHeader({
           : `${keyboardTargetLabel} is ready for keyboard note entry.`;
 
   return (
-    <div className="border-b border-line">
-      <div className="flex flex-col gap-3 px-3 pt-3 pb-2 lg:flex-row lg:items-start lg:justify-between lg:px-4">
+    <div>
+      <div className="flex flex-col gap-2.5 pb-1 lg:flex-row lg:items-end lg:justify-between lg:gap-[18px]">
         <div className="min-w-0">
-          <h2 className="font-wide text-base font-bold">Pattern ruler</h2>
-          <p className="mt-0.5 text-sm text-ink-muted">
+          <h2 className="glow-text font-screen text-[32px] leading-[0.9] font-normal">Pattern ruler</h2>
+          <p className="mt-1.5 text-[13.5px] text-ink-muted">
             {loopLength} step loop. Select empty steps, then press Enter to add.
           </p>
           <p
             aria-live="polite"
-            className={cn("mt-0.5 text-sm", recordingTrackId !== null ? "font-semibold text-signal-text" : "text-ink-muted")}
+            className={cn("text-[13.5px]", recordingTrackId !== null ? "font-semibold text-signal-text" : "text-ink-muted")}
           >
             {keyboardTargetSummary}
           </p>
@@ -112,7 +112,7 @@ export const PatternHeader = memo(function PatternHeader({
       ) : null}
       <div className={cn("grid", laneColumnsClass)}>
         <div aria-hidden className="hidden lg:block" />
-        <div className="px-3 pt-1 pb-2">
+        <div className="pt-1 pb-1.5">
           <StepRuler isPlaying={isPlaying} loopLength={loopLength} playhead={playhead} />
         </div>
       </div>
@@ -149,9 +149,10 @@ const PatternToolbar = memo(function PatternToolbar({
   const canUseGrid: Record<GridChoice, boolean> = { beat: canUseBeatGrid, eighth: canUseEighthGrid };
 
   return (
-    <Toolbar aria-label="Pattern" className="lg:justify-end">
-      <ToolbarGroup aria-label="Loop length">
+    <Toolbar aria-label="Pattern" className="gap-x-2.5 lg:justify-end">
+      <ToolbarGroup aria-label="Loop length" className="gap-1.5">
         <ToolbarButton
+          variant="screen"
           size="icon-sm"
           aria-label="Remove 4 steps"
           disabled={loopLength <= SONG_LOOP_LENGTH_RANGE.min}
@@ -161,8 +162,9 @@ const PatternToolbar = memo(function PatternToolbar({
         >
           <Minus aria-hidden="true" />
         </ToolbarButton>
-        <span className="min-w-16 text-center text-sm font-semibold tabular-nums">{loopLength} steps</span>
+        <span className="min-w-[66px] text-center font-screen text-[22px] leading-none whitespace-nowrap">{loopLength} steps</span>
         <ToolbarButton
+          variant="screen"
           size="icon-sm"
           aria-label="Add 4 steps"
           disabled={loopLength >= SONG_LOOP_LENGTH_RANGE.max}
@@ -173,12 +175,11 @@ const PatternToolbar = memo(function PatternToolbar({
           <Plus aria-hidden="true" />
         </ToolbarButton>
       </ToolbarGroup>
-      <ToolbarSeparator />
       <ToggleGroup
         aria-label="Recording grid"
         deselectable={false}
         value={gridChoice === null ? [] : [gridChoice]}
-        className="h-8 gap-0.5 rounded-control border border-line bg-surface-sunken p-0.5"
+        className="h-8 gap-0.5 rounded-[5px] border border-screen-edge p-0.5"
         onValueChange={(next) => {
           const choice = next[0] as GridChoice | undefined;
 
@@ -194,14 +195,14 @@ const PatternToolbar = memo(function PatternToolbar({
             size="xs"
             aria-label={gridChoices[choice].name}
             disabled={!canUseGrid[choice]}
-            className="h-full rounded-[4px] border-transparent data-pressed:border-line data-pressed:bg-surface-2 data-pressed:text-ink data-pressed:shadow-raised"
+            className="h-full rounded-[3px] border-transparent px-2.5 font-screen text-[21px] leading-none font-normal text-screen-muted hover:bg-transparent data-pressed:bg-screen-ink data-pressed:text-glass data-pressed:shadow-[0_0_10px_rgb(170_205_255/0.45)]"
           >
             {gridChoices[choice].label}
           </Toggle>
         ))}
       </ToggleGroup>
-      <ToolbarSeparator />
       <Toggle
+        variant="screen"
         size="sm"
         aria-label={keyboardModeEnabled ? "Disable keyboard note mode" : "Enable keyboard note mode"}
         aria-keyshortcuts={keyboardModeShortcutKey}
@@ -209,13 +210,14 @@ const PatternToolbar = memo(function PatternToolbar({
         onPressedChange={onToggleKeyboardMode}
       >
         <Keyboard aria-hidden="true" />
-        Keys
-        <kbd className="rounded-[3px] border border-current/30 px-1 text-[11px] leading-4 font-medium opacity-70">
+        <span className="font-screen text-[21px] leading-none font-normal">Keys</span>
+        <kbd className="rounded-[3px] border border-current/40 px-1 font-screen text-[16px] leading-4">
           {keyboardModeShortcutKey}
         </kbd>
       </Toggle>
-      <ToolbarGroup aria-label="Keyboard octave">
+      <ToolbarGroup aria-label="Keyboard octave" className="gap-1.5">
         <ToolbarButton
+          variant="screen"
           size="icon-sm"
           aria-label="Lower keyboard octave"
           aria-keyshortcuts="["
@@ -224,8 +226,9 @@ const PatternToolbar = memo(function PatternToolbar({
         >
           <Minus aria-hidden="true" />
         </ToolbarButton>
-        <span className="min-w-20 text-center text-sm tabular-nums">Octave {keyboardBaseOctave}</span>
+        <span className="min-w-[72px] text-center font-screen text-[22px] leading-none whitespace-nowrap">Octave {keyboardBaseOctave}</span>
         <ToolbarButton
+          variant="screen"
           size="icon-sm"
           aria-label="Raise keyboard octave"
           aria-keyshortcuts="]"
@@ -272,13 +275,13 @@ const RulerStepCell = memo(function RulerStepCell({
     <div
       aria-current={isActive ? "step" : undefined}
       className={cn(
-        "rounded-[4px] py-0.5 text-center text-[11px] tabular-nums",
+        "relative pt-2 text-center font-screen leading-none",
         beatEdgeClass(index),
-        isActive
-          ? "bg-ink font-bold text-surface-1"
-          : index % stepsPerBeatGroup === 0
-            ? "font-semibold text-ink-muted"
-            : "text-ink-faint",
+        index % stepsPerBeatGroup === 0
+          ? "text-[24px] text-ink before:absolute before:top-0 before:left-1/2 before:h-[5px] before:w-0.5 before:-translate-x-1/2 before:bg-ink-muted"
+          : "text-[20px] text-ink-muted",
+        isActive &&
+          "beam rounded-t-[3px] text-beam [text-shadow:0_0_8px_var(--glow),0_0_2px_var(--beam)] before:bg-beam",
       )}
     >
       {index + 1}
@@ -298,9 +301,9 @@ const KeyboardPreview = memo(function KeyboardPreview({
   selectedNote: NoteValue | null;
 }) {
   return (
-    <div className="mx-3 mb-2 rounded-panel border border-line bg-surface-sunken p-2.5 lg:mx-4">
+    <div className="mt-1.5 mb-2 rounded-panel border border-line bg-surface-sunken/70 p-2.5">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="text-xs font-semibold">
+        <p className="text-[13px] font-semibold">
           Keyboard notes <span className="font-normal text-ink-muted">{keyboardModeEnabled ? "Live note entry" : "Preview layout"}</span>
         </p>
         <p className="text-xs text-ink-muted">
@@ -369,15 +372,15 @@ function KeyboardBindingKey({
       data-keyboard-key={binding.key}
       aria-label={`${binding.keyLabel} keyboard note ${binding.note ?? "unavailable"}`}
       className={cn(
-        "flex min-w-0 items-baseline justify-between gap-1 rounded-[4px] border px-1.5 py-1 text-xs tabular-nums transition-[background-color,translate] duration-75",
-        binding.lane === "black" ? "border-line-strong bg-surface-1" : "border-line bg-surface-2",
+        "flex min-w-0 items-baseline justify-between gap-1 rounded-[4px] border px-1.5 py-0.5 transition-[background-color,translate] duration-75",
+        binding.lane === "black" ? "border-line-strong bg-surface-sunken" : "border-line-strong bg-surface-2",
         !binding.isPlayable && "opacity-40",
-        isSelected && "border-ink font-bold",
-        isPressed && "translate-y-px bg-line",
+        isSelected && "border-ink shadow-[0_0_8px_color-mix(in_srgb,var(--ink)_40%,transparent)]",
+        isPressed && "translate-y-px bg-screen-edge/40",
       )}
     >
-      <span className="truncate font-semibold">{binding.note ?? "None"}</span>
-      <span className="text-[11px] text-ink-faint">{binding.keyLabel}</span>
+      <span className="truncate font-screen text-[20px] leading-none">{binding.note ?? "None"}</span>
+      <span className="text-xs text-ink-muted">{binding.keyLabel}</span>
     </div>
   );
 }

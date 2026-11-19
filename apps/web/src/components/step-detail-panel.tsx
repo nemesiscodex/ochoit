@@ -30,7 +30,7 @@ import {
 import type { AudioEngine } from "ochoit-lib/web";
 
 import type { EngineMode } from "@/features/song/pcm-mode";
-import { labelByTrackId, voiceClassesByTrackId, voiceColorByTrackId } from "@/components/sequencer-theme";
+import { labelByTrackId, voiceColorByTrackId } from "@/components/sequencer-theme";
 import { NotePicker } from "@/components/note-picker";
 
 const STEP_VOLUME_PERCENT_MAX = 100;
@@ -175,7 +175,7 @@ function MelodicStepDetail({
       <DetailField label="Length">
         <div className="flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="screen"
             size="icon-sm"
             aria-label={`Shorten ${stepName} duration`}
             disabled={!step.enabled || step.length <= 1}
@@ -187,12 +187,12 @@ function MelodicStepDetail({
           </Button>
           <output
             aria-label={`${stepName} duration`}
-            className="min-w-12 text-center text-sm font-semibold tabular-nums"
+            className="min-w-12 text-center font-screen text-[22px] leading-none"
           >
             {step.enabled ? `${step.length} st` : "--"}
           </output>
           <Button
-            variant="outline"
+            variant="screen"
             size="icon-sm"
             aria-label={`Extend ${stepName} duration`}
             disabled={!step.enabled || step.length >= maxLength}
@@ -302,6 +302,8 @@ function NoiseStepDetail({
       <DetailField label="Period">
         <div className="flex items-center gap-3">
           <Slider
+            look="glow"
+            accent="var(--voice)"
             className="w-28"
             disabled={!step.enabled}
             label={`${stepName} noise period`}
@@ -314,7 +316,7 @@ function NoiseStepDetail({
               onUpdate({ periodIndex });
             }}
           />
-          <output aria-label={`${stepName} noise settings`} className="min-w-16 text-sm font-semibold tabular-nums">
+          <output aria-label={`${stepName} noise settings`} className="min-w-16 font-screen text-[22px] leading-none">
             {formatNoiseConfigLabel(step.mode, step.periodIndex)}
           </output>
         </div>
@@ -494,17 +496,18 @@ function DetailPanelFrame({
   return (
     <section
       aria-label={`${trackLabel} step ${stepIndex + 1} editor`}
-      className="mt-2 rounded-panel border border-line bg-surface-2 p-3 shadow-raised"
+      className="mt-2 rounded-[8px] border border-(--voice)/60 bg-glass/85 p-3 shadow-[0_0_18px_-6px_color-mix(in_srgb,var(--voice)_50%,transparent)]"
     >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-full", voiceClassesByTrackId[track.id].swatch)} />
-          <span className="font-wide text-sm font-bold tabular-nums">Step {stepIndex + 1}</span>
-          <span className="truncate text-sm text-ink-muted">{trackLabel}</span>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="font-screen text-[24px] leading-none text-(--voice) [text-shadow:0_0_8px_color-mix(in_srgb,var(--voice)_60%,transparent)]">
+            Step {stepIndex + 1}
+          </span>
+          <span className="truncate text-[13.5px] text-ink-muted">{trackLabel}</span>
         </div>
         <div className="flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="screen"
             size="xs"
             aria-label={`${enabled ? "Disable" : "Enable"} ${trackLabel} step ${stepIndex + 1}`}
             onClick={onToggleEnabled}
@@ -528,7 +531,7 @@ function DetailPanelFrame({
 function DetailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-ink-muted">{label}</span>
+      <span className="text-[13px] text-ink-muted">{label}</span>
       {children}
     </div>
   );
@@ -556,7 +559,7 @@ function ChoiceGroup({
         }
       }}
       className={cn(
-        "max-w-full gap-0.5 rounded-control border border-line bg-surface-sunken p-0.5 data-disabled:opacity-60",
+        "max-w-full gap-0.5 rounded-[5px] border border-screen-edge p-0.5 data-disabled:opacity-60",
         className,
       )}
       {...props}
@@ -569,7 +572,7 @@ function ChoiceToggle({ className, ...props }: ComponentProps<typeof Toggle>) {
     <Toggle
       size="xs"
       className={cn(
-        "rounded-[4px] border-transparent tabular-nums data-pressed:border-line data-pressed:bg-surface-2 data-pressed:text-ink data-pressed:shadow-raised",
+        "rounded-[3px] border-transparent text-[13px] text-screen-muted hover:bg-screen-edge/20 hover:text-screen-ink data-pressed:bg-screen-ink data-pressed:text-glass data-pressed:shadow-[0_0_10px_rgb(170_205_255/0.45)]",
         className,
       )}
       {...props}
@@ -594,6 +597,8 @@ function StepVolumeField({
     <DetailField label="Volume">
       <div className="flex items-center gap-3">
         <Slider
+          look="glow"
+          accent="var(--voice)"
           className="w-28"
           disabled={disabled}
           label={label}
@@ -605,7 +610,7 @@ function StepVolumeField({
             onChange(next / STEP_VOLUME_PERCENT_MAX);
           }}
         />
-        <span className="w-10 text-right text-sm tabular-nums text-ink-muted">{percent}%</span>
+        <span className="w-10 text-right font-screen text-[19px] leading-none text-ink-muted">{percent}%</span>
       </div>
     </DetailField>
   );

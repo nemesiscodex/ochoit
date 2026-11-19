@@ -75,7 +75,7 @@ describe("waveform-canvas", () => {
     expect(mockContext.stroke).toHaveBeenCalled();
   });
 
-  it("resolves a CSS variable colour on the canvas so the token's light or dark value is drawn", () => {
+  it("resolves a CSS variable colour on the canvas so the token's value is drawn", () => {
     // jsdom does not inherit custom properties, so the stylesheet's resolved values are stood in for here.
     vi.spyOn(window, "getComputedStyle").mockReturnValue({
       color: "rgb(9, 9, 9)",

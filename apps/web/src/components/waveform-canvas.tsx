@@ -14,7 +14,6 @@ import {
 
 const liveWaveformIntervalMs = 1000 / 30;
 const frameJitterMs = 2;
-const darkSchemeQuery = "(prefers-color-scheme: dark)";
 
 type WaveformColorProps = Partial<WaveformColors>;
 
@@ -113,26 +112,11 @@ function useWaveformSurface({ backgroundColor, glowColor, gridColor, lineColor }
       return;
     }
 
-    const updateColors = () => {
-      colorsRef.current = readCanvasColors(canvas, { backgroundColor, glowColor, gridColor, lineColor });
+    colorsRef.current = readCanvasColors(canvas, { backgroundColor, glowColor, gridColor, lineColor });
 
-      if (samplesRef.current !== null) {
-        painterRef.current?.paint(samplesRef.current, colorsRef.current);
-      }
-    };
-
-    updateColors();
-
-    if (typeof window.matchMedia !== "function") {
-      return;
+    if (samplesRef.current !== null) {
+      painterRef.current?.paint(samplesRef.current, colorsRef.current);
     }
-
-    const schemeQuery = window.matchMedia(darkSchemeQuery);
-    schemeQuery.addEventListener("change", updateColors);
-
-    return () => {
-      schemeQuery.removeEventListener("change", updateColors);
-    };
   }, [backgroundColor, glowColor, gridColor, lineColor, className]);
 
   return { canvasRef, draw };

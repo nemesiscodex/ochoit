@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { GridMetrics } from "@/features/sequencer/step-drag";
 
 export const stepsPerBeatGroup = 4;
-export const stepGridClass = "grid grid-cols-8 gap-1 md:grid-cols-16";
+export const stepGridClass = "grid auto-rows-fr grid-cols-8 gap-1 md:grid-cols-16";
 export const laneColumnsClass = "lg:grid-cols-[18rem_minmax(0,1fr)]";
 export const stepHeightPx = 48;
 
